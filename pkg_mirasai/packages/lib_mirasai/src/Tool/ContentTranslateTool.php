@@ -519,20 +519,20 @@ class ContentTranslateTool extends AbstractTool
         string $title,
         string $alias,
     ): array {
-        // Find menu item(s) pointing to the source article
+        // Find menu item(s) pointing to the source article (include unpublished/hidden)
         $query = $this->db->getQuery(true)
-            ->select(['id', 'menutype', 'title', 'parent_id', 'level', 'component_id', 'access', 'params', 'home'])
+            ->select('*')
             ->from($this->db->quoteName('#__menu'))
             ->where('link LIKE ' . $this->db->quote('%option=com_content&view=article&id=' . $sourceArticleId))
             ->where('client_id = 0')
-            ->where('published = 1');
+            ->where('published >= 0');  // include unpublished (0) but not trashed (-2)
 
         $sourceMenuItem = $this->db->setQuery($query)->loadAssoc();
 
         if (!$sourceMenuItem) {
             return [
                 'action' => 'skipped',
-                'note' => 'Source article has no published menu item. No menu item created for translation.',
+                'note' => 'Source article has no menu item. No menu item created for translation.',
             ];
         }
 
@@ -571,7 +571,7 @@ class ContentTranslateTool extends AbstractTool
 
         $maxRgt = (int) $this->db->setQuery($query)->loadResult();
 
-        // Create the menu item
+        // Create the menu item — copy all relevant attributes from source
         $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
 
         $columns = [
@@ -587,22 +587,22 @@ class ContentTranslateTool extends AbstractTool
             $this->db->quote($alias),
             $this->db->quote($alias),
             $this->db->quote($link),
-            $this->db->quote('component'),
-            1,
+            $this->db->quote($sourceMenuItem['type'] ?: 'component'),
+            (int) $sourceMenuItem['published'],        // preserve published state
             (int) $sourceMenuItem['parent_id'],
             (int) $sourceMenuItem['level'],
             (int) $sourceMenuItem['component_id'],
-            (int) $sourceMenuItem['access'],
-            $this->db->quote($sourceMenuItem['params'] ?: '{}'),
+            (int) $sourceMenuItem['access'],           // preserve access level
+            $this->db->quote($sourceMenuItem['params'] ?: '{}'),  // preserve all params (menu_show, pageclass_sfx, etc.)
             $maxRgt + 1,
             $maxRgt + 2,
             (int) $sourceMenuItem['home'],
             $this->db->quote($targetLang),
             0,
-            $this->db->quote(''),
-            $this->db->quote(''),
-            0,
-            0,
+            $this->db->quote($sourceMenuItem['note'] ?? ''),          // preserve note
+            $this->db->quote($sourceMenuItem['img'] ?? ''),           // preserve icon
+            (int) ($sourceMenuItem['template_style_id'] ?? 0),        // preserve template style
+            (int) ($sourceMenuItem['browserNav'] ?? 0),               // preserve browser navigation
         ];
 
         $query = 'INSERT INTO ' . $this->db->quoteName('#__menu')
