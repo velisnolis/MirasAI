@@ -11,6 +11,7 @@ use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
+use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\SystemInfoTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
@@ -184,6 +185,7 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
         $registry->register(new ContentListTool());
         $registry->register(new ContentReadTool());
         $registry->register(new ContentTranslateTool());
+        $registry->register(new ContentCheckLinksTool());
 
         return new McpHandler($registry);
     }

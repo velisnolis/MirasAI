@@ -31,6 +31,7 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
 use Mirasai\Library\Mcp\McpHandler;
@@ -38,6 +39,7 @@ use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
 use Mirasai\Library\Tool\SystemInfoTool;
+use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 // --- Authentication ---
@@ -69,6 +71,7 @@ $registry->register(new SystemInfoTool());
 $registry->register(new ContentListTool());
 $registry->register(new ContentReadTool());
 $registry->register(new ContentTranslateTool());
+$registry->register(new ContentCheckLinksTool());
 
 $handler = new McpHandler($registry);
 
