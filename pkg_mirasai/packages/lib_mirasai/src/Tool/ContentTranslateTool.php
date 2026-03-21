@@ -119,6 +119,14 @@ class ContentTranslateTool extends AbstractTool
         $translatedAlias = $arguments['translated_alias']
             ?? $this->generateAlias($translatedTitle);
 
+        if ($this->hasYoothemeLayout((string) ($source['fulltext'] ?? ''))
+            && empty($arguments['translated_fulltext'])
+            && empty($arguments['yootheme_text_replacements'])) {
+            return [
+                'error' => 'YOOtheme articles require translated_fulltext or yootheme_text_replacements. Refusing to copy the source layout unchanged.',
+            ];
+        }
+
         $translatedIntrotext = $arguments['translated_introtext'] ?? '';
         $translatedFulltext = $this->buildTranslatedFulltext(
             $source,
@@ -313,6 +321,11 @@ class ContentTranslateTool extends AbstractTool
 
         // Fallback: copy source fulltext
         return $source['fulltext'] ?? '';
+    }
+
+    private function hasYoothemeLayout(string $fulltext): bool
+    {
+        return str_starts_with(trim($fulltext), '<!-- {');
     }
 
     /**

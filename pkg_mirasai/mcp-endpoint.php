@@ -32,8 +32,10 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
+use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
@@ -49,19 +51,7 @@ if (!$token) {
     sendJson(['jsonrpc' => '2.0', 'error' => ['code' => -32000, 'message' => 'Missing X-Joomla-Token header'], 'id' => null], 401);
 }
 
-$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-$hashedToken = base64_encode(hash('sha256', $token, true));
-
-$query = $db->getQuery(true)
-    ->select('user_id')
-    ->from($db->quoteName('#__user_profiles'))
-    ->where($db->quoteName('profile_key') . ' = ' . $db->quote('joomlatoken.token'))
-    ->where($db->quoteName('profile_value') . ' = :token')
-    ->bind(':token', $hashedToken);
-
-$userId = $db->setQuery($query)->loadResult();
-
-if (!$userId) {
+if (!JoomlaApiTokenAuthenticator::authenticate($token)) {
     sendJson(['jsonrpc' => '2.0', 'error' => ['code' => -32000, 'message' => 'Invalid API token'], 'id' => null], 401);
 }
 

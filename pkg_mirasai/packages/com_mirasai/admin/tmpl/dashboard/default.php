@@ -171,6 +171,10 @@ foreach ($info['extensions'] as $ext) {
                             <td><code>content/translate</code></td>
                             <td>Tradueix un article: duplica, patcheja layout YOOtheme, crea associació, menu item, i regenera introtext.</td>
                         </tr>
+                        <tr>
+                            <td><code>content/check-links</code></td>
+                            <td>Escaneja articles traduïts per detectar enllaços interns sense destí traduït i, opcionalment, els reescriu.</td>
+                        </tr>
                     </tbody>
                 </table>
 

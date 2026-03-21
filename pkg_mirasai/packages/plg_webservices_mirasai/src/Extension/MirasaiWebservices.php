@@ -10,6 +10,7 @@ use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Event\SubscriberInterface;
+use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\ContentListTool;
@@ -137,38 +138,7 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
     private function authenticateToken(string $token): ?\Joomla\CMS\User\User
     {
-        $hashedToken = base64_encode(hash('sha256', $token, true));
-        $db = Factory::getContainer()->get(DatabaseInterface::class);
-
-        $query = $db->getQuery(true)
-            ->select('user_id')
-            ->from($db->quoteName('#__user_profiles'))
-            ->where($db->quoteName('profile_key') . ' = ' . $db->quote('joomlatoken.token'))
-            ->where($db->quoteName('profile_value') . ' = :token')
-            ->bind(':token', $hashedToken);
-
-        $userId = $db->setQuery($query)->loadResult();
-
-        if (!$userId) {
-            return null;
-        }
-
-        $query = $db->getQuery(true)
-            ->select('profile_value')
-            ->from($db->quoteName('#__user_profiles'))
-            ->where($db->quoteName('user_id') . ' = :uid')
-            ->where($db->quoteName('profile_key') . ' = ' . $db->quote('joomlatoken.enabled'))
-            ->bind(':uid', $userId, \Joomla\Database\ParameterType::INTEGER);
-
-        $enabled = $db->setQuery($query)->loadResult();
-
-        if ((int) $enabled !== 1) {
-            return null;
-        }
-
-        return Factory::getContainer()
-            ->get(\Joomla\CMS\User\UserFactoryInterface::class)
-            ->loadUserById((int) $userId);
+        return JoomlaApiTokenAuthenticator::authenticate($token);
     }
 
     private function buildHandler(): McpHandler

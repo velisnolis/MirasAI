@@ -101,19 +101,25 @@ function regenerateIntrotext(
 
     $layoutJson = substr($fulltext, 5, $end - 5);
 
-    // Render introtext using YOOtheme Builder (same as PageController::savePage)
+    // Normalize first through the Builder save pipeline, then render that normalized layout.
+    // Rendering the raw layout can leave introtext one step behind the persisted fulltext.
     try {
+        $savedLayout = $builder->withParams(['context' => 'save'])->load($layoutJson);
+        $normalizedLayoutJson = json_encode($savedLayout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if (!is_string($normalizedLayoutJson) || $normalizedLayoutJson === '') {
+            return ['article_id' => $articleId, 'status' => 'error', 'message' => 'Failed to normalize YOOtheme layout'];
+        }
+
         $introtext = $builder
             ->withParams(['context' => 'content'])
-            ->render($layoutJson, ['prefix' => 'page']);
+            ->render($normalizedLayoutJson, ['prefix' => 'page']);
 
         if ($introtext === null) {
             $introtext = '';
         }
 
-        // Also re-encode the fulltext through Builder save context for consistency
-        $savedLayout = $builder->withParams(['context' => 'save'])->load($layoutJson);
-        $newFulltext = '<!-- ' . json_encode($savedLayout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ' -->';
+        $newFulltext = '<!-- ' . $normalizedLayoutJson . ' -->';
 
         // Update article
         $query = $db->getQuery(true)
