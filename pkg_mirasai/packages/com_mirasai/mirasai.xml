@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" method="upgrade">
+    <name>com_mirasai</name>
+    <version>0.1.0</version>
+    <creationDate>2026-03-21</creationDate>
+    <author>Alex Miras</author>
+    <authorEmail>alex@miras.pro</authorEmail>
+    <description>MirasAI: MCP server for Joomla. AI-powered content translation and management.</description>
+    <namespace path="src">Mirasai\Component\Mirasai</namespace>
+
+    <administration>
+        <menu>MirasAI</menu>
+        <files folder="services">
+            <filename>provider.php</filename>
+        </files>
+    </administration>
+
+    <api>
+        <files folder="src">
+            <folder>Controller</folder>
+        </files>
+    </api>
+</extension>

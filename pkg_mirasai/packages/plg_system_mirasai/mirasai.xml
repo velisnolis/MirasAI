@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="system" method="upgrade">
+    <name>plg_system_mirasai</name>
+    <version>0.1.0</version>
+    <creationDate>2026-03-21</creationDate>
+    <author>Alex Miras</author>
+    <authorEmail>alex@miras.pro</authorEmail>
+    <description>MirasAI system plugin: registers the library autoloader and manages the AI runtime.</description>
+    <namespace path="src">Mirasai\Plugin\System\Mirasai</namespace>
+    <files>
+        <folder plugin="mirasai">services</folder>
+        <folder>src</folder>
+    </files>
+</extension>

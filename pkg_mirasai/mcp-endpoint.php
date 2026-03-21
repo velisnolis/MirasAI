@@ -1,0 +1,139 @@
+<?php
+
+/**
+ * MirasAI — Standalone MCP endpoint for Joomla.
+ *
+ * Place this file in the Joomla root directory.
+ * Access via: https://yoursite.com/mcp-endpoint.php
+ *
+ * Authenticates via X-Joomla-Token header using the standard Joomla API token system.
+ */
+
+declare(strict_types=1);
+
+define('_JEXEC', 1);
+define('JPATH_BASE', __DIR__);
+
+require __DIR__ . '/includes/defines.php';
+require __DIR__ . '/includes/framework.php';
+
+// Boot minimum Joomla
+$container = \Joomla\CMS\Factory::getContainer();
+$container->alias(\Joomla\Session\SessionInterface::class, 'session.web.site');
+$app = $container->get(\Joomla\CMS\Application\SiteApplication::class);
+\Joomla\CMS\Factory::$application = $app;
+
+// Load the MirasAI library
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolInterface.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/AbstractTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolRegistry.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
+
+use Mirasai\Library\Mcp\McpHandler;
+use Mirasai\Library\Tool\ContentListTool;
+use Mirasai\Library\Tool\ContentReadTool;
+use Mirasai\Library\Tool\ContentTranslateTool;
+use Mirasai\Library\Tool\SystemInfoTool;
+use Mirasai\Library\Tool\ToolRegistry;
+
+// --- Authentication ---
+$token = $_SERVER['HTTP_X_JOOMLA_TOKEN'] ?? '';
+
+if (!$token) {
+    sendJson(['jsonrpc' => '2.0', 'error' => ['code' => -32000, 'message' => 'Missing X-Joomla-Token header'], 'id' => null], 401);
+}
+
+$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+$hashedToken = base64_encode(hash('sha256', $token, true));
+
+$query = $db->getQuery(true)
+    ->select('user_id')
+    ->from($db->quoteName('#__user_profiles'))
+    ->where($db->quoteName('profile_key') . ' = ' . $db->quote('joomlatoken.token'))
+    ->where($db->quoteName('profile_value') . ' = :token')
+    ->bind(':token', $hashedToken);
+
+$userId = $db->setQuery($query)->loadResult();
+
+if (!$userId) {
+    sendJson(['jsonrpc' => '2.0', 'error' => ['code' => -32000, 'message' => 'Invalid API token'], 'id' => null], 401);
+}
+
+// --- Build handler ---
+$registry = new ToolRegistry();
+$registry->register(new SystemInfoTool());
+$registry->register(new ContentListTool());
+$registry->register(new ContentReadTool());
+$registry->register(new ContentTranslateTool());
+
+$handler = new McpHandler($registry);
+
+// --- Handle request ---
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+if ($method === 'GET') {
+    // SSE endpoint
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('Connection: keep-alive');
+    header('X-Accel-Buffering: no');
+
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+
+    $endpoint = dirname($_SERVER['SCRIPT_NAME']) . '/mcp-endpoint.php';
+    echo "event: endpoint\ndata: {$endpoint}\n\n";
+    flush();
+
+    $timeout = 300;
+    $start = time();
+
+    while ((time() - $start) < $timeout) {
+        if (connection_aborted()) {
+            break;
+        }
+
+        echo ": heartbeat\n\n";
+        flush();
+        sleep(15);
+    }
+
+    exit;
+}
+
+if ($method === 'POST') {
+    $input = file_get_contents('php://input');
+    $request = json_decode($input ?: '', true);
+
+    if (!$request || !isset($request['method'])) {
+        sendJson([
+            'jsonrpc' => '2.0',
+            'error' => ['code' => -32700, 'message' => 'Parse error'],
+            'id' => null,
+        ], 400);
+    }
+
+    $response = $handler->handleRequest($request);
+
+    if (empty($response)) {
+        http_response_code(204);
+        exit;
+    }
+
+    sendJson($response);
+}
+
+sendJson(['jsonrpc' => '2.0', 'error' => ['code' => -32000, 'message' => 'Method not allowed'], 'id' => null], 405);
+
+function sendJson(array $data, int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}

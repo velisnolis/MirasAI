@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension version="5.0" type="package" method="upgrade">
+    <name>MirasAI</name>
+    <packagename>mirasai</packagename>
+    <version>0.1.0</version>
+    <creationDate>2026-03-21</creationDate>
+    <author>Alex Miras</author>
+    <authorEmail>alex@miras.pro</authorEmail>
+    <url>https://miras.pro</url>
+    <description>MirasAI — MCP server for Joomla. Gives AI agents full access to content translation, YOOtheme layout management, and system inspection. For development and staging environments.</description>
+    <scriptfile>script.php</scriptfile>
+    <blockChildUninstall>true</blockChildUninstall>
+
+    <files folder="packages">
+        <file type="library" id="mirasai">lib_mirasai.zip</file>
+        <file type="plugin" group="system" id="mirasai">plg_system_mirasai.zip</file>
+        <file type="component" id="com_mirasai">com_mirasai.zip</file>
+        <file type="plugin" group="webservices" id="mirasai">plg_webservices_mirasai.zip</file>
+    </files>
+</extension>
