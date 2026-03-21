@@ -19,7 +19,7 @@ use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 {
-    private const MCP_PATH = '/api/v1/mirasai/mcp';
+    private const MCP_PATH = '/v1/mirasai/mcp';
 
     public static function getSubscribedEvents(): array
     {
