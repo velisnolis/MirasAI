@@ -342,6 +342,15 @@ class ContentTranslateTool extends AbstractTool
      * @param  array<string, mixed> $source
      * @param  array<string, mixed> $overrides
      */
+    /** @var list<string> */
+    private const NULLABLE_COLUMNS = [
+        'publish_up', 'publish_down', 'checked_out', 'checked_out_time',
+    ];
+
+    /**
+     * @param  array<string, mixed> $source
+     * @param  array<string, mixed> $overrides
+     */
     private function duplicateArticle(array $source, array $overrides): int
     {
         $fields = array_merge($source, $overrides);
@@ -356,8 +365,13 @@ class ContentTranslateTool extends AbstractTool
         $values = [];
 
         foreach ($fields as $col => $val) {
-            $columns[] = $this->db->quoteName($col);
-            $values[] = $this->db->quote((string) ($val ?? ''));
+            if ($val === null || ($val === '' && in_array($col, self::NULLABLE_COLUMNS, true))) {
+                $columns[] = $this->db->quoteName($col);
+                $values[] = 'NULL';
+            } else {
+                $columns[] = $this->db->quoteName($col);
+                $values[] = $this->db->quote((string) $val);
+            }
         }
 
         $query = 'INSERT INTO ' . $this->db->quoteName('#__content')
