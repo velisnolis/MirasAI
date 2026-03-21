@@ -803,8 +803,8 @@ class ContentTranslateTool extends AbstractTool
             $this->db->quote($link),
             $this->db->quote($sourceMenuItem['type'] ?: 'component'),
             (int) $sourceMenuItem['published'],        // preserve published state
-            (int) $sourceMenuItem['parent_id'],
-            (int) $sourceMenuItem['level'],
+            1,                                         // always top-level in target menu (parent_id=1 = root)
+            1,                                         // level 1
             (int) $sourceMenuItem['component_id'],
             (int) $sourceMenuItem['access'],           // preserve access level
             $this->db->quote($sourceMenuItem['params'] ?: '{}'),  // preserve all params (menu_show, pageclass_sfx, etc.)
