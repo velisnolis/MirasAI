@@ -157,12 +157,22 @@ class ContentTranslateTool extends AbstractTool
         // Create association
         $this->createAssociation($sourceId, $newId);
 
+        // Create menu item if the source article has one
+        $menuResult = $this->createMenuItemForTranslation(
+            $sourceId,
+            $newId,
+            $targetLang,
+            $translatedTitle,
+            $translatedAlias,
+        );
+
         return [
             'action' => 'created',
             'article_id' => $newId,
             'source_id' => $sourceId,
             'target_language' => $targetLang,
             'title' => $translatedTitle,
+            'menu_item' => $menuResult,
         ];
     }
 
@@ -491,6 +501,178 @@ class ContentTranslateTool extends AbstractTool
             ->values(
                 $this->db->quote('com_content.item') . ','
                 . $newId . ','
+                . $this->db->quote($existingKey)
+            );
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    /**
+     * Creates a menu item for the translated article if the source article has one.
+     *
+     * @return array{action: string, menu_item_id?: int, source_menu_item_id?: int, note?: string}
+     */
+    private function createMenuItemForTranslation(
+        int $sourceArticleId,
+        int $newArticleId,
+        string $targetLang,
+        string $title,
+        string $alias,
+    ): array {
+        // Find menu item(s) pointing to the source article
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'menutype', 'title', 'parent_id', 'level', 'component_id', 'access', 'params', 'home'])
+            ->from($this->db->quoteName('#__menu'))
+            ->where('link LIKE ' . $this->db->quote('%option=com_content&view=article&id=' . $sourceArticleId))
+            ->where('client_id = 0')
+            ->where('published = 1');
+
+        $sourceMenuItem = $this->db->setQuery($query)->loadAssoc();
+
+        if (!$sourceMenuItem) {
+            return [
+                'action' => 'skipped',
+                'note' => 'Source article has no published menu item. No menu item created for translation.',
+            ];
+        }
+
+        // Find the target menu type for this language
+        $targetMenuType = $this->findMenuTypeForLanguage($targetLang);
+
+        if (!$targetMenuType) {
+            return [
+                'action' => 'skipped',
+                'note' => "No menu found for language {$targetLang}. Create a menu for this language first.",
+            ];
+        }
+
+        // Check if a menu item already exists for this translated article
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('link LIKE ' . $this->db->quote('%option=com_content&view=article&id=' . $newArticleId))
+            ->where('client_id = 0');
+
+        $existingMenuItemId = $this->db->setQuery($query)->loadResult();
+
+        if ($existingMenuItemId) {
+            return [
+                'action' => 'exists',
+                'menu_item_id' => (int) $existingMenuItemId,
+                'note' => 'Menu item already exists for this translated article.',
+            ];
+        }
+
+        // Get max lft/rgt for menu tree positioning
+        $query = $this->db->getQuery(true)
+            ->select('MAX(rgt)')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('client_id = 0');
+
+        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
+
+        // Create the menu item
+        $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
+
+        $columns = [
+            'menutype', 'title', 'alias', 'path', 'link', 'type',
+            'published', 'parent_id', 'level', 'component_id',
+            'access', 'params', 'lft', 'rgt', 'home', 'language',
+            'client_id', 'note', 'img', 'template_style_id', 'browserNav',
+        ];
+
+        $values = [
+            $this->db->quote($targetMenuType),
+            $this->db->quote($title),
+            $this->db->quote($alias),
+            $this->db->quote($alias),
+            $this->db->quote($link),
+            $this->db->quote('component'),
+            1,
+            (int) $sourceMenuItem['parent_id'],
+            (int) $sourceMenuItem['level'],
+            (int) $sourceMenuItem['component_id'],
+            (int) $sourceMenuItem['access'],
+            $this->db->quote($sourceMenuItem['params'] ?: '{}'),
+            $maxRgt + 1,
+            $maxRgt + 2,
+            (int) $sourceMenuItem['home'],
+            $this->db->quote($targetLang),
+            0,
+            $this->db->quote(''),
+            $this->db->quote(''),
+            0,
+            0,
+        ];
+
+        $query = 'INSERT INTO ' . $this->db->quoteName('#__menu')
+            . ' (' . implode(',', array_map([$this->db, 'quoteName'], $columns)) . ')'
+            . ' VALUES (' . implode(',', $values) . ')';
+
+        $this->db->setQuery($query)->execute();
+
+        $newMenuItemId = (int) $this->db->insertid();
+
+        // Create menu item association
+        $this->createMenuAssociation((int) $sourceMenuItem['id'], $newMenuItemId);
+
+        return [
+            'action' => 'created',
+            'menu_item_id' => $newMenuItemId,
+            'source_menu_item_id' => (int) $sourceMenuItem['id'],
+        ];
+    }
+
+    /**
+     * Find the menu type (menutype string) that contains home items for a given language.
+     */
+    private function findMenuTypeForLanguage(string $targetLang): ?string
+    {
+        // Look for a menu that has a default (home) item for this language
+        $query = $this->db->getQuery(true)
+            ->select('menutype')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('home = 1')
+            ->where('language = :lang')
+            ->where('client_id = 0')
+            ->where('published = 1')
+            ->bind(':lang', $targetLang);
+
+        return $this->db->setQuery($query)->loadResult() ?: null;
+    }
+
+    private function createMenuAssociation(int $sourceMenuItemId, int $newMenuItemId): void
+    {
+        $query = $this->db->getQuery(true)
+            ->select($this->db->quoteName('key'))
+            ->from($this->db->quoteName('#__associations'))
+            ->where('context = ' . $this->db->quote('com_menus.item'))
+            ->where('id = :id')
+            ->bind(':id', $sourceMenuItemId, ParameterType::INTEGER);
+
+        $existingKey = $this->db->setQuery($query)->loadResult();
+
+        if (!$existingKey) {
+            $existingKey = 'mirasai_menu_' . $sourceMenuItemId . '_' . time();
+
+            $query = $this->db->getQuery(true)
+                ->insert($this->db->quoteName('#__associations'))
+                ->columns(['context', 'id', $this->db->quoteName('key')])
+                ->values(
+                    $this->db->quote('com_menus.item') . ','
+                    . $sourceMenuItemId . ','
+                    . $this->db->quote($existingKey)
+                );
+
+            $this->db->setQuery($query)->execute();
+        }
+
+        $query = $this->db->getQuery(true)
+            ->insert($this->db->quoteName('#__associations'))
+            ->columns(['context', 'id', $this->db->quoteName('key')])
+            ->values(
+                $this->db->quote('com_menus.item') . ','
+                . $newMenuItemId . ','
                 . $this->db->quote($existingKey)
             );
 
