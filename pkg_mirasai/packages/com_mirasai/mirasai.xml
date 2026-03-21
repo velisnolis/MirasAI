@@ -10,14 +10,16 @@
 
     <administration>
         <menu>MirasAI</menu>
-        <files folder="services">
-            <filename>provider.php</filename>
+        <files folder="admin">
+            <folder>services</folder>
+            <folder>src</folder>
+            <folder>tmpl</folder>
         </files>
     </administration>
 
     <api>
-        <files folder="src">
-            <folder>Controller</folder>
+        <files folder="api">
+            <folder>src</folder>
         </files>
     </api>
 </extension>
