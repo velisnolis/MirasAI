@@ -135,6 +135,7 @@ class ContentTranslateTool extends AbstractTool
                 'catid' => $targetCatId,
             ]);
 
+            $introtextResult = $this->regenerateIntrotext($existing);
             $linkWarnings = $this->checkInternalLinks($existing, $targetLang);
 
             $result = [
@@ -143,6 +144,7 @@ class ContentTranslateTool extends AbstractTool
                 'source_id' => $sourceId,
                 'target_language' => $targetLang,
                 'title' => $translatedTitle,
+                'introtext_regenerated' => $introtextResult,
             ];
 
             if (!empty($linkWarnings)) {
@@ -174,6 +176,9 @@ class ContentTranslateTool extends AbstractTool
             $translatedAlias,
         );
 
+        // Regenerate introtext via YOOtheme Builder if article has YOOtheme layout
+        $introtextResult = $this->regenerateIntrotext($newId);
+
         // Check for internal links without translated destinations
         $linkWarnings = $this->checkInternalLinks($newId, $targetLang);
 
@@ -184,6 +189,7 @@ class ContentTranslateTool extends AbstractTool
             'target_language' => $targetLang,
             'title' => $translatedTitle,
             'menu_item' => $menuResult,
+            'introtext_regenerated' => $introtextResult,
         ];
 
         if (!empty($linkWarnings)) {
@@ -522,6 +528,41 @@ class ContentTranslateTool extends AbstractTool
             );
 
         $this->db->setQuery($query)->execute();
+    }
+
+    /**
+     * Regenerate introtext by calling the YOOtheme Builder via the standalone script.
+     *
+     * @return array{status: string, introtext_length?: int, message?: string}
+     */
+    private function regenerateIntrotext(int $articleId): array
+    {
+        $script = JPATH_ROOT . '/regenerate-introtext.php';
+
+        if (!file_exists($script)) {
+            return ['status' => 'skipped', 'message' => 'regenerate-introtext.php not found'];
+        }
+
+        $cmd = sprintf(
+            'cd %s && php %s %d 2>&1',
+            escapeshellarg(JPATH_ROOT),
+            escapeshellarg($script),
+            $articleId,
+        );
+
+        $output = shell_exec($cmd);
+
+        if (!$output) {
+            return ['status' => 'error', 'message' => 'No output from regenerate script'];
+        }
+
+        $result = json_decode($output, true);
+
+        if (!$result || !isset($result['results'][0])) {
+            return ['status' => 'error', 'message' => 'Invalid output: ' . substr($output, 0, 200)];
+        }
+
+        return $result['results'][0];
     }
 
     /**
