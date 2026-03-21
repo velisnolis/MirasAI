@@ -2,14 +2,9 @@
 
 ## Pendents
 
-### TODO-001: Investigar API interna YOOtheme Pro 5
-- **What:** Spike per documentar com YOOtheme Pro 5 guarda i llegeix layouts (classes internes, taules DB, format JSON).
-- **Why:** L'approach híbrid (llegir via API interna, escriure via DB) requereix entendre l'API no documentada.
-- **Pros:** Redueix risc d'implementació i evita trencar layouts.
-- **Cons:** Temps d'investigació (~2-3h amb CC).
-- **Context:** YOOtheme usa `BuilderConfig` i guarda JSON probablement a `#__template_styles.params`. Cal verificar amb Joomla 5. Referència: el design doc especifica approach híbrid per accés a layouts.
-- **Depends on:** Entorn Joomla 5 + YOOtheme Pro 5 muntat (TODO-003).
-- **Added:** 2026-03-21 via /plan-eng-review
+### ~~TODO-001: Investigar API interna YOOtheme Pro 5~~ ✅ DONE
+- **Completat:** 2026-03-21. Resultats a `~/.gstack/projects/movamiraai/yootheme5-api-research.md`
+- **Findings:** Articles: `#__content.fulltext` (`<!-- JSON -->`). Storage: `#__extensions.custom_data`. Template: `#__template_styles.params`. Builder: `YOOtheme\Builder::load()/render()`.
 
 ### TODO-002: Definir MCP capabilities subset
 - **What:** Documentar exactament quines parts de l'spec MCP implementem i quines no.
