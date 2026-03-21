@@ -380,7 +380,64 @@ class ContentTranslateTool extends AbstractTool
 
         $this->db->setQuery($query)->execute();
 
-        return (int) $this->db->insertid();
+        $newId = (int) $this->db->insertid();
+
+        // Create asset for the new article (required for Joomla ACL)
+        $this->createAsset($newId, $overrides['title'] ?? 'Untitled');
+
+        return $newId;
+    }
+
+    private function createAsset(int $articleId, string $title): void
+    {
+        // Find parent asset (com_content)
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__assets'))
+            ->where($this->db->quoteName('name') . ' = ' . $this->db->quote('com_content'));
+
+        $parentId = (int) $this->db->setQuery($query)->loadResult();
+
+        if (!$parentId) {
+            return;
+        }
+
+        // Get max rgt
+        $query = $this->db->getQuery(true)
+            ->select('MAX(rgt)')
+            ->from($this->db->quoteName('#__assets'));
+
+        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
+
+        // Insert asset
+        $assetName = 'com_content.article.' . $articleId;
+        $lft = $maxRgt + 1;
+        $rgt = $maxRgt + 2;
+
+        $query = $this->db->getQuery(true)
+            ->insert($this->db->quoteName('#__assets'))
+            ->columns(['parent_id', 'lft', 'rgt', 'level', 'name', 'title', 'rules'])
+            ->values(implode(',', [
+                $parentId,
+                $lft,
+                $rgt,
+                3,
+                $this->db->quote($assetName),
+                $this->db->quote($title),
+                $this->db->quote('{}'),
+            ]));
+
+        $this->db->setQuery($query)->execute();
+
+        $assetId = (int) $this->db->insertid();
+
+        // Update article with the asset_id
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__content'))
+            ->set($this->db->quoteName('asset_id') . ' = ' . $assetId)
+            ->where('id = ' . $articleId);
+
+        $this->db->setQuery($query)->execute();
     }
 
     private function updateArticle(int $id, array $fields): void
