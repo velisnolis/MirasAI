@@ -135,13 +135,21 @@ class ContentTranslateTool extends AbstractTool
                 'catid' => $targetCatId,
             ]);
 
-            return [
+            $linkWarnings = $this->checkInternalLinks($existing, $targetLang);
+
+            $result = [
                 'action' => 'updated',
                 'article_id' => $existing,
                 'source_id' => $sourceId,
                 'target_language' => $targetLang,
                 'title' => $translatedTitle,
             ];
+
+            if (!empty($linkWarnings)) {
+                $result['link_warnings'] = $linkWarnings;
+            }
+
+            return $result;
         }
 
         // Create new article
@@ -166,7 +174,10 @@ class ContentTranslateTool extends AbstractTool
             $translatedAlias,
         );
 
-        return [
+        // Check for internal links without translated destinations
+        $linkWarnings = $this->checkInternalLinks($newId, $targetLang);
+
+        $result = [
             'action' => 'created',
             'article_id' => $newId,
             'source_id' => $sourceId,
@@ -174,6 +185,12 @@ class ContentTranslateTool extends AbstractTool
             'title' => $translatedTitle,
             'menu_item' => $menuResult,
         ];
+
+        if (!empty($linkWarnings)) {
+            $result['link_warnings'] = $linkWarnings;
+        }
+
+        return $result;
     }
 
     /**
@@ -505,6 +522,162 @@ class ContentTranslateTool extends AbstractTool
             );
 
         $this->db->setQuery($query)->execute();
+    }
+
+    /**
+     * Scan a translated article for internal links pointing to articles
+     * that don't have a translation in the target language yet.
+     *
+     * @return list<array{type: string, target_article_id: int, target_title: string, link: string}>
+     */
+    private function checkInternalLinks(int $articleId, string $targetLang): array
+    {
+        // Load the translated article content
+        $query = $this->db->getQuery(true)
+            ->select(['introtext', $this->db->quoteName('fulltext', 'fulltext_raw')])
+            ->from($this->db->quoteName('#__content'))
+            ->where('id = :id')
+            ->bind(':id', $articleId, ParameterType::INTEGER);
+
+        $row = $this->db->setQuery($query)->loadAssoc();
+
+        if (!$row) {
+            return [];
+        }
+
+        // Collect all referenced article IDs from the content
+        $referencedIds = [];
+
+        // 1. Scan HTML links in introtext and fulltext
+        $htmlContent = ($row['introtext'] ?? '') . ' ' . ($row['fulltext_raw'] ?? '');
+        $this->extractArticleIdsFromHtml($htmlContent, $referencedIds);
+
+        // 2. Scan YOOtheme layout JSON for link props
+        $fulltext = trim($row['fulltext_raw'] ?? '');
+        if (str_starts_with($fulltext, '<!-- {')) {
+            $end = strrpos($fulltext, ' -->');
+            if ($end !== false) {
+                $json = substr($fulltext, 5, $end - 5);
+                $layout = json_decode($json, true);
+                if ($layout) {
+                    $this->extractArticleIdsFromLayout($layout, $referencedIds);
+                }
+            }
+        }
+
+        if (empty($referencedIds)) {
+            return [];
+        }
+
+        // Remove the article itself and deduplicate
+        $referencedIds = array_unique($referencedIds);
+        $referencedIds = array_filter($referencedIds, fn($id) => $id !== $articleId);
+
+        if (empty($referencedIds)) {
+            return [];
+        }
+
+        // Check which referenced articles have a translation in the target language
+        $warnings = [];
+
+        foreach ($referencedIds as $refId) {
+            $translation = $this->findExistingTranslation($refId, $targetLang);
+
+            if ($translation !== null) {
+                continue; // Has translation — OK
+            }
+
+            // Get the title of the untranslated article
+            $query = $this->db->getQuery(true)
+                ->select(['title', 'language'])
+                ->from($this->db->quoteName('#__content'))
+                ->where('id = :id')
+                ->bind(':id', $refId, ParameterType::INTEGER);
+
+            $ref = $this->db->setQuery($query)->loadAssoc();
+
+            if ($ref) {
+                $warnings[] = [
+                    'type' => 'missing_translation',
+                    'target_article_id' => $refId,
+                    'target_title' => $ref['title'],
+                    'target_language' => $ref['language'],
+                    'missing_in' => $targetLang,
+                    'hint' => "Article \"{$ref['title']}\" (ID:{$refId}) has no {$targetLang} translation. Links to it will 404.",
+                ];
+            }
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * Extract article IDs from HTML href attributes.
+     *
+     * @param  list<int> &$ids
+     */
+    private function extractArticleIdsFromHtml(string $html, array &$ids): void
+    {
+        // Match Joomla SEF URLs like /ca/coneix-nos or /es/conocenos
+        // and non-SEF like index.php?option=com_content&view=article&id=2
+        if (preg_match_all('/[?&]id=(\d+)/', $html, $matches)) {
+            foreach ($matches[1] as $id) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        // Match menu item links (Itemid)
+        if (preg_match_all('/Itemid=(\d+)/', $html, $matches)) {
+            foreach ($matches[1] as $itemId) {
+                $articleId = $this->getArticleIdFromMenuItem((int) $itemId);
+                if ($articleId) {
+                    $ids[] = $articleId;
+                }
+            }
+        }
+    }
+
+    /**
+     * Extract article IDs from YOOtheme layout link props.
+     *
+     * @param  array<string, mixed> $node
+     * @param  list<int>            &$ids
+     */
+    private function extractArticleIdsFromLayout(array $node, array &$ids): void
+    {
+        $props = $node['props'] ?? [];
+
+        // Check link-related props
+        foreach (['link', 'button_link', 'image_link', 'title_link', 'href'] as $prop) {
+            $val = $props[$prop] ?? null;
+            if (is_string($val) && $val !== '') {
+                $this->extractArticleIdsFromHtml($val, $ids);
+            }
+        }
+
+        // Recurse into children
+        foreach ($node['children'] ?? [] as $child) {
+            if (is_array($child)) {
+                $this->extractArticleIdsFromLayout($child, $ids);
+            }
+        }
+    }
+
+    private function getArticleIdFromMenuItem(int $menuItemId): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('link')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('id = :id')
+            ->bind(':id', $menuItemId, ParameterType::INTEGER);
+
+        $link = $this->db->setQuery($query)->loadResult();
+
+        if ($link && preg_match('/[?&]id=(\d+)/', $link, $m)) {
+            return (int) $m[1];
+        }
+
+        return null;
     }
 
     /**
