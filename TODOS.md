@@ -11,12 +11,15 @@
 - **Findings:** MirasAI implementa `initialize`, `tools/list`, `tools/call` i `ping`. No implementa resources, prompts, sampling ni roots.
 - **Extra:** Documentat també el workflow de migració de menús YOOtheme a `mod_menu` multiidioma (`navbar` + `dialog-mobile`).
 
-### TODO-003: Configurar entorn Docker per tests d'integració
+### ~~TODO-003: Configurar entorn Docker per tests d'integració~~ ✅ DONE
 - **What:** Crear `docker-compose.yml` amb Joomla 5 + MySQL + YOOtheme Pro.
 - **Why:** L'estratègia de test (PHPUnit unit + integració) requereix un Joomla real.
 - **Pros:** Tests fiables, CI/CD possible, reproducció consistent entre màquines.
 - **Cons:** Setup inicial (~1h amb CC). YOOtheme Pro necessita llicència.
 - **Context:** Joomla té imatge Docker oficial (`joomla:5`). YOOtheme Pro es pot instal·lar via volume mount.
+- **Completat:** 2026-03-22. Validat end-to-end en una VM Debian + Docker a Proxmox amb `./docker/bootstrap-lab.sh` i `./docker/smoke.sh`.
+- **Findings:** El laboratori funciona amb `mysql:8.4`, `joomla:5-apache`, YOOtheme Pro i el runtime MCP de MirasAI. En entorns ISP espanyols afectats pel bloqueig de Cloudflare R2 pot caldre WARP o equivalent per permetre `docker pull`.
+- **Extra:** `com_mirasai` queda com a instal·lació opcional/best effort al bootstrap; el runtime de proves depèn de `lib_mirasai` + plugins MCP.
 - **Depends on:** Llicència YOOtheme Pro.
 - **Added:** 2026-03-21 via /plan-eng-review
 

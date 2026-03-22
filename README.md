@@ -92,3 +92,60 @@ Correct state on that site:
 
 - Module translation outside the header-menu workflow, such as multilingual footer or other shared modules, remains a separate concern from article translation.
 - The standalone endpoint at `mcp-endpoint.php` is kept aligned with the same tool registry as the Joomla plugin entrypoints.
+
+## Docker Integration Lab
+
+The repository includes a Docker-based integration lab intended to run canonically inside a Proxmox VM.
+
+This lab is primarily for:
+
+- reproducible Joomla 5 + MySQL bring-up
+- installing YOOtheme Pro from a local package outside the repo
+- installing the current MirasAI workspace into a fresh Joomla instance
+- running minimal smoke checks against the MCP endpoint
+
+It is not meant to replace staging QA. The primary goal is integration safety and a reproducible local-ish lab.
+
+### Files
+
+- `docker-compose.yml`
+- `.env.example`
+- `docker/build-package.sh`
+- `docker/bootstrap-lab.sh`
+- `docker/smoke.sh`
+
+### Prerequisites
+
+- Docker with Compose available on the host VM
+- `curl`, `php`, and `zip`
+- a checked-out copy of this repository
+- a local YOOtheme Pro package path available on the VM, outside the repo
+- if the host sits behind the Spanish Cloudflare/R2 ISP blocks, Docker may need Cloudflare WARP or equivalent egress bypass to pull `mysql:8.4` and `joomla:5-apache`
+
+### Initial Setup
+
+1. Copy `.env.example` to `.env`
+2. Set secure MySQL and Joomla admin passwords
+3. Keep `.env` values shell-safe. In particular, avoid unquoted spaces in values such as `JOOMLA_SITE_NAME` or `JOOMLA_ADMIN_NAME`
+4. Set `YOOTHEME_PACKAGE_PATH` to the absolute path of a local YOOtheme Pro zip or extracted folder
+5. Run `docker compose up -d`
+6. Run `./docker/bootstrap-lab.sh`
+7. Run `./docker/smoke.sh`
+
+The bootstrap script is designed to be idempotent:
+
+- it skips Joomla install if `configuration.php` already exists
+- it rebuilds the current MirasAI package from the workspace
+- it installs the MirasAI runtime pieces needed for MCP (`lib_mirasai`, `plg_system_mirasai`, `plg_webservices_mirasai`) and attempts `com_mirasai` as a best-effort optional step
+- it provisions a Joomla API token for the configured admin user and writes the MCP token to `.docker-build/mcp-token.txt`
+
+### Proxmox Host Model
+
+The canonical deployment model for this lab is:
+
+- Proxmox host provides the persistent VM
+- Docker runs inside that VM
+- the repository defines the lab with Compose and scripts
+- YOOtheme Pro is provided via a host-local path configured in `.env`
+
+This keeps the repo portable while still optimizing for a shared, persistent integration host.

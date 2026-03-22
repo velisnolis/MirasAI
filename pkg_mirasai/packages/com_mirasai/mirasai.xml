@@ -10,7 +10,7 @@
 
     <administration>
         <menu>MirasAI</menu>
-        <files folder="admin">
+        <files>
             <folder>services</folder>
             <folder>src</folder>
             <folder>tmpl</folder>
