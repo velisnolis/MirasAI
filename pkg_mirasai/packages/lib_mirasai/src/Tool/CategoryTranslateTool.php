@@ -88,6 +88,10 @@ class CategoryTranslateTool extends AbstractTool
             return ['error' => "Category {$sourceId} not found."];
         }
 
+        if (($source['extension'] ?? '') !== 'com_content') {
+            return ['error' => 'Only com_content categories are currently supported.'];
+        }
+
         // Check existing translation
         $existing = $this->findTranslation($sourceId, $targetLang, 'com_categories.item');
 
@@ -101,6 +105,11 @@ class CategoryTranslateTool extends AbstractTool
         $title = $arguments['translated_title'];
         $alias = $arguments['translated_alias'] ?? $this->generateAlias($title);
         $description = $arguments['translated_description'] ?? ($source['description'] ?? '');
+        $targetParentId = $this->resolveTargetParentCategoryId($source, $targetLang);
+
+        if ($targetParentId === null) {
+            return ['error' => 'Translate the parent category first so the target category can be placed under the right language tree.'];
+        }
 
         if ($existing && $overwrite) {
             $query = $this->db->getQuery(true)
@@ -112,6 +121,7 @@ class CategoryTranslateTool extends AbstractTool
                 ->where('id = ' . $existing);
 
             $this->db->setQuery($query)->execute();
+            $this->createAssetForCategory($existing, $title);
 
             return [
                 'action' => 'updated',
@@ -122,16 +132,29 @@ class CategoryTranslateTool extends AbstractTool
             ];
         }
 
-        // Find parent category in target language (or keep same parent)
-        $parentId = (int) ($source['parent_id'] ?? 1);
+        $parentNode = $this->getCategoryNode($targetParentId);
 
-        // Get max lft/rgt
+        if (!$parentNode) {
+            return ['error' => "Target parent category {$targetParentId} not found."];
+        }
+
+        $insertAt = (int) $parentNode['rgt'];
+        $level = (int) $parentNode['level'] + 1;
+        $path = $this->buildCategoryPath((string) $parentNode['path'], $alias);
+
         $query = $this->db->getQuery(true)
-            ->select('MAX(rgt)')
-            ->from($this->db->quoteName('#__categories'))
-            ->where('extension = ' . $this->db->quote('com_content'));
+            ->update($this->db->quoteName('#__categories'))
+            ->set($this->db->quoteName('rgt') . ' = ' . $this->db->quoteName('rgt') . ' + 2')
+            ->where($this->db->quoteName('rgt') . ' >= :insertAt')
+            ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
+        $this->db->setQuery($query)->execute();
 
-        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__categories'))
+            ->set($this->db->quoteName('lft') . ' = ' . $this->db->quoteName('lft') . ' + 2')
+            ->where($this->db->quoteName('lft') . ' > :insertAt')
+            ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
+        $this->db->setQuery($query)->execute();
 
         // Insert new category
         $columns = [
@@ -143,11 +166,11 @@ class CategoryTranslateTool extends AbstractTool
         ];
 
         $values = [
-            $parentId,
-            $maxRgt + 1,
-            $maxRgt + 2,
-            (int) ($source['level'] ?? 1),
-            $this->db->quote($alias),
+            $targetParentId,
+            $insertAt,
+            $insertAt + 1,
+            $level,
+            $this->db->quote($path),
             $this->db->quote($source['extension'] ?? 'com_content'),
             $this->db->quote($title),
             $this->db->quote($alias),
@@ -188,6 +211,43 @@ class CategoryTranslateTool extends AbstractTool
             'source_id' => $sourceId,
             'target_language' => $targetLang,
             'title' => $title,
+            'parent_id' => $targetParentId,
         ];
+    }
+
+    protected function resolveTargetParentCategoryId(array $source, string $targetLang): ?int
+    {
+        $parentId = (int) ($source['parent_id'] ?? 1);
+
+        if ($parentId <= 1) {
+            return 1;
+        }
+
+        $translatedParent = $this->findTranslation($parentId, $targetLang, 'com_categories.item');
+
+        return $translatedParent ?: null;
+    }
+
+    /**
+     * @return array{id: string, parent_id: string, level: string, path: string, lft: string, rgt: string}|null
+     */
+    protected function getCategoryNode(int $categoryId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'parent_id', 'level', 'path', 'lft', 'rgt'])
+            ->from($this->db->quoteName('#__categories'))
+            ->where('id = :id')
+            ->bind(':id', $categoryId, ParameterType::INTEGER);
+
+        return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    protected function buildCategoryPath(string $parentPath, string $alias): string
+    {
+        if ($parentPath === '' || $parentPath === 'root') {
+            return $alias;
+        }
+
+        return $parentPath . '/' . $alias;
     }
 }

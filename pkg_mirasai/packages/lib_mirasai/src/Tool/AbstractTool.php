@@ -233,16 +233,330 @@ abstract class AbstractTool implements ToolInterface
      */
     protected function createAssetForCategory(int $categoryId, string $title): void
     {
-        $assetId = $this->createAsset($categoryId, $title, 'com_categories.category', 'com_categories');
+        $this->ensureContentCategoryAsset($categoryId, $title);
+    }
 
-        if ($assetId) {
+    /**
+     * Ensure a com_content category has a valid asset linked under the right parent.
+     */
+    protected function ensureContentCategoryAsset(int $categoryId, string $title): void
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'title', 'parent_id', 'asset_id'])
+            ->from($this->db->quoteName('#__categories'))
+            ->where('id = :id')
+            ->where('extension = ' . $this->db->quote('com_content'))
+            ->bind(':id', $categoryId, ParameterType::INTEGER);
+
+        $category = $this->db->setQuery($query)->loadAssoc();
+
+        if (!$category) {
+            return;
+        }
+
+        $assetName = 'com_content.category.' . $categoryId;
+        $assetId = $this->resolveOrCreateCategoryAsset(
+            (int) $category['id'],
+            (string) $category['title'],
+            (int) $category['parent_id'],
+            $assetName,
+            !empty($category['asset_id']) ? (int) $category['asset_id'] : null
+        );
+
+        if (!$assetId) {
+            return;
+        }
+
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__categories'))
+            ->set($this->db->quoteName('asset_id') . ' = ' . $assetId)
+            ->where('id = :id')
+            ->bind(':id', $categoryId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    protected function resolveOrCreateCategoryAsset(
+        int $categoryId,
+        string $title,
+        int $parentCategoryId,
+        string $assetName,
+        ?int $linkedAssetId = null
+    ): ?int {
+        $asset = $linkedAssetId ? $this->getAssetById($linkedAssetId) : null;
+
+        if ($asset && (string) $asset['name'] === $assetName) {
+            $this->updateAssetTitle((int) $asset['id'], $title);
+
+            return (int) $asset['id'];
+        }
+
+        $asset = $this->getAssetByName($assetName);
+
+        if ($asset) {
+            $this->updateAssetTitle((int) $asset['id'], $title);
+
+            return (int) $asset['id'];
+        }
+
+        $parentAssetId = $this->resolveCategoryAssetParentId($parentCategoryId);
+
+        if (!$parentAssetId) {
+            return null;
+        }
+
+        return $this->insertAssetNode($parentAssetId, $assetName, $title);
+    }
+
+    protected function resolveCategoryAssetParentId(int $parentCategoryId): ?int
+    {
+        if ($parentCategoryId <= 1) {
+            return $this->getAssetIdByName('com_content');
+        }
+
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'title', 'parent_id', 'asset_id'])
+            ->from($this->db->quoteName('#__categories'))
+            ->where('id = :id')
+            ->where('extension = ' . $this->db->quote('com_content'))
+            ->bind(':id', $parentCategoryId, ParameterType::INTEGER);
+
+        $parentCategory = $this->db->setQuery($query)->loadAssoc();
+
+        if (!$parentCategory) {
+            return null;
+        }
+
+        $parentAssetName = 'com_content.category.' . $parentCategoryId;
+        $parentAssetId = $this->resolveOrCreateCategoryAsset(
+            (int) $parentCategory['id'],
+            (string) $parentCategory['title'],
+            (int) $parentCategory['parent_id'],
+            $parentAssetName,
+            !empty($parentCategory['asset_id']) ? (int) $parentCategory['asset_id'] : null
+        );
+
+        if ($parentAssetId && (int) ($parentCategory['asset_id'] ?? 0) !== (int) $parentAssetId) {
             $query = $this->db->getQuery(true)
                 ->update($this->db->quoteName('#__categories'))
-                ->set($this->db->quoteName('asset_id') . ' = ' . $assetId)
-                ->where('id = ' . $categoryId);
+                ->set($this->db->quoteName('asset_id') . ' = ' . (int) $parentAssetId)
+                ->where('id = :id')
+                ->bind(':id', (int) $parentCategory['id'], ParameterType::INTEGER);
 
             $this->db->setQuery($query)->execute();
         }
+
+        return $parentAssetId ?: null;
+    }
+
+    /**
+     * Insert an asset as the last child of the given parent, preserving nested set integrity.
+     */
+    protected function insertAssetNode(int $parentAssetId, string $assetName, string $title): ?int
+    {
+        $this->lockTables([$this->db->replacePrefix('#__assets') . ' WRITE']);
+
+        try {
+            $existing = $this->getAssetByName($assetName);
+
+            if ($existing) {
+                $this->updateAssetTitle((int) $existing['id'], $title);
+
+                return (int) $existing['id'];
+            }
+
+            $parentAsset = $this->getAssetById($parentAssetId);
+
+            if (!$parentAsset) {
+                return null;
+            }
+
+            $insertAt = (int) $parentAsset['rgt'];
+            $level = (int) $parentAsset['level'] + 1;
+
+            $query = $this->db->getQuery(true)
+                ->update($this->db->quoteName('#__assets'))
+                ->set($this->db->quoteName('rgt') . ' = ' . $this->db->quoteName('rgt') . ' + 2')
+                ->where($this->db->quoteName('rgt') . ' >= :insertAt')
+                ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
+            $this->db->setQuery($query)->execute();
+
+            $query = $this->db->getQuery(true)
+                ->update($this->db->quoteName('#__assets'))
+                ->set($this->db->quoteName('lft') . ' = ' . $this->db->quoteName('lft') . ' + 2')
+                ->where($this->db->quoteName('lft') . ' > :insertAt')
+                ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
+            $this->db->setQuery($query)->execute();
+
+            $query = $this->db->getQuery(true)
+                ->insert($this->db->quoteName('#__assets'))
+                ->columns([
+                    $this->db->quoteName('parent_id'),
+                    $this->db->quoteName('lft'),
+                    $this->db->quoteName('rgt'),
+                    $this->db->quoteName('level'),
+                    $this->db->quoteName('name'),
+                    $this->db->quoteName('title'),
+                    $this->db->quoteName('rules'),
+                ])
+                ->values(implode(',', [
+                    $parentAssetId,
+                    $insertAt,
+                    $insertAt + 1,
+                    $level,
+                    $this->db->quote($assetName),
+                    $this->db->quote($title),
+                    $this->db->quote('{}'),
+                ]));
+
+            $this->db->setQuery($query)->execute();
+
+            return (int) $this->db->insertid();
+        } finally {
+            $this->unlockTables();
+        }
+    }
+
+    protected function getAssetIdByName(string $name): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__assets'))
+            ->where($this->db->quoteName('name') . ' = :name')
+            ->bind(':name', $name);
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
+    /**
+     * @return array{id: string, parent_id: string, lft: string, rgt: string, level: string, name: string, title: string}|null
+     */
+    protected function getAssetById(int $assetId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'parent_id', 'lft', 'rgt', 'level', 'name', 'title'])
+            ->from($this->db->quoteName('#__assets'))
+            ->where('id = :id')
+            ->bind(':id', $assetId, ParameterType::INTEGER);
+
+        return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    /**
+     * @return array{id: string, parent_id: string, lft: string, rgt: string, level: string, name: string, title: string}|null
+     */
+    protected function getAssetByName(string $name): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'parent_id', 'lft', 'rgt', 'level', 'name', 'title'])
+            ->from($this->db->quoteName('#__assets'))
+            ->where($this->db->quoteName('name') . ' = :name')
+            ->bind(':name', $name);
+
+        return $this->db->setQuery($query)->loadAssoc() ?: null;
+    }
+
+    protected function updateAssetTitle(int $assetId, string $title): void
+    {
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__assets'))
+            ->set($this->db->quoteName('title') . ' = ' . $this->db->quote($title))
+            ->where('id = :id')
+            ->bind(':id', $assetId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    /**
+     * @param list<string> $tables
+     */
+    protected function lockTables(array $tables): void
+    {
+        $this->db->setQuery('LOCK TABLES ' . implode(', ', $tables))->execute();
+    }
+
+    protected function unlockTables(): void
+    {
+        $this->db->setQuery('UNLOCK TABLES')->execute();
+    }
+
+    /**
+     * Ensure a workflow association exists for an item.
+     *
+     * If a source item is provided and already belongs to a workflow stage,
+     * reuse that stage. Otherwise fall back to the default workflow stage for
+     * the extension.
+     */
+    protected function ensureWorkflowAssociation(int $itemId, string $extension, ?int $sourceItemId = null): void
+    {
+        $query = $this->db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__workflow_associations'))
+            ->where('item_id = :itemId')
+            ->where('extension = :extension')
+            ->bind(':itemId', $itemId, ParameterType::INTEGER)
+            ->bind(':extension', $extension);
+
+        if ((int) $this->db->setQuery($query)->loadResult() > 0) {
+            return;
+        }
+
+        $stageId = $sourceItemId ? $this->getWorkflowStageForItem($sourceItemId, $extension) : null;
+        $stageId = $stageId ?? $this->getDefaultWorkflowStageId($extension);
+
+        if (!$stageId) {
+            return;
+        }
+
+        $query = $this->db->getQuery(true)
+            ->insert($this->db->quoteName('#__workflow_associations'))
+            ->columns([
+                $this->db->quoteName('item_id'),
+                $this->db->quoteName('stage_id'),
+                $this->db->quoteName('extension'),
+            ])
+            ->values(
+                (int) $itemId . ','
+                . (int) $stageId . ','
+                . $this->db->quote($extension)
+            );
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    protected function getWorkflowStageForItem(int $itemId, string $extension): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('stage_id')
+            ->from($this->db->quoteName('#__workflow_associations'))
+            ->where('item_id = :itemId')
+            ->where('extension = :extension')
+            ->bind(':itemId', $itemId, ParameterType::INTEGER)
+            ->bind(':extension', $extension);
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
+    protected function getDefaultWorkflowStageId(string $extension): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('s.id')
+            ->from($this->db->quoteName('#__workflow_stages', 's'))
+            ->join('INNER', $this->db->quoteName('#__workflows', 'w') . ' ON w.id = s.workflow_id')
+            ->where('w.extension = :extension')
+            ->where('w.default = 1')
+            ->where('s.default = 1')
+            ->where('w.published = 1')
+            ->where('s.published = 1')
+            ->bind(':extension', $extension);
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
     }
 
     /**

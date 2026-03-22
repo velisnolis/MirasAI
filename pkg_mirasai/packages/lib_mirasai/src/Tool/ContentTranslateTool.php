@@ -178,6 +178,7 @@ class ContentTranslateTool extends AbstractTool
             }
 
             $this->updateArticle($existing, $updateFields);
+            $this->ensureWorkflowAssociation($existing, 'com_content.article', $sourceId);
 
             $introtextResult = $this->regenerateIntrotext($existing);
             $linkWarnings = $this->checkInternalLinks($existing, $targetLang);
@@ -220,6 +221,7 @@ class ContentTranslateTool extends AbstractTool
 
         // Create association
         $this->createAssociation($sourceId, $newId);
+        $this->ensureWorkflowAssociation($newId, 'com_content.article', $sourceId);
 
         // Create menu item if the source article has one
         $menuResult = $this->createMenuItemForTranslation(
