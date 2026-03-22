@@ -22,7 +22,7 @@ class ThemeExtractToModulesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Extracts a YOOtheme Builder theme area (footer, header, etc.) into per-language Joomla modules (mod_yootheme_builder). Creates one module per language with translated Builder content, assigned to the correct position. This enables multilingual theme areas that were previously shared across all languages.';
+        return 'Extracts a YOOtheme Builder theme area (footer, header, etc.) into per-language Joomla modules. Three steps: (1) creates mod_yootheme_builder modules per language with translated content, (2) replaces the theme area\'s Builder content with a module_position element that loads the per-language modules, (3) YOOtheme then serves the correct module based on the visitor\'s language.';
     }
 
     public function getInputSchema(): array
@@ -125,11 +125,18 @@ class ThemeExtractToModulesTool extends AbstractTool
             ];
         }
 
+        // 5. Replace the theme area content with a module_position element
+        //    This is the key step: the theme Builder area now loads modules from
+        //    the position instead of rendering its own content. YOOtheme's
+        //    language filter then serves the correct module per language.
+        $replaced = $this->replaceThemeAreaWithModulePosition($area, $position);
+
         return [
             'area' => $area,
             'position' => $position,
             'translatable_nodes' => $translatableNodes,
             'modules' => $results,
+            'theme_area_replaced' => $replaced,
         ];
     }
 
@@ -215,6 +222,102 @@ class ThemeExtractToModulesTool extends AbstractTool
                 $this->applyReplacements($child, $replacements, "{$path}>{$childType}[{$i}]");
             }
         }
+    }
+
+    /**
+     * Replace the theme area's Builder content with a module_position element.
+     *
+     * Before: theme area has inline Builder content (e.g., buttons, text)
+     * After:  theme area has a module_position element that loads modules from the position
+     *
+     * This way YOOtheme renders the per-language module instead of the static theme content.
+     */
+    private function replaceThemeAreaWithModulePosition(string $area, string $position): bool
+    {
+        $query = $this->db->getQuery(true)
+            ->select('params')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('template = ' . $this->db->quote('yootheme'));
+
+        $paramsJson = $this->db->setQuery($query)->loadResult();
+
+        if (!$paramsJson) {
+            return false;
+        }
+
+        $params = json_decode($paramsJson, true);
+        $config = isset($params['config']) ? json_decode($params['config'], true) : [];
+
+        if (!isset($config[$area]['content'])) {
+            return false;
+        }
+
+        // Check if already replaced (module_position is already there)
+        $existingContent = json_encode($config[$area]['content']);
+        if (str_contains($existingContent, '"type":"module_position"')) {
+            return false; // Already done
+        }
+
+        // Build the module_position layout
+        $modulePositionLayout = [
+            'type' => 'layout',
+            'children' => [
+                [
+                    'type' => 'section',
+                    'props' => [
+                        'style' => 'default',
+                        'width' => 'default',
+                        'vertical_align' => 'middle',
+                        'image_position' => 'center-center',
+                        'padding_top' => 'none',
+                        'padding_bottom' => 'xsmall',
+                    ],
+                    'children' => [
+                        [
+                            'type' => 'row',
+                            'props' => [],
+                            'children' => [
+                                [
+                                    'type' => 'column',
+                                    'props' => [
+                                        'image_position' => 'center-center',
+                                        'position_sticky_breakpoint' => 'm',
+                                    ],
+                                    'children' => [
+                                        [
+                                            'type' => 'module_position',
+                                            'props' => [
+                                                'layout' => 'stack',
+                                                'breakpoint' => 'm',
+                                                'content' => $position,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'version' => '5.0.24',
+        ];
+
+        // Update the config
+        $config[$area]['content'] = $modulePositionLayout;
+
+        $params['config'] = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        // Write back to template_styles
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__template_styles'))
+            ->set($this->db->quoteName('params') . ' = ' . $this->db->quote(
+                json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            ))
+            ->where('template = ' . $this->db->quote('yootheme'));
+
+        $this->db->setQuery($query)->execute();
+
+        return true;
     }
 
     private function resolvePosition(string $area): string
