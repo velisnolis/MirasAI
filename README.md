@@ -31,6 +31,9 @@ It does not currently implement:
 - `site/setup-language-switcher`
 - `theme/extract-to-modules`
 - `menu/migrate-theme-to-modules`
+- `template/list`
+- `template/read`
+- `template/translate`
 
 ## Multilingual Workflows
 
@@ -41,6 +44,17 @@ For `com_content` articles built with YOOtheme Pro, MirasAI keeps the Builder st
 ### Theme Areas
 
 For Builder-driven theme areas such as `footer`, use `theme/extract-to-modules` to move the area into per-language `mod_yootheme_builder` modules and replace the inline theme layout with a `module_position` wrapper.
+
+### Builder Templates
+
+YOOtheme Builder templates live in `#__extensions.custom_data.templates`.
+
+MirasAI treats them as multilingual-ready only when:
+
+- no template exists for that assignment, or
+- the template is fully dynamic and shared across all languages
+
+If a template contains fixed text, the v1 strategy is to duplicate it per language and assign the target language directly on the template.
 
 ### Header Menus
 

@@ -175,6 +175,30 @@ foreach ($info['extensions'] as $ext) {
                             <td><code>content/check-links</code></td>
                             <td>Escaneja articles traduïts per detectar enllaços interns sense destí traduït i, opcionalment, els reescriu.</td>
                         </tr>
+                        <tr>
+                            <td><code>content/audit-multilingual</code></td>
+                            <td>Audita gaps de multidioma a articles, menús, templates, theme areas i metadata.</td>
+                        </tr>
+                        <tr>
+                            <td><code>theme/extract-to-modules</code></td>
+                            <td>Extreu un area del theme YOOtheme a mòduls per idioma i el substitueix per un <code>module_position</code>.</td>
+                        </tr>
+                        <tr>
+                            <td><code>menu/migrate-theme-to-modules</code></td>
+                            <td>Migra menús gestionats per YOOtheme a <code>mod_menu</code> per idioma.</td>
+                        </tr>
+                        <tr>
+                            <td><code>template/list</code></td>
+                            <td>Llista templates de YOOtheme amb idioma, tipus i si tenen text fix.</td>
+                        </tr>
+                        <tr>
+                            <td><code>template/read</code></td>
+                            <td>Llegeix un template YOOtheme i identifica els nodes de text fix traduïbles.</td>
+                        </tr>
+                        <tr>
+                            <td><code>template/translate</code></td>
+                            <td>Duplica un template per idioma, conserva l'assignació i només tradueix les cadenes fixes del layout.</td>
+                        </tr>
                     </tbody>
                 </table>
 

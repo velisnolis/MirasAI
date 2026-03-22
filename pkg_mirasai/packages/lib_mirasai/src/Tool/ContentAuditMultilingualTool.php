@@ -44,6 +44,8 @@ class ContentAuditMultilingualTool extends AbstractTool
             );
         }
 
+        $targetLangs = array_values($targetLangs);
+
         $gaps = [];
 
         // 1. Audit articles
@@ -67,6 +69,7 @@ class ContentAuditMultilingualTool extends AbstractTool
 
         // 7. Audit theme areas
         $gaps = array_merge($gaps, $this->auditThemeAreas());
+        $gaps = array_merge($gaps, $this->auditTemplates($sourceLang, $targetLangs));
 
         // Summary
         $byType = [];
@@ -515,6 +518,152 @@ class ContentAuditMultilingualTool extends AbstractTool
                     'field' => 'metadesc',
                     'hint' => "Article \"{$article['title']}\" ({$targetLang}) has no meta description.",
                     'fix' => null, // Can be fixed by re-running content/translate with include_meta
+                ];
+            }
+        }
+
+        return $gaps;
+    }
+
+    /**
+     * @param list<string> $targetLangs
+     * @return list<array<string, mixed>>
+     */
+    private function auditTemplates(string $sourceLang, array $targetLangs): array
+    {
+        $templates = $this->loadYoothemeTemplates();
+
+        if ($templates === []) {
+            return [];
+        }
+
+        $records = [];
+
+        foreach ($templates as $key => $template) {
+            if (!is_array($template)) {
+                continue;
+            }
+
+            $records[] = [
+                'key' => (string) $key,
+                'name' => $this->getYoothemeTemplateName($template),
+                'type' => is_string($template['type'] ?? null) ? $template['type'] : '',
+                'language' => $this->getYoothemeTemplateLanguage($template),
+                'has_static_text' => $this->yoothemeTemplateHasStaticText($template),
+                'fingerprint' => $this->buildYoothemeTemplateAssignmentFingerprint($template),
+            ];
+        }
+
+        if ($records === []) {
+            return [];
+        }
+
+        $groups = [];
+
+        foreach ($records as $record) {
+            $groups[$record['fingerprint']][] = $record;
+        }
+
+        $gaps = [];
+
+        foreach ($groups as $group) {
+            $byLanguage = [];
+            $hasWildcard = false;
+            $hasStaticWildcard = false;
+
+            foreach ($group as $record) {
+                $lang = $record['language'] === '' ? '*' : $record['language'];
+
+                if (isset($byLanguage[$lang])) {
+                    $gaps[] = [
+                        'type' => 'template_assignment_conflict',
+                        'severity' => 'high',
+                        'template_keys' => [$byLanguage[$lang]['key'], $record['key']],
+                        'language' => $lang,
+                        'hint' => 'More than one YOOtheme template shares the same assignment fingerprint and language.',
+                        'fix' => null,
+                    ];
+                    continue 2;
+                }
+
+                $byLanguage[$lang] = $record;
+                $hasWildcard = $hasWildcard || $lang === '*';
+                $hasStaticWildcard = $hasStaticWildcard || ($lang === '*' && $record['has_static_text']);
+            }
+
+            if ($hasWildcard && count($group) > 1) {
+                $gaps[] = [
+                    'type' => 'template_assignment_conflict',
+                    'severity' => 'high',
+                    'template_keys' => array_map(static fn(array $record): string => $record['key'], $group),
+                    'hint' => 'A wildcard YOOtheme template overlaps with language-specific variants for the same assignment.',
+                    'fix' => null,
+                ];
+                continue;
+            }
+
+            if ($hasStaticWildcard) {
+                /** @var array<string, mixed> $sourceRecord */
+                $sourceRecord = $byLanguage['*'];
+                $gaps[] = [
+                    'type' => 'template_static_text_shared_all_languages',
+                    'severity' => 'high',
+                    'template_key' => $sourceRecord['key'],
+                    'template_name' => $sourceRecord['name'],
+                    'template_type' => $sourceRecord['type'],
+                    'hint' => 'This template contains fixed text but is still assigned to all languages.',
+                    'fix' => [
+                        'tool' => 'template/translate',
+                        'arguments' => [
+                            'key' => $sourceRecord['key'],
+                            'target_language' => $targetLangs[0] ?? '',
+                            'translated_name' => '[TRANSLATE TEMPLATE]',
+                        ],
+                    ],
+                ];
+                continue;
+            }
+
+            if ($hasWildcard) {
+                continue;
+            }
+
+            /** @var array<string, mixed>|null $sourceRecord */
+            $sourceRecord = $byLanguage[$sourceLang] ?? null;
+
+            if ($sourceRecord === null) {
+                $sourceRecord = reset($group) ?: null;
+            }
+
+            if ($sourceRecord === null) {
+                continue;
+            }
+
+            foreach ($targetLangs as $targetLang) {
+                if (isset($byLanguage[$targetLang])) {
+                    continue;
+                }
+
+                $gaps[] = [
+                    'type' => $sourceRecord['has_static_text']
+                        ? 'template_language_variant_missing'
+                        : 'template_dynamic_only_language_limited',
+                    'severity' => $sourceRecord['has_static_text'] ? 'high' : 'medium',
+                    'template_key' => $sourceRecord['key'],
+                    'template_name' => $sourceRecord['name'],
+                    'template_type' => $sourceRecord['type'],
+                    'missing_in' => $targetLang,
+                    'hint' => $sourceRecord['has_static_text']
+                        ? "Template \"{$sourceRecord['name']}\" is missing a translated variant in {$targetLang}."
+                        : "Dynamic-only template \"{$sourceRecord['name']}\" is limited to specific languages and has no {$targetLang} variant.",
+                    'fix' => [
+                        'tool' => 'template/translate',
+                        'arguments' => [
+                            'key' => $sourceRecord['key'],
+                            'target_language' => $targetLang,
+                            'translated_name' => $sourceRecord['has_static_text'] ? '[TRANSLATE TEMPLATE]' : '',
+                        ],
+                    ],
                 ];
             }
         }

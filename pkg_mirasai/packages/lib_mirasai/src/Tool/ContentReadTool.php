@@ -85,7 +85,7 @@ class ContentReadTool extends AbstractTool
 
                 if ($layout !== null) {
                     $result['yootheme_layout'] = $layout;
-                    $result['yootheme_translatable_nodes'] = $this->findTranslatableNodes($layout);
+                    $result['yootheme_translatable_nodes'] = $this->findYoothemeTranslatableNodes($layout);
                 }
             }
         } else {
@@ -93,87 +93,5 @@ class ContentReadTool extends AbstractTool
         }
 
         return $result;
-    }
-
-    private function extractYoothemeJson(string $fulltext): ?string
-    {
-        $fulltext = trim($fulltext);
-
-        if (!str_starts_with($fulltext, '<!-- ')) {
-            return null;
-        }
-
-        $end = strrpos($fulltext, ' -->');
-
-        if ($end === false) {
-            return null;
-        }
-
-        return substr($fulltext, 5, $end - 5);
-    }
-
-    private const TEXT_PROPS = [
-        'content', 'title', 'meta', 'subtitle', 'text', 'video_title',
-        'link_text', 'label', 'description', 'caption', 'alt',
-        'button_text', 'heading', 'footer', 'header', 'placeholder',
-    ];
-
-    private const CONFIG_PROPS = [
-        'title_position', 'title_style', 'title_element', 'title_decoration',
-        'image_position', 'image_effect', 'meta_align', 'id', 'class',
-        'title_rotation', 'title_breakpoint', 'heading_style', 'height',
-        'width', 'style', 'animation', 'name', 'status', 'source',
-    ];
-
-    /**
-     * @param  array<string, mixed> $node
-     * @param  string               $path
-     * @return list<array{path: string, node_type: string, field: string, text: string, format: string}>
-     */
-    private function findTranslatableNodes(array $node, string $path = 'root'): array
-    {
-        $results = [];
-        $props = $node['props'] ?? [];
-        $nodeType = $node['type'] ?? 'unknown';
-
-        foreach ($props as $key => $value) {
-            if (!is_string($value) || strlen(trim($value)) < 2) {
-                continue;
-            }
-
-            if (in_array($key, self::CONFIG_PROPS, true)) {
-                continue;
-            }
-
-            $isTextProp = in_array($key, self::TEXT_PROPS, true);
-            $looksLikeText = strlen($value) > 15
-                && str_contains($value, ' ')
-                && !preg_match('/^(http|\/|#|images\/|uk-|el-)/', $value)
-                && !preg_match('/(px|vh|vw|%|\{)/', $value);
-
-            if ($isTextProp || $looksLikeText) {
-                $format = 'plain';
-
-                if (preg_match('/<[a-z][\s>]/i', $value)) {
-                    $format = 'html';
-                }
-
-                $results[] = [
-                    'path' => $path,
-                    'node_type' => $nodeType,
-                    'field' => $key,
-                    'text' => $value,
-                    'format' => $format,
-                ];
-            }
-        }
-
-        foreach ($node['children'] ?? [] as $i => $child) {
-            $childType = $child['type'] ?? 'unknown';
-            $childPath = "{$path}>{$childType}[{$i}]";
-            $results = array_merge($results, $this->findTranslatableNodes($child, $childPath));
-        }
-
-        return $results;
     }
 }

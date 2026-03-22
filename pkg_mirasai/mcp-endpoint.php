@@ -34,6 +34,9 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ThemeExtractToModulesTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/MenuMigrateThemeToModulesTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateListTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateReadTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
@@ -45,6 +48,9 @@ use Mirasai\Library\Tool\ContentTranslateTool;
 use Mirasai\Library\Tool\SystemInfoTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
+use Mirasai\Library\Tool\TemplateListTool;
+use Mirasai\Library\Tool\TemplateReadTool;
+use Mirasai\Library\Tool\TemplateTranslateTool;
 use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
@@ -68,6 +74,9 @@ $registry->register(new ContentTranslateTool());
 $registry->register(new ContentCheckLinksTool());
 $registry->register(new ThemeExtractToModulesTool());
 $registry->register(new MenuMigrateThemeToModulesTool());
+$registry->register(new TemplateListTool());
+$registry->register(new TemplateReadTool());
+$registry->register(new TemplateTranslateTool());
 
 $handler = new McpHandler($registry);
 

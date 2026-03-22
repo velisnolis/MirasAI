@@ -18,6 +18,9 @@ use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
 use Mirasai\Library\Tool\SiteSetupLanguageSwitcherTool;
+use Mirasai\Library\Tool\TemplateListTool;
+use Mirasai\Library\Tool\TemplateReadTool;
+use Mirasai\Library\Tool\TemplateTranslateTool;
 use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateBatchTool;
@@ -161,6 +164,9 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
         $registry->register(new SiteSetupLanguageSwitcherTool());
         $registry->register(new ThemeExtractToModulesTool());
         $registry->register(new MenuMigrateThemeToModulesTool());
+        $registry->register(new TemplateListTool());
+        $registry->register(new TemplateReadTool());
+        $registry->register(new TemplateTranslateTool());
 
         return new McpHandler($registry);
     }
