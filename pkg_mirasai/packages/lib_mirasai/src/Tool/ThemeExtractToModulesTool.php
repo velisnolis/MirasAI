@@ -47,6 +47,10 @@ class ThemeExtractToModulesTool extends AbstractTool
                         'additionalProperties' => ['type' => 'string'],
                     ],
                 ],
+                'template_style_id' => [
+                    'type' => 'integer',
+                    'description' => 'Optional: specific template_styles id to operate on. Defaults to the active YOOtheme style (client_id=0, home=1).',
+                ],
             ],
             'required' => ['area', 'languages'],
         ];
@@ -71,31 +75,74 @@ class ThemeExtractToModulesTool extends AbstractTool
             return ['error' => 'area and languages are required.'];
         }
 
-        // 1. Read the theme area layout
-        $layout = $this->readThemeAreaLayout($area);
+        // 0. Resolve the template_style id
+        $styleId = isset($arguments['template_style_id'])
+            ? (int) $arguments['template_style_id']
+            : $this->resolveActiveStyleId();
 
-        if (!$layout) {
-            return ['error' => "Theme area \"{$area}\" has no Builder content."];
+        if (!$styleId) {
+            return ['error' => 'No active YOOtheme template style found (client_id=0, home=1). Pass template_style_id explicitly if needed.'];
         }
 
-        // 2. Find translatable nodes in the layout
+        // 1. Validate mod_yootheme_builder is installed
+        if (!$this->isModuleTypeAvailable('mod_yootheme_builder')) {
+            return ['error' => 'mod_yootheme_builder is not installed. YOOtheme Pro is required.'];
+        }
+
+        // 2. Validate all requested languages are published
+        $invalidLangs = [];
+        foreach ($languages as $lang) {
+            if (!$this->languageExists($lang)) {
+                $invalidLangs[] = $lang;
+            }
+        }
+        if (!empty($invalidLangs)) {
+            return ['error' => 'Languages not published: ' . implode(', ', $invalidLangs)];
+        }
+
+        // 3. Read the theme area layout
+        $layout = $this->readThemeAreaLayout($area, $styleId);
+
+        if (!$layout) {
+            return ['error' => "Theme area \"{$area}\" has no Builder content in template_style id={$styleId}."];
+        }
+
+        // 4. Validate the layout JSON structure
+        if (!isset($layout['type']) && !isset($layout['children'])) {
+            return ['error' => "Theme area \"{$area}\" has invalid Builder layout (missing type/children)."];
+        }
+
+        // 5. Find translatable nodes in the layout
         $translatableNodes = $this->findTranslatableNodes($layout, 'root');
 
-        // 3. Determine the Joomla module position for this area
+        // 6. Determine the Joomla module position for this area
         $position = $this->resolvePosition($area);
 
-        // 4. Create a mod_yootheme_builder module per language
+        // 7. Create a mod_yootheme_builder module per language
         $results = [];
+        $conflicts = [];
 
         foreach ($languages as $lang) {
-            // Check if a module already exists for this area + language
-            $existingId = $this->findExistingModule($position, $lang);
+            // Check if a MirasAI-managed module already exists
+            $existingId = $this->findExistingModule($position, $lang, $area);
 
             if ($existingId) {
                 $results[] = [
                     'language' => $lang,
                     'action' => 'exists',
                     'module_id' => $existingId,
+                ];
+                continue;
+            }
+
+            // Check for non-MirasAI modules at the same position+language
+            $conflictId = $this->findConflictingModule($position, $lang);
+            if ($conflictId) {
+                $conflicts[] = [
+                    'language' => $lang,
+                    'module_id' => $conflictId,
+                    'position' => $position,
+                    'reason' => 'Existing mod_yootheme_builder module not managed by MirasAI.',
                 ];
                 continue;
             }
@@ -125,30 +172,75 @@ class ThemeExtractToModulesTool extends AbstractTool
             ];
         }
 
-        // 5. Replace the theme area content with a module_position element
-        //    This is the key step: the theme Builder area now loads modules from
-        //    the position instead of rendering its own content. YOOtheme's
-        //    language filter then serves the correct module per language.
-        $replaced = $this->replaceThemeAreaWithModulePosition($area, $position);
+        // 8. If there were conflicts, abort the theme area replacement and report
+        if (!empty($conflicts)) {
+            return [
+                'error' => 'Conflicts detected: existing modules not managed by MirasAI occupy the target position. Remove them or pass force: true (Phase 2).',
+                'area' => $area,
+                'position' => $position,
+                'template_style_id' => $styleId,
+                'translatable_nodes' => $translatableNodes,
+                'modules' => $results,
+                'conflicts' => $conflicts,
+                'theme_area_replaced' => false,
+            ];
+        }
+
+        // 9. Replace the theme area content with a module_position element
+        $replaced = $this->replaceThemeAreaWithModulePosition($area, $position, $styleId);
 
         return [
             'area' => $area,
             'position' => $position,
+            'template_style_id' => $styleId,
             'translatable_nodes' => $translatableNodes,
             'modules' => $results,
+            'conflicts' => [],
             'theme_area_replaced' => $replaced,
         ];
     }
 
     /**
+     * Resolve the active YOOtheme template style id (site-side, home=1).
+     */
+    private function resolveActiveStyleId(): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('template = ' . $this->db->quote('yootheme'))
+            ->where('client_id = 0')
+            ->where('home = 1');
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
+    /**
+     * Check if a module type is installed and available.
+     */
+    private function isModuleTypeAvailable(string $module): bool
+    {
+        $query = $this->db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__extensions'))
+            ->where('element = ' . $this->db->quote($module))
+            ->where('type = ' . $this->db->quote('module'));
+
+        return (int) $this->db->setQuery($query)->loadResult() > 0;
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
-    private function readThemeAreaLayout(string $area): ?array
+    private function readThemeAreaLayout(string $area, int $styleId): ?array
     {
         $query = $this->db->getQuery(true)
             ->select('params')
             ->from($this->db->quoteName('#__template_styles'))
-            ->where('template = ' . $this->db->quote('yootheme'));
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
 
         $params = $this->db->setQuery($query)->loadResult();
 
@@ -232,12 +324,13 @@ class ThemeExtractToModulesTool extends AbstractTool
      *
      * This way YOOtheme renders the per-language module instead of the static theme content.
      */
-    private function replaceThemeAreaWithModulePosition(string $area, string $position): bool
+    private function replaceThemeAreaWithModulePosition(string $area, string $position, int $styleId): bool
     {
         $query = $this->db->getQuery(true)
             ->select('params')
             ->from($this->db->quoteName('#__template_styles'))
-            ->where('template = ' . $this->db->quote('yootheme'));
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
 
         $paramsJson = $this->db->setQuery($query)->loadResult();
 
@@ -307,13 +400,14 @@ class ThemeExtractToModulesTool extends AbstractTool
 
         $params['config'] = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        // Write back to template_styles
+        // Write back to template_styles by id
         $query = $this->db->getQuery(true)
             ->update($this->db->quoteName('#__template_styles'))
             ->set($this->db->quoteName('params') . ' = ' . $this->db->quote(
                 json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             ))
-            ->where('template = ' . $this->db->quote('yootheme'));
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
 
         $this->db->setQuery($query)->execute();
 
@@ -334,7 +428,34 @@ class ThemeExtractToModulesTool extends AbstractTool
         };
     }
 
-    private function findExistingModule(string $position, string $lang): ?int
+    /**
+     * Find an existing MirasAI-managed module for this position, language, and area.
+     */
+    private function findExistingModule(string $position, string $lang, string $area): ?int
+    {
+        $note = self::buildMirasaiNote($area);
+
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__modules'))
+            ->where('module = ' . $this->db->quote('mod_yootheme_builder'))
+            ->where('position = :pos')
+            ->where('language = :lang')
+            ->where('note = :note')
+            ->where('client_id = 0')
+            ->bind(':pos', $position)
+            ->bind(':lang', $lang)
+            ->bind(':note', $note);
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
+    /**
+     * Detect non-MirasAI mod_yootheme_builder modules at the same position+language.
+     */
+    private function findConflictingModule(string $position, string $lang): ?int
     {
         $query = $this->db->getQuery(true)
             ->select('id')
@@ -343,12 +464,21 @@ class ThemeExtractToModulesTool extends AbstractTool
             ->where('position = :pos')
             ->where('language = :lang')
             ->where('client_id = 0')
+            ->where('(note IS NULL OR note NOT LIKE ' . $this->db->quote('mirasai:theme_area=%') . ')')
             ->bind(':pos', $position)
             ->bind(':lang', $lang);
 
         $result = $this->db->setQuery($query)->loadResult();
 
         return $result ? (int) $result : null;
+    }
+
+    /**
+     * Build the standardised MirasAI note marker for a theme area module.
+     */
+    private static function buildMirasaiNote(string $area): string
+    {
+        return 'mirasai:theme_area=' . $area;
     }
 
     private function createBuilderModule(
@@ -375,7 +505,7 @@ class ThemeExtractToModulesTool extends AbstractTool
 
         $values = [
             $this->db->quote($title),
-            $this->db->quote('Created by MirasAI'),
+            $this->db->quote(self::buildMirasaiNote($area)),
             $this->db->quote($content),
             0,
             $this->db->quote($position),
