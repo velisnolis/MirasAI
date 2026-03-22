@@ -20,14 +20,11 @@
 - **Depends on:** Llicència YOOtheme Pro.
 - **Added:** 2026-03-21 via /plan-eng-review
 
-### TODO-004: Suport multiidioma per templates YOOtheme
-- **What:** Auditar, llegir i duplicar/traduir templates de YOOtheme per idioma via MCP.
-- **Why:** Un template amb text fix compartit a tots els idiomes trenca el site multilingüe igual que un footer o un mòdul.
-- **Pros:** Cobertura real de templates, gaps accionables i workflow complet sense editar manualment cada variant.
-- **Cons:** Cal mantenir variants per idioma quan el template tingui text fix.
-- **Context:** Els templates es guarden a `#__extensions.custom_data.templates`; el filtre d'idioma viu a `query.lang` i el layout a `layout`.
-- **Depends on:** Res funcional crític; Boira ja té un exemple real per validar el mapping.
-- **Added:** 2026-03-22
+### ~~TODO-004: Suport multiidioma per templates YOOtheme~~ ✅ DONE
+- **Completat:** 2026-03-22. Implementat als tools MCP i validat a Boira.
+- **Findings:** `template/list`, `template/read` i `template/translate` ja permeten auditar, llegir i duplicar/traduir templates per idioma.
+- **Extra:** `content/audit-multilingual` detecta templates amb text fix compartit, variants per idioma faltants i casos dinàmics purs amb `lang=all`.
+- **Context:** Els templates es llegeixen de `#__extensions.custom_data.templates`; el filtre d'idioma viu a `query.lang` i el layout a `layout`.
 
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
