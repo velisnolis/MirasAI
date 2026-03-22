@@ -10,7 +10,9 @@ use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
+use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
 use Mirasai\Library\Tool\SystemInfoTool;
+use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 class McpController extends ApiController
@@ -105,6 +107,8 @@ class McpController extends ApiController
         $registry->register(new ContentReadTool());
         $registry->register(new ContentTranslateTool());
         $registry->register(new ContentCheckLinksTool());
+        $registry->register(new ThemeExtractToModulesTool());
+        $registry->register(new MenuMigrateThemeToModulesTool());
 
         return new McpHandler($registry);
     }

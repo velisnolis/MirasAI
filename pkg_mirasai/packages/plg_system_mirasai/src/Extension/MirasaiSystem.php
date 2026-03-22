@@ -13,7 +13,9 @@ use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
+use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
 use Mirasai\Library\Tool\SystemInfoTool;
+use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
@@ -155,6 +157,8 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
         $registry->register(new ContentReadTool());
         $registry->register(new ContentTranslateTool());
         $registry->register(new ContentCheckLinksTool());
+        $registry->register(new ThemeExtractToModulesTool());
+        $registry->register(new MenuMigrateThemeToModulesTool());
 
         return new McpHandler($registry);
     }

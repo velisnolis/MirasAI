@@ -51,6 +51,7 @@ class ContentAuditMultilingualTool extends AbstractTool
 
         // 2. Audit menus
         $gaps = array_merge($gaps, $this->auditMenus($sourceLang, $targetLangs));
+        $gaps = array_merge($gaps, $this->auditThemeManagedMenus());
 
         // 3. Audit categories
         $gaps = array_merge($gaps, $this->auditCategories($sourceLang, $targetLangs));
@@ -84,18 +85,7 @@ class ContentAuditMultilingualTool extends AbstractTool
 
     private function detectSourceLanguage(): string
     {
-        // The source language is the one with the most articles
-        $query = $this->db->getQuery(true)
-            ->select(['language', 'COUNT(*) AS cnt'])
-            ->from($this->db->quoteName('#__content'))
-            ->where('state >= 0')
-            ->where('language != ' . $this->db->quote('*'))
-            ->group('language')
-            ->order('cnt DESC');
-
-        $row = $this->db->setQuery($query, 0, 1)->loadAssoc();
-
-        return $row ? $row['language'] : 'ca-ES';
+        return $this->detectLikelySourceLanguage();
     }
 
     /**
@@ -201,6 +191,174 @@ class ContentAuditMultilingualTool extends AbstractTool
         }
 
         return $gaps;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function auditThemeManagedMenus(): array
+    {
+        $styleId = $this->resolveActiveYoothemeStyleId();
+
+        if (!$styleId) {
+            return [];
+        }
+
+        $config = $this->loadYoothemeStyleConfig($styleId);
+
+        if ($config === null) {
+            return [];
+        }
+
+        $positions = ['navbar', 'dialog-mobile'];
+        $themeAssignments = [];
+
+        foreach ($positions as $position) {
+            $menu = $config['menu']['positions'][$position]['menu'] ?? '';
+            $themeAssignments[$position] = is_string($menu) ? trim($menu) : '';
+        }
+
+        $languages = [];
+
+        foreach ($this->getPublishedLanguages() as $language) {
+            if ($language['lang_code'] !== '*') {
+                $languages[] = $language['lang_code'];
+            }
+        }
+
+        if ($languages === []) {
+            return [];
+        }
+
+        $query = $this->db->getQuery(true)
+            ->select(['id', 'title', 'position', 'language', 'params'])
+            ->from($this->db->quoteName('#__modules'))
+            ->where('module = ' . $this->db->quote('mod_menu'))
+            ->where('client_id = 0')
+            ->where('published = 1')
+            ->where('position IN (' . implode(',', array_map([$this->db, 'quote'], $positions)) . ')');
+
+        $moduleRows = $this->db->setQuery($query)->loadAssocList();
+        $hasAnyModules = !empty($moduleRows);
+        $conflicts = [];
+        $languagesMissing = [];
+
+        foreach ($positions as $position) {
+            $rowsForPosition = array_values(array_filter(
+                $moduleRows,
+                static fn(array $row): bool => ($row['position'] ?? null) === $position,
+            ));
+
+            foreach ($rowsForPosition as $row) {
+                if (($row['language'] ?? null) === '*') {
+                    $conflicts[] = [
+                        'position' => $position,
+                        'language' => '*',
+                        'module_id' => (int) $row['id'],
+                        'reason' => 'Wildcard mod_menu at a multilingual theme menu position.',
+                    ];
+                }
+            }
+
+            foreach ($languages as $language) {
+                $candidates = array_values(array_filter(
+                    $rowsForPosition,
+                    static fn(array $row): bool => ($row['language'] ?? null) === $language,
+                ));
+
+                if (count($candidates) === 0) {
+                    $languagesMissing[$position][] = $language;
+                    continue;
+                }
+
+                if (count($candidates) > 1) {
+                    $conflicts[] = [
+                        'position' => $position,
+                        'language' => $language,
+                        'module_ids' => array_map(static fn(array $row): int => (int) $row['id'], $candidates),
+                        'reason' => 'More than one published mod_menu exists for this position and language.',
+                    ];
+                    continue;
+                }
+
+                $candidate = $candidates[0];
+                $candidateMenutype = $this->extractModuleMenutypeForAudit((string) ($candidate['params'] ?? ''));
+
+                if ($candidateMenutype === null) {
+                    $conflicts[] = [
+                        'position' => $position,
+                        'language' => $language,
+                        'module_id' => (int) $candidate['id'],
+                        'reason' => 'mod_menu is missing a valid menutype parameter.',
+                    ];
+                }
+            }
+        }
+
+        $fix = [
+            'tool' => 'menu/migrate-theme-to-modules',
+            'arguments' => [
+                'positions' => $positions,
+                'languages' => $languages,
+                'template_style_id' => $styleId,
+                'dry_run' => true,
+            ],
+        ];
+
+        if ($conflicts !== []) {
+            return [[
+                'type' => 'theme_menu_module_conflict',
+                'severity' => 'medium',
+                'positions' => array_values(array_unique(array_map(
+                    static fn(array $conflict): string => $conflict['position'],
+                    $conflicts,
+                ))),
+                'current_theme_assignments' => $themeAssignments,
+                'hint' => 'Theme menu positions have conflicting mod_menu candidates. Resolve conflicts before migrating or declaring the header multilingual-ready.',
+                'conflicts' => $conflicts,
+                'fix' => $fix,
+            ]];
+        }
+
+        $hasThemeAssignments = array_filter($themeAssignments, static fn(string $menu): bool => $menu !== '') !== [];
+        $hasMissingModules = array_filter($languagesMissing, static fn(array $langs): bool => $langs !== []) !== [];
+
+        if (!$hasThemeAssignments && !$hasMissingModules) {
+            return [];
+        }
+
+        if ($hasThemeAssignments && !$hasAnyModules) {
+            return [[
+                'type' => 'theme_menu_still_assigned',
+                'severity' => 'high',
+                'positions' => array_keys(array_filter($themeAssignments, static fn(string $menu): bool => $menu !== '')),
+                'current_theme_assignments' => $themeAssignments,
+                'hint' => 'YOOtheme still manages the header menus directly. Clear the theme menu assignments and replace them with per-language mod_menu modules.',
+                'fix' => $fix,
+            ]];
+        }
+
+        if ($hasThemeAssignments) {
+            return [[
+                'type' => 'theme_menu_mixed_mode',
+                'severity' => 'high',
+                'positions' => $positions,
+                'languages_missing' => $languagesMissing,
+                'current_theme_assignments' => $themeAssignments,
+                'hint' => 'Header menus are split between YOOtheme menu assignments and Joomla menu modules. Finish the migration to per-language modules before considering the site multilingual-ready.',
+                'fix' => $fix,
+            ]];
+        }
+
+        return [[
+            'type' => 'theme_menu_modules_missing',
+            'severity' => 'high',
+            'positions' => array_keys($languagesMissing),
+            'languages_missing' => $languagesMissing,
+            'current_theme_assignments' => $themeAssignments,
+            'hint' => 'YOOtheme no longer manages the header menus, but one or more per-language mod_menu modules are missing.',
+            'fix' => $fix,
+        ]];
     }
 
     /**
@@ -447,4 +605,22 @@ class ContentAuditMultilingualTool extends AbstractTool
 
         return $gaps;
     }
+
+    private function extractModuleMenutypeForAudit(string $paramsJson): ?string
+    {
+        if ($paramsJson === '') {
+            return null;
+        }
+
+        $params = json_decode($paramsJson, true);
+
+        if (!is_array($params)) {
+            return null;
+        }
+
+        $menutype = $params['menutype'] ?? null;
+
+        return is_string($menutype) && trim($menutype) !== '' ? trim($menutype) : null;
+    }
+
 }

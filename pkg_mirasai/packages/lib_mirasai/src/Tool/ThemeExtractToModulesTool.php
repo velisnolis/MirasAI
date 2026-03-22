@@ -63,7 +63,7 @@ class ThemeExtractToModulesTool extends AbstractTool
                 ],
                 'force' => [
                     'type' => 'boolean',
-                    'description' => 'If true, override conflict checks and proceed even when non-MirasAI modules exist at the target position. Use with caution.',
+                    'description' => 'If true, attempt a safe takeover of an exact-language mod_yootheme_builder conflict instead of failing. Does not override arbitrary modules.',
                 ],
             ],
             'required' => ['area', 'languages'],
@@ -169,16 +169,32 @@ class ThemeExtractToModulesTool extends AbstractTool
 
             if (!empty($langConflicts)) {
                 if ($force) {
-                    // With force, degrade conflicts to warnings and proceed
+                    $takeoverModuleId = $this->findTakeoverCandidate($langConflicts, $lang);
+
+                    if ($takeoverModuleId !== null) {
+                        foreach ($langConflicts as $conflict) {
+                            $conflict['forced'] = true;
+                            $warnings[] = sprintf(
+                                'force: taking over existing module id=%d (%s) at position "%s" for %s.',
+                                $conflict['module_id'],
+                                $conflict['existing_title'],
+                                $position,
+                                $lang,
+                            );
+                            $conflicts[] = $conflict;
+                        }
+
+                        $plan[] = [
+                            'language' => $lang,
+                            'action' => $dryRun ? 'would_take_over' : 'take_over',
+                            'module_id' => $takeoverModuleId,
+                            'position' => $position,
+                        ];
+                        continue;
+                    }
+
                     foreach ($langConflicts as $conflict) {
                         $conflict['forced'] = true;
-                        $warnings[] = sprintf(
-                            'force: overriding conflict with module id=%d (%s) at position "%s" for %s.',
-                            $conflict['module_id'],
-                            $conflict['existing_title'],
-                            $position,
-                            $lang,
-                        );
                         $conflicts[] = $conflict;
                     }
                 } else {
@@ -199,7 +215,7 @@ class ThemeExtractToModulesTool extends AbstractTool
         // 8. If there were conflicts without force, abort and report
         if (!empty($conflicts) && !$force) {
             return [
-                'error' => 'Conflicts detected: existing modules occupy the target position and would render through module_position. Use force: true to override.',
+                'error' => 'Conflicts detected: existing modules occupy the target position and would render through module_position. Use force: true only to take over an exact-language mod_yootheme_builder module.',
                 'area' => $area,
                 'position' => $position,
                 'template_style_id' => $styleId,
@@ -215,6 +231,33 @@ class ThemeExtractToModulesTool extends AbstractTool
                     'backup_reference' => null,
                 ],
             ];
+        }
+
+        if (!empty($conflicts) && $force) {
+            $blockingConflicts = array_values(array_filter(
+                $conflicts,
+                static fn(array $conflict): bool => empty($conflict['takeover_safe']),
+            ));
+
+            if ($blockingConflicts !== []) {
+                return [
+                    'error' => 'Conflicts detected that cannot be safely forced. Only exact-language mod_yootheme_builder modules can be taken over.',
+                    'area' => $area,
+                    'position' => $position,
+                    'template_style_id' => $styleId,
+                    'source_language' => $sourceLanguage,
+                    'dry_run' => $dryRun,
+                    'translatable_nodes' => $translatableNodes,
+                    'modules' => $plan,
+                    'conflicts' => $conflicts,
+                    'warnings' => $warnings,
+                    'theme_area' => [
+                        'requested_replace' => $replaceThemeArea,
+                        'status' => 'not_replaced',
+                        'backup_reference' => null,
+                    ],
+                ];
+            }
         }
 
         // 9. Execute module creation plan unless dry-run
@@ -244,16 +287,27 @@ class ThemeExtractToModulesTool extends AbstractTool
                 continue;
             }
 
-            $moduleId = $this->createBuilderModule(
-                $area,
-                $lang,
-                $position,
-                $content,
-            );
+            if ($item['action'] === 'take_over') {
+                $moduleId = (int) $item['module_id'];
+                $this->updateBuilderModule(
+                    $moduleId,
+                    $area,
+                    $lang,
+                    $position,
+                    $content,
+                );
+            } else {
+                $moduleId = $this->createBuilderModule(
+                    $area,
+                    $lang,
+                    $position,
+                    $content,
+                );
+            }
 
             $results[] = [
                 'language' => $lang,
-                'action' => 'created',
+                'action' => $item['action'] === 'take_over' ? 'taken_over' : 'created',
                 'module_id' => $moduleId,
                 'position' => $position,
             ];
@@ -288,7 +342,7 @@ class ThemeExtractToModulesTool extends AbstractTool
         foreach ($results as $r) {
             match ($r['action'] ?? null) {
                 'created' => $modulesCreated++,
-                'exists' => $modulesReused++,
+                'exists', 'taken_over' => $modulesReused++,
                 default => null,
             };
         }
@@ -601,10 +655,38 @@ class ThemeExtractToModulesTool extends AbstractTool
                 'existing_title' => $row['title'],
                 'existing_language' => $row['language'],
                 'reason' => 'Existing published module would also render through this module position.',
+                'takeover_safe' => $this->isTakeoverSafeConflict($row, $lang),
             ];
         }
 
         return $conflicts;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $conflicts
+     */
+    private function findTakeoverCandidate(array $conflicts, string $lang): ?int
+    {
+        if (count($conflicts) !== 1) {
+            return null;
+        }
+
+        $conflict = $conflicts[0];
+
+        if (empty($conflict['takeover_safe']) || ($conflict['existing_language'] ?? null) !== $lang) {
+            return null;
+        }
+
+        return (int) $conflict['module_id'];
+    }
+
+    /**
+     * @param array{module?: mixed, language?: mixed} $row
+     */
+    private function isTakeoverSafeConflict(array $row, string $lang): bool
+    {
+        return ($row['module'] ?? null) === 'mod_yootheme_builder'
+            && ($row['language'] ?? null) === $lang;
     }
 
     /**
@@ -696,6 +778,59 @@ class ThemeExtractToModulesTool extends AbstractTool
         $this->db->setQuery($query)->execute();
 
         return $moduleId;
+    }
+
+    private function updateBuilderModule(
+        int $moduleId,
+        string $area,
+        string $language,
+        string $position,
+        string $content,
+    ): void {
+        $title = ucfirst($area) . ' (' . $language . ')';
+        $params = json_encode([
+            'layout' => '_:default',
+            'moduleclass_sfx' => '',
+            'cache' => '0',
+            'cache_time' => '900',
+            'cachemode' => 'static',
+        ], JSON_UNESCAPED_SLASHES);
+
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__modules'))
+            ->set($this->db->quoteName('title') . ' = ' . $this->db->quote($title))
+            ->set($this->db->quoteName('note') . ' = ' . $this->db->quote(self::buildMirasaiNote($area)))
+            ->set($this->db->quoteName('content') . ' = ' . $this->db->quote($content))
+            ->set($this->db->quoteName('position') . ' = ' . $this->db->quote($position))
+            ->set($this->db->quoteName('published') . ' = 1')
+            ->set($this->db->quoteName('module') . ' = ' . $this->db->quote('mod_yootheme_builder'))
+            ->set($this->db->quoteName('access') . ' = 1')
+            ->set($this->db->quoteName('showtitle') . ' = 0')
+            ->set($this->db->quoteName('params') . ' = ' . $this->db->quote($params))
+            ->set($this->db->quoteName('client_id') . ' = 0')
+            ->set($this->db->quoteName('language') . ' = ' . $this->db->quote($language))
+            ->where('id = :id')
+            ->bind(':id', $moduleId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+
+        $query = $this->db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__modules_menu'))
+            ->where('moduleid = :moduleid')
+            ->where('menuid = 0')
+            ->bind(':moduleid', $moduleId, ParameterType::INTEGER);
+
+        $hasAllPagesAssignment = (int) $this->db->setQuery($query)->loadResult() > 0;
+
+        if (!$hasAllPagesAssignment) {
+            $query = $this->db->getQuery(true)
+                ->insert($this->db->quoteName('#__modules_menu'))
+                ->columns(['moduleid', 'menuid'])
+                ->values($moduleId . ', 0');
+
+            $this->db->setQuery($query)->execute();
+        }
     }
 
     private function buildModulePositionLayout(string $position): array

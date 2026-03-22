@@ -32,6 +32,8 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ThemeExtractToModulesTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/MenuMigrateThemeToModulesTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
@@ -42,6 +44,8 @@ use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
 use Mirasai\Library\Tool\SystemInfoTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
+use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
+use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 // --- Authentication ---
@@ -62,6 +66,8 @@ $registry->register(new ContentListTool());
 $registry->register(new ContentReadTool());
 $registry->register(new ContentTranslateTool());
 $registry->register(new ContentCheckLinksTool());
+$registry->register(new ThemeExtractToModulesTool());
+$registry->register(new MenuMigrateThemeToModulesTool());
 
 $handler = new McpHandler($registry);
 

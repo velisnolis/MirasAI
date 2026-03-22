@@ -262,4 +262,123 @@ abstract class AbstractTool implements ToolInterface
 
         return $result;
     }
+
+    /**
+     * Infer the primary/source language as the one with the most articles.
+     */
+    protected function detectLikelySourceLanguage(): string
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['language', 'COUNT(*) AS cnt', 'MIN(id) AS first_id'])
+            ->from($this->db->quoteName('#__content'))
+            ->where('state >= 0')
+            ->where('language != ' . $this->db->quote('*'))
+            ->group('language')
+            ->order('cnt DESC, first_id ASC');
+
+        $row = $this->db->setQuery($query, 0, 1)->loadAssoc();
+
+        return $row ? (string) $row['language'] : 'ca-ES';
+    }
+
+    /**
+     * Resolve the active site-side YOOtheme template style.
+     */
+    protected function resolveActiveYoothemeStyleId(): ?int
+    {
+        $query = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('template = ' . $this->db->quote('yootheme'))
+            ->where('client_id = 0')
+            ->where('home = 1');
+
+        $result = $this->db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
+    /**
+     * Check that a style id points at a site-side YOOtheme style.
+     */
+    protected function isYoothemeSiteStyle(int $styleId): bool
+    {
+        $query = $this->db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('id = :id')
+            ->where('template = ' . $this->db->quote('yootheme'))
+            ->where('client_id = 0')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        return (int) $this->db->setQuery($query)->loadResult() > 0;
+    }
+
+    /**
+     * Load the raw params array for a template style.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function loadYoothemeStyleParams(int $styleId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select('params')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        $paramsJson = $this->db->setQuery($query)->loadResult();
+
+        if (!is_string($paramsJson) || $paramsJson === '') {
+            return null;
+        }
+
+        $params = json_decode($paramsJson, true);
+
+        return is_array($params) ? $params : null;
+    }
+
+    /**
+     * Persist the raw params array for a template style.
+     *
+     * @param array<string, mixed> $params
+     */
+    protected function writeYoothemeStyleParams(int $styleId, array $params): void
+    {
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__template_styles'))
+            ->set(
+                $this->db->quoteName('params') . ' = ' . $this->db->quote(
+                    json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                )
+            )
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    /**
+     * Load the decoded YOOtheme config payload stored inside template style params.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function loadYoothemeStyleConfig(int $styleId): ?array
+    {
+        $params = $this->loadYoothemeStyleParams($styleId);
+
+        if ($params === null) {
+            return null;
+        }
+
+        $configJson = $params['config'] ?? null;
+
+        if (!is_string($configJson) || $configJson === '') {
+            return [];
+        }
+
+        $config = json_decode($configJson, true);
+
+        return is_array($config) ? $config : [];
+    }
 }
