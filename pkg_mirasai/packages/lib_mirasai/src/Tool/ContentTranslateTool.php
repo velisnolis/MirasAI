@@ -68,6 +68,10 @@ class ContentTranslateTool extends AbstractTool
                     'type' => 'string',
                     'description' => 'Translated page title (shown in browser tab). If omitted, uses translated_title.',
                 ],
+                'require_translated_meta_if_source_has_meta' => [
+                    'type' => 'boolean',
+                    'description' => 'If true, the call fails unless translated_metadesc and/or translated_metakey are provided whenever the source article has those SEO fields filled.',
+                ],
                 'overwrite' => [
                     'type' => 'boolean',
                     'description' => 'If true, overwrites an existing translation. Default: false (returns error if translation exists).',
@@ -130,6 +134,12 @@ class ContentTranslateTool extends AbstractTool
         $translatedTitle = $arguments['translated_title'];
         $translatedAlias = $arguments['translated_alias']
             ?? $this->generateAlias($translatedTitle);
+
+        $metaValidation = $this->validateTranslatedMetaRequirements($source, $arguments);
+
+        if ($metaValidation !== null) {
+            return $metaValidation;
+        }
 
         if ($this->hasYoothemeLayout((string) ($source['fulltext'] ?? ''))
             && empty($arguments['translated_fulltext'])
@@ -247,6 +257,41 @@ class ContentTranslateTool extends AbstractTool
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     * @param array<string, mixed> $arguments
+     * @return array<string, mixed>|null
+     */
+    private function validateTranslatedMetaRequirements(array $source, array $arguments): ?array
+    {
+        if (empty($arguments['require_translated_meta_if_source_has_meta'])) {
+            return null;
+        }
+
+        $missing = [];
+        $sourceHasMetaDesc = trim((string) ($source['metadesc'] ?? '')) !== '';
+        $sourceHasMetaKey = trim((string) ($source['metakey'] ?? '')) !== '';
+
+        if ($sourceHasMetaDesc && trim((string) ($arguments['translated_metadesc'] ?? '')) === '') {
+            $missing[] = 'translated_metadesc';
+        }
+
+        if ($sourceHasMetaKey && trim((string) ($arguments['translated_metakey'] ?? '')) === '') {
+            $missing[] = 'translated_metakey';
+        }
+
+        if ($missing === []) {
+            return null;
+        }
+
+        return [
+            'error' => 'Source article has SEO metadata. Provide translated values for the required SEO fields or disable require_translated_meta_if_source_has_meta.',
+            'missing_fields' => $missing,
+            'source_has_metadesc' => $sourceHasMetaDesc,
+            'source_has_metakey' => $sourceHasMetaKey,
+        ];
     }
 
     /**

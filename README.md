@@ -41,6 +41,8 @@ It does not currently implement:
 
 For `com_content` articles built with YOOtheme Pro, MirasAI keeps the Builder structure intact and only replaces translated text. It can also audit or repair internal links after translation.
 
+`content/translate` also supports a strict SEO mode via `require_translated_meta_if_source_has_meta`. When enabled, the tool refuses to create or overwrite a translation unless translated SEO metadata is provided for any source `metadesc` or `metakey` fields that are already filled.
+
 ### Theme Areas
 
 For Builder-driven theme areas such as `footer`, use `theme/extract-to-modules` to move the area into per-language `mod_yootheme_builder` modules and replace the inline theme layout with a `module_position` wrapper.

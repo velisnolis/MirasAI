@@ -65,7 +65,7 @@ class ContentAuditMultilingualTool extends AbstractTool
         $gaps = array_merge($gaps, $this->auditLanguageSwitcher());
 
         // 6. Audit SEO metadata
-        $gaps = array_merge($gaps, $this->auditMetadata($targetLangs));
+        $gaps = array_merge($gaps, $this->auditMetadata($sourceLang, $targetLangs));
 
         // 7. Audit theme areas
         $gaps = array_merge($gaps, $this->auditThemeAreas());
@@ -492,37 +492,195 @@ class ContentAuditMultilingualTool extends AbstractTool
     /**
      * @return list<array<string, mixed>>
      */
-    private function auditMetadata(array $targetLangs): array
+    private function auditMetadata(string $sourceLang, array $targetLangs): array
     {
+        $languages = array_values(array_unique(array_merge([$sourceLang], $targetLangs)));
+
+        $query = $this->db->getQuery(true)
+            ->select([
+                'c.id', 'c.title', 'c.language', 'c.metadesc',
+                $this->db->quoteName('a.key', 'association_key'),
+            ])
+            ->from($this->db->quoteName('#__content', 'c'))
+            ->join(
+                'LEFT',
+                $this->db->quoteName('#__associations', 'a')
+                . ' ON a.id = c.id AND a.context = ' . $this->db->quote('com_content.item')
+            )
+            ->where('c.state >= 0')
+            ->where('c.language IN (' . implode(',', array_map([$this->db, 'quote'], $languages)) . ')');
+
+        $rows = $this->db->setQuery($query)->loadAssocList();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        $rowsById = [];
+        $groupedByAssociation = [];
+        $standaloneRows = [];
+
+        foreach ($rows as $row) {
+            $row['id'] = (int) $row['id'];
+            $row['metadesc'] = is_string($row['metadesc'] ?? null) ? trim((string) $row['metadesc']) : '';
+            $rowsById[$row['id']] = $row;
+
+            $associationKey = is_string($row['association_key'] ?? null) ? trim((string) $row['association_key']) : '';
+
+            if ($associationKey === '') {
+                $standaloneRows[] = $row;
+                continue;
+            }
+
+            $groupedByAssociation[$associationKey][] = $row;
+        }
+
         $gaps = [];
 
-        foreach ($targetLangs as $targetLang) {
-            // Find articles in target language with empty metadesc
-            $query = $this->db->getQuery(true)
-                ->select(['id', 'title'])
-                ->from($this->db->quoteName('#__content'))
-                ->where('language = :lang')
-                ->where('state >= 0')
-                ->where('(metadesc IS NULL OR metadesc = ' . $this->db->quote('') . ')')
-                ->bind(':lang', $targetLang);
+        foreach ($groupedByAssociation as $associationKey => $groupRows) {
+            $groupGap = $this->buildMetadataGapForAssociationGroup($associationKey, $groupRows, $sourceLang, $targetLangs);
 
-            $articles = $this->db->setQuery($query)->loadAssocList();
-
-            foreach ($articles as $article) {
-                $gaps[] = [
-                    'type' => 'meta_empty',
-                    'severity' => 'low',
-                    'article_id' => (int) $article['id'],
-                    'article_title' => $article['title'],
-                    'language' => $targetLang,
-                    'field' => 'metadesc',
-                    'hint' => "Article \"{$article['title']}\" ({$targetLang}) has no meta description.",
-                    'fix' => null, // Can be fixed by re-running content/translate with include_meta
-                ];
+            if ($groupGap !== null) {
+                $gaps[] = $groupGap;
             }
         }
 
+        foreach ($standaloneRows as $row) {
+            if (!in_array($row['language'], $targetLangs, true) || $row['metadesc'] !== '') {
+                continue;
+            }
+
+            $gaps[] = [
+                'type' => 'meta_empty',
+                'severity' => 'low',
+                'article_id' => $row['id'],
+                'article_title' => $row['title'],
+                'language' => $row['language'],
+                'field' => 'metadesc',
+                'hint' => "Article \"{$row['title']}\" ({$row['language']}) has no meta description.",
+                'fix' => null,
+            ];
+        }
+
         return $gaps;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $groupRows
+     * @param list<string> $targetLangs
+     * @return array<string, mixed>|null
+     */
+    private function buildMetadataGapForAssociationGroup(string $associationKey, array $groupRows, string $sourceLang, array $targetLangs): ?array
+    {
+        $rowsByLanguage = [];
+
+        foreach ($groupRows as $row) {
+            $language = (string) ($row['language'] ?? '');
+
+            if ($language === '') {
+                continue;
+            }
+
+            $rowsByLanguage[$language] = $row;
+        }
+
+        $sourceRow = $rowsByLanguage[$sourceLang] ?? null;
+        $emptyTargets = [];
+
+        foreach ($targetLangs as $targetLang) {
+            $targetRow = $rowsByLanguage[$targetLang] ?? null;
+
+            if ($targetRow === null) {
+                continue;
+            }
+
+            if (($targetRow['metadesc'] ?? '') === '') {
+                $emptyTargets[] = $targetRow;
+            }
+        }
+
+        if ($emptyTargets === []) {
+            return null;
+        }
+
+        $sourceMetaEmpty = $sourceRow === null || ($sourceRow['metadesc'] ?? '') === '';
+
+        if ($sourceMetaEmpty) {
+            $emptyLanguages = [];
+            $articleIds = [];
+
+            foreach ($groupRows as $row) {
+                if (($row['metadesc'] ?? '') !== '') {
+                    continue;
+                }
+
+                $emptyLanguages[] = (string) $row['language'];
+                $articleIds[] = (int) $row['id'];
+            }
+
+            return [
+                'type' => 'meta_empty_group',
+                'severity' => 'low',
+                'association_key' => $associationKey,
+                'source_id' => (int) ($sourceRow['id'] ?? 0),
+                'source_title' => $sourceRow['title'] ?? '[Unknown source]',
+                'languages' => array_values(array_unique($emptyLanguages)),
+                'article_ids' => array_values(array_unique($articleIds)),
+                'field' => 'metadesc',
+                'hint' => sprintf(
+                    'The association group for "%s" has no meta description in the source language, so translated articles are empty too.',
+                    $sourceRow['title'] ?? '[Unknown source]'
+                ),
+                'fix' => null,
+            ];
+        }
+
+        if (count($emptyTargets) === 1) {
+            $targetRow = $emptyTargets[0];
+
+            return [
+                'type' => 'meta_empty',
+                'severity' => 'low',
+                'article_id' => (int) $targetRow['id'],
+                'article_title' => $targetRow['title'],
+                'language' => $targetRow['language'],
+                'field' => 'metadesc',
+                'hint' => sprintf(
+                    'Article "%s" (%s) has no meta description even though the source article "%s" does.',
+                    $targetRow['title'],
+                    $targetRow['language'],
+                    $sourceRow['title'] ?? '[Unknown source]'
+                ),
+                'fix' => [
+                    'tool' => 'content/translate',
+                    'arguments' => [
+                        'source_id' => (int) $sourceRow['id'],
+                        'target_language' => $targetRow['language'],
+                        'translated_title' => $targetRow['title'],
+                        'translated_metadesc' => '[TRANSLATE META DESCRIPTION]',
+                        'overwrite' => true,
+                    ],
+                ],
+            ];
+        }
+
+        return [
+            'type' => 'meta_empty_translation_group',
+            'severity' => 'low',
+            'association_key' => $associationKey,
+            'source_id' => (int) ($sourceRow['id'] ?? 0),
+            'source_title' => $sourceRow['title'] ?? '[Unknown source]',
+            'missing_in' => array_values(array_map(
+                static fn(array $row): string => (string) $row['language'],
+                $emptyTargets
+            )),
+            'field' => 'metadesc',
+            'hint' => sprintf(
+                'The source article "%s" has a meta description, but some translated articles in this association group do not.',
+                $sourceRow['title'] ?? '[Unknown source]'
+            ),
+            'fix' => null,
+        ];
     }
 
     /**
