@@ -16,6 +16,7 @@ use Mirasai\Library\Tool\CategoryTranslateTool;
 use Mirasai\Library\Tool\ContentAuditMultilingualTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\ContentListTool;
+use Mirasai\Library\Tool\SiteSetupLanguageSwitcherTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\ContentTranslateBatchTool;
 use Mirasai\Library\Tool\ContentTranslateTool;
@@ -155,6 +156,7 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
         $registry->register(new ContentCheckLinksTool());
         $registry->register(new ContentAuditMultilingualTool());
         $registry->register(new CategoryTranslateTool());
+        $registry->register(new SiteSetupLanguageSwitcherTool());
 
         return new McpHandler($registry);
     }

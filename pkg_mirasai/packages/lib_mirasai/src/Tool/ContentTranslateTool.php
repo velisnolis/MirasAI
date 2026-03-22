@@ -56,6 +56,18 @@ class ContentTranslateTool extends AbstractTool
                     'type' => 'integer',
                     'description' => 'Category ID for the translated article. If omitted, uses the associated category for the target language.',
                 ],
+                'translated_metadesc' => [
+                    'type' => 'string',
+                    'description' => 'Translated meta description for SEO. If omitted, left empty.',
+                ],
+                'translated_metakey' => [
+                    'type' => 'string',
+                    'description' => 'Translated meta keywords. If omitted, left empty.',
+                ],
+                'translated_page_title' => [
+                    'type' => 'string',
+                    'description' => 'Translated page title (shown in browser tab). If omitted, uses translated_title.',
+                ],
                 'overwrite' => [
                     'type' => 'boolean',
                     'description' => 'If true, overwrites an existing translation. Default: false (returns error if translation exists).',
@@ -133,15 +145,29 @@ class ContentTranslateTool extends AbstractTool
             $arguments,
         );
 
+        // SEO metadata
+        $metadesc = $arguments['translated_metadesc'] ?? '';
+        $metakey = $arguments['translated_metakey'] ?? '';
+
         if ($existing && $overwrite) {
             // Update existing
-            $this->updateArticle($existing, [
+            $updateFields = [
                 'title' => $translatedTitle,
                 'alias' => $translatedAlias,
                 'introtext' => $translatedIntrotext,
                 'fulltext' => $translatedFulltext,
                 'catid' => $targetCatId,
-            ]);
+            ];
+
+            if ($metadesc !== '') {
+                $updateFields['metadesc'] = $metadesc;
+            }
+
+            if ($metakey !== '') {
+                $updateFields['metakey'] = $metakey;
+            }
+
+            $this->updateArticle($existing, $updateFields);
 
             $introtextResult = $this->regenerateIntrotext($existing);
             $linkWarnings = $this->checkInternalLinks($existing, $targetLang);
@@ -163,14 +189,24 @@ class ContentTranslateTool extends AbstractTool
         }
 
         // Create new article
-        $newId = $this->duplicateArticle($source, [
+        $overrides = [
             'title' => $translatedTitle,
             'alias' => $translatedAlias,
             'language' => $targetLang,
             'introtext' => $translatedIntrotext,
             'fulltext' => $translatedFulltext,
             'catid' => $targetCatId,
-        ]);
+        ];
+
+        if ($metadesc !== '') {
+            $overrides['metadesc'] = $metadesc;
+        }
+
+        if ($metakey !== '') {
+            $overrides['metakey'] = $metakey;
+        }
+
+        $newId = $this->duplicateArticle($source, $overrides);
 
         // Create association
         $this->createAssociation($sourceId, $newId);
@@ -183,6 +219,12 @@ class ContentTranslateTool extends AbstractTool
             $translatedTitle,
             $translatedAlias,
         );
+
+        // Update menu item page_title if provided
+        $pageTitle = $arguments['translated_page_title'] ?? '';
+        if ($pageTitle !== '' && isset($menuResult['menu_item_id'])) {
+            $this->updateMenuItemPageTitle($menuResult['menu_item_id'], $pageTitle);
+        }
 
         // Regenerate introtext via YOOtheme Builder if article has YOOtheme layout
         $introtextResult = $this->regenerateIntrotext($newId);
@@ -734,6 +776,32 @@ class ContentTranslateTool extends AbstractTool
             ->bind(':lang', $targetLang);
 
         return $this->db->setQuery($query)->loadResult() ?: null;
+    }
+
+    private function updateMenuItemPageTitle(int $menuItemId, string $pageTitle): void
+    {
+        $query = $this->db->getQuery(true)
+            ->select('params')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('id = :id')
+            ->bind(':id', $menuItemId, ParameterType::INTEGER);
+
+        $paramsJson = $this->db->setQuery($query)->loadResult();
+        $params = $paramsJson ? json_decode($paramsJson, true) : [];
+
+        if (!is_array($params)) {
+            $params = [];
+        }
+
+        $params['page_title'] = $pageTitle;
+
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__menu'))
+            ->set($this->db->quoteName('params') . ' = ' . $this->db->quote(json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)))
+            ->where('id = :id')
+            ->bind(':id', $menuItemId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
     }
 
     private function createMenuAssociation(int $sourceMenuItemId, int $newMenuItemId): void
