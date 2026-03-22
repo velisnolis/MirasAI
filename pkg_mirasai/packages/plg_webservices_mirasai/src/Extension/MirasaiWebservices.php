@@ -12,6 +12,8 @@ use Joomla\Database\DatabaseInterface;
 use Joomla\Event\SubscriberInterface;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
+use Mirasai\Library\Tool\CategoryTranslateTool;
+use Mirasai\Library\Tool\ContentAuditMultilingualTool;
 use Mirasai\Library\Tool\ContentCheckLinksTool;
 use Mirasai\Library\Tool\ContentListTool;
 use Mirasai\Library\Tool\ContentReadTool;
@@ -151,6 +153,8 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
         $registry->register(new ContentTranslateTool());
         $registry->register(new ContentTranslateBatchTool());
         $registry->register(new ContentCheckLinksTool());
+        $registry->register(new ContentAuditMultilingualTool());
+        $registry->register(new CategoryTranslateTool());
 
         return new McpHandler($registry);
     }

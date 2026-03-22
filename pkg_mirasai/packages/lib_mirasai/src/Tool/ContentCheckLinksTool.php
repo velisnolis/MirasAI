@@ -269,37 +269,7 @@ class ContentCheckLinksTool extends AbstractTool
         ];
     }
 
-    private function findTranslation(int $articleId, string $targetLang): ?int
-    {
-        $query = $this->db->getQuery(true)
-            ->select($this->db->quoteName('key'))
-            ->from($this->db->quoteName('#__associations'))
-            ->where('context = ' . $this->db->quote('com_content.item'))
-            ->where('id = :id')
-            ->bind(':id', $articleId, ParameterType::INTEGER);
-
-        $key = $this->db->setQuery($query)->loadResult();
-
-        if (!$key) {
-            return null;
-        }
-
-        $query = $this->db->getQuery(true)
-            ->select('a.id')
-            ->from($this->db->quoteName('#__associations', 'a'))
-            ->join('INNER', $this->db->quoteName('#__content', 'c') . ' ON c.id = a.id')
-            ->where('a.context = ' . $this->db->quote('com_content.item'))
-            ->where('a.' . $this->db->quoteName('key') . ' = :akey')
-            ->where('c.language = :lang')
-            ->where('a.id != :sid')
-            ->bind(':akey', $key)
-            ->bind(':lang', $targetLang)
-            ->bind(':sid', $articleId, ParameterType::INTEGER);
-
-        $result = $this->db->setQuery($query)->loadResult();
-
-        return $result ? (int) $result : null;
-    }
+    // findTranslation → now in AbstractTool
 
     private function regenerateIntrotext(int $articleId): void
     {

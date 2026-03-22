@@ -97,7 +97,7 @@ class ContentTranslateTool extends AbstractTool
         }
 
         // Check for existing translation
-        $existing = $this->findExistingTranslation($sourceId, $targetLang);
+        $existing = $this->findTranslation($sourceId, $targetLang);
 
         if ($existing && !$overwrite) {
             return [
@@ -221,51 +221,8 @@ class ContentTranslateTool extends AbstractTool
         return $this->db->setQuery($query)->loadAssoc();
     }
 
-    private function languageExists(string $langCode): bool
-    {
-        $query = $this->db->getQuery(true)
-            ->select('COUNT(*)')
-            ->from($this->db->quoteName('#__languages'))
-            ->where('lang_code = :lang')
-            ->where('published = 1')
-            ->bind(':lang', $langCode);
 
-        return (int) $this->db->setQuery($query)->loadResult() > 0;
-    }
-
-    private function findExistingTranslation(int $sourceId, string $targetLang): ?int
-    {
-        // Find association key for source
-        $query = $this->db->getQuery(true)
-            ->select($this->db->quoteName('key'))
-            ->from($this->db->quoteName('#__associations'))
-            ->where('context = ' . $this->db->quote('com_content.item'))
-            ->where('id = :id')
-            ->bind(':id', $sourceId, ParameterType::INTEGER);
-
-        $key = $this->db->setQuery($query)->loadResult();
-
-        if (!$key) {
-            return null;
-        }
-
-        // Find article in target language with same association key
-        $query = $this->db->getQuery(true)
-            ->select('a.id')
-            ->from($this->db->quoteName('#__associations', 'a'))
-            ->join('INNER', $this->db->quoteName('#__content', 'c') . ' ON c.id = a.id')
-            ->where('a.context = ' . $this->db->quote('com_content.item'))
-            ->where('a.' . $this->db->quoteName('key') . ' = :akey')
-            ->where('c.language = :lang')
-            ->where('a.id != :sid')
-            ->bind(':akey', $key)
-            ->bind(':lang', $targetLang)
-            ->bind(':sid', $sourceId, ParameterType::INTEGER);
-
-        $result = $this->db->setQuery($query)->loadResult();
-
-        return $result ? (int) $result : null;
-    }
+    // findTranslation() is now in AbstractTool
 
     private function resolveTargetCategory(int $sourceCatId, string $targetLang, ?int $explicit): int
     {
@@ -429,62 +386,12 @@ class ContentTranslateTool extends AbstractTool
         $newId = (int) $this->db->insertid();
 
         // Create asset for the new article (required for Joomla ACL)
-        $this->createAsset($newId, $overrides['title'] ?? 'Untitled');
+        $this->createAssetForContent($newId, $overrides['title'] ?? 'Untitled');
 
         return $newId;
     }
 
-    private function createAsset(int $articleId, string $title): void
-    {
-        // Find parent asset (com_content)
-        $query = $this->db->getQuery(true)
-            ->select('id')
-            ->from($this->db->quoteName('#__assets'))
-            ->where($this->db->quoteName('name') . ' = ' . $this->db->quote('com_content'));
-
-        $parentId = (int) $this->db->setQuery($query)->loadResult();
-
-        if (!$parentId) {
-            return;
-        }
-
-        // Get max rgt
-        $query = $this->db->getQuery(true)
-            ->select('MAX(rgt)')
-            ->from($this->db->quoteName('#__assets'));
-
-        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
-
-        // Insert asset
-        $assetName = 'com_content.article.' . $articleId;
-        $lft = $maxRgt + 1;
-        $rgt = $maxRgt + 2;
-
-        $query = $this->db->getQuery(true)
-            ->insert($this->db->quoteName('#__assets'))
-            ->columns(['parent_id', 'lft', 'rgt', 'level', 'name', 'title', 'rules'])
-            ->values(implode(',', [
-                $parentId,
-                $lft,
-                $rgt,
-                3,
-                $this->db->quote($assetName),
-                $this->db->quote($title),
-                $this->db->quote('{}'),
-            ]));
-
-        $this->db->setQuery($query)->execute();
-
-        $assetId = (int) $this->db->insertid();
-
-        // Update article with the asset_id
-        $query = $this->db->getQuery(true)
-            ->update($this->db->quoteName('#__content'))
-            ->set($this->db->quoteName('asset_id') . ' = ' . $assetId)
-            ->where('id = ' . $articleId);
-
-        $this->db->setQuery($query)->execute();
-    }
+    // createAsset → now createAssetForContent in AbstractTool
 
     private function updateArticle(int $id, array $fields): void
     {
@@ -502,46 +409,7 @@ class ContentTranslateTool extends AbstractTool
         $this->db->setQuery($query)->execute();
     }
 
-    private function createAssociation(int $sourceId, int $newId): void
-    {
-        // Check if source already has an association key
-        $query = $this->db->getQuery(true)
-            ->select($this->db->quoteName('key'))
-            ->from($this->db->quoteName('#__associations'))
-            ->where('context = ' . $this->db->quote('com_content.item'))
-            ->where('id = :id')
-            ->bind(':id', $sourceId, ParameterType::INTEGER);
-
-        $existingKey = $this->db->setQuery($query)->loadResult();
-
-        if (!$existingKey) {
-            // Create new association group
-            $existingKey = 'mirasai_' . $sourceId . '_' . time();
-
-            $query = $this->db->getQuery(true)
-                ->insert($this->db->quoteName('#__associations'))
-                ->columns(['context', 'id', $this->db->quoteName('key')])
-                ->values(
-                    $this->db->quote('com_content.item') . ','
-                    . $sourceId . ','
-                    . $this->db->quote($existingKey)
-                );
-
-            $this->db->setQuery($query)->execute();
-        }
-
-        // Add new article to association
-        $query = $this->db->getQuery(true)
-            ->insert($this->db->quoteName('#__associations'))
-            ->columns(['context', 'id', $this->db->quoteName('key')])
-            ->values(
-                $this->db->quote('com_content.item') . ','
-                . $newId . ','
-                . $this->db->quote($existingKey)
-            );
-
-        $this->db->setQuery($query)->execute();
-    }
+    // createAssociation → now in AbstractTool (with context parameter)
 
     /**
      * Regenerate introtext by calling the YOOtheme Builder via the standalone script.
@@ -635,7 +503,7 @@ class ContentTranslateTool extends AbstractTool
         $warnings = [];
 
         foreach ($referencedIds as $refId) {
-            $translation = $this->findExistingTranslation($refId, $targetLang);
+            $translation = $this->findTranslation($refId, $targetLang);
 
             if ($translation !== null) {
                 continue; // Has translation — OK
@@ -906,12 +774,5 @@ class ContentTranslateTool extends AbstractTool
         $this->db->setQuery($query)->execute();
     }
 
-    private function generateAlias(string $title): string
-    {
-        $alias = mb_strtolower($title);
-        $alias = preg_replace('/[^a-z0-9\-]/', '-', $alias) ?? $alias;
-        $alias = preg_replace('/-+/', '-', $alias) ?? $alias;
-
-        return trim($alias, '-');
-    }
+    // generateAlias → now in AbstractTool
 }
