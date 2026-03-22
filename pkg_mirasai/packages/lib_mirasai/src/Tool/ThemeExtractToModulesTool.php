@@ -8,6 +8,8 @@ use Joomla\Database\ParameterType;
 
 class ThemeExtractToModulesTool extends AbstractTool
 {
+    private const MIRASAI_BACKUP_LIMIT = 5;
+
     /** @var list<string> */
     private const TEXT_PROPS = [
         'content', 'title', 'meta', 'subtitle', 'text', 'video_title',
@@ -51,6 +53,18 @@ class ThemeExtractToModulesTool extends AbstractTool
                     'type' => 'integer',
                     'description' => 'Optional: specific template_styles id to operate on. Defaults to the active YOOtheme style (client_id=0, home=1).',
                 ],
+                'dry_run' => [
+                    'type' => 'boolean',
+                    'description' => 'If true, validates and returns the execution plan without writing modules or changing the theme area.',
+                ],
+                'replace_theme_area' => [
+                    'type' => 'boolean',
+                    'description' => 'If true (default), replace the theme area content with a module_position wrapper after modules are ready.',
+                ],
+                'force' => [
+                    'type' => 'boolean',
+                    'description' => 'If true, override conflict checks and proceed even when non-MirasAI modules exist at the target position. Use with caution.',
+                ],
             ],
             'required' => ['area', 'languages'],
         ];
@@ -70,6 +84,10 @@ class ThemeExtractToModulesTool extends AbstractTool
         $area = $arguments['area'] ?? '';
         $languages = $arguments['languages'] ?? [];
         $translations = $arguments['translations'] ?? [];
+        $dryRun = !empty($arguments['dry_run']);
+        $force = !empty($arguments['force']);
+        $replaceThemeArea = !array_key_exists('replace_theme_area', $arguments)
+            || !empty($arguments['replace_theme_area']);
 
         if ($area === '' || empty($languages)) {
             return ['error' => 'area and languages are required.'];
@@ -84,9 +102,19 @@ class ThemeExtractToModulesTool extends AbstractTool
             return ['error' => 'No active YOOtheme template style found (client_id=0, home=1). Pass template_style_id explicitly if needed.'];
         }
 
+        if (!$this->templateStyleExists($styleId)) {
+            return ['error' => "Template style id={$styleId} does not exist or is not a YOOtheme site style."];
+        }
+
         // 1. Validate mod_yootheme_builder is installed
         if (!$this->isModuleTypeAvailable('mod_yootheme_builder')) {
             return ['error' => 'mod_yootheme_builder is not installed. YOOtheme Pro is required.'];
+        }
+
+        $sourceLanguage = $this->detectSourceLanguage();
+
+        if (!in_array($sourceLanguage, $languages, true)) {
+            return ['error' => "languages must include the source language {$sourceLanguage}."];
         }
 
         // 2. Validate all requested languages are published
@@ -118,16 +146,17 @@ class ThemeExtractToModulesTool extends AbstractTool
         // 6. Determine the Joomla module position for this area
         $position = $this->resolvePosition($area);
 
-        // 7. Create a mod_yootheme_builder module per language
-        $results = [];
+        // 7. Plan module operations before writing anything
+        $plan = [];
         $conflicts = [];
+        $warnings = [];
 
         foreach ($languages as $lang) {
             // Check if a MirasAI-managed module already exists
             $existingId = $this->findExistingModule($position, $lang, $area);
 
             if ($existingId) {
-                $results[] = [
+                $plan[] = [
                     'language' => $lang,
                     'action' => 'exists',
                     'module_id' => $existingId,
@@ -135,19 +164,69 @@ class ThemeExtractToModulesTool extends AbstractTool
                 continue;
             }
 
-            // Check for non-MirasAI modules at the same position+language
-            $conflictId = $this->findConflictingModule($position, $lang);
-            if ($conflictId) {
-                $conflicts[] = [
-                    'language' => $lang,
-                    'module_id' => $conflictId,
-                    'position' => $position,
-                    'reason' => 'Existing mod_yootheme_builder module not managed by MirasAI.',
-                ];
+            // Check for any non-MirasAI module that would also render at this position.
+            $langConflicts = $this->findConflictingModules($position, $lang, $area);
+
+            if (!empty($langConflicts)) {
+                if ($force) {
+                    // With force, degrade conflicts to warnings and proceed
+                    foreach ($langConflicts as $conflict) {
+                        $conflict['forced'] = true;
+                        $warnings[] = sprintf(
+                            'force: overriding conflict with module id=%d (%s) at position "%s" for %s.',
+                            $conflict['module_id'],
+                            $conflict['existing_title'],
+                            $position,
+                            $lang,
+                        );
+                        $conflicts[] = $conflict;
+                    }
+                } else {
+                    foreach ($langConflicts as $conflict) {
+                        $conflicts[] = $conflict;
+                    }
+                    continue;
+                }
+            }
+
+            $plan[] = [
+                'language' => $lang,
+                'action' => $dryRun ? 'would_create' : 'create',
+                'position' => $position,
+            ];
+        }
+
+        // 8. If there were conflicts without force, abort and report
+        if (!empty($conflicts) && !$force) {
+            return [
+                'error' => 'Conflicts detected: existing modules occupy the target position and would render through module_position. Use force: true to override.',
+                'area' => $area,
+                'position' => $position,
+                'template_style_id' => $styleId,
+                'source_language' => $sourceLanguage,
+                'dry_run' => $dryRun,
+                'translatable_nodes' => $translatableNodes,
+                'modules' => $plan,
+                'conflicts' => $conflicts,
+                'warnings' => $warnings,
+                'theme_area' => [
+                    'requested_replace' => $replaceThemeArea,
+                    'status' => 'not_replaced',
+                    'backup_reference' => null,
+                ],
+            ];
+        }
+
+        // 9. Execute module creation plan unless dry-run
+        $results = [];
+
+        foreach ($plan as $item) {
+            if ($item['action'] === 'exists') {
+                $results[] = $item;
                 continue;
             }
 
-            // Build the translated layout
+            $lang = $item['language'];
             $translatedLayout = $layout;
 
             if (isset($translations[$lang]) && is_array($translations[$lang])) {
@@ -156,7 +235,15 @@ class ThemeExtractToModulesTool extends AbstractTool
 
             $content = json_encode($translatedLayout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-            // Create the module
+            if (!is_string($content) || $content === '') {
+                return ['error' => "Failed to encode Builder layout for {$lang}."];
+            }
+
+            if ($dryRun) {
+                $results[] = $item;
+                continue;
+            }
+
             $moduleId = $this->createBuilderModule(
                 $area,
                 $lang,
@@ -172,31 +259,53 @@ class ThemeExtractToModulesTool extends AbstractTool
             ];
         }
 
-        // 8. If there were conflicts, abort the theme area replacement and report
-        if (!empty($conflicts)) {
-            return [
-                'error' => 'Conflicts detected: existing modules not managed by MirasAI occupy the target position. Remove them or pass force: true (Phase 2).',
-                'area' => $area,
-                'position' => $position,
-                'template_style_id' => $styleId,
-                'translatable_nodes' => $translatableNodes,
-                'modules' => $results,
-                'conflicts' => $conflicts,
-                'theme_area_replaced' => false,
-            ];
+        $themeAreaStatus = [
+            'requested_replace' => $replaceThemeArea,
+            'status' => 'not_replaced',
+            'backup_reference' => null,
+        ];
+
+        if ($replaceThemeArea) {
+            $themeAreaStatus = $this->replaceThemeAreaWithModulePosition(
+                $area,
+                $position,
+                $styleId,
+                $dryRun,
+            );
+        } else {
+            $themeAreaStatus['status'] = $dryRun ? 'would_skip' : 'skipped';
         }
 
-        // 9. Replace the theme area content with a module_position element
-        $replaced = $this->replaceThemeAreaWithModulePosition($area, $position, $styleId);
+        if (($themeAreaStatus['warning'] ?? '') !== '') {
+            $warnings[] = $themeAreaStatus['warning'];
+            unset($themeAreaStatus['warning']);
+        }
+
+        // Build numeric summary for agents and auditing
+        $modulesCreated = 0;
+        $modulesReused = 0;
+
+        foreach ($results as $r) {
+            match ($r['action'] ?? null) {
+                'created' => $modulesCreated++,
+                'exists' => $modulesReused++,
+                default => null,
+            };
+        }
 
         return [
             'area' => $area,
             'position' => $position,
             'template_style_id' => $styleId,
+            'source_language' => $sourceLanguage,
+            'dry_run' => $dryRun,
+            'modules_created' => $modulesCreated,
+            'modules_reused' => $modulesReused,
             'translatable_nodes' => $translatableNodes,
             'modules' => $results,
-            'conflicts' => [],
-            'theme_area_replaced' => $replaced,
+            'conflicts' => $conflicts,
+            'warnings' => $warnings,
+            'theme_area' => $themeAreaStatus,
         ];
     }
 
@@ -217,6 +326,19 @@ class ThemeExtractToModulesTool extends AbstractTool
         return $result ? (int) $result : null;
     }
 
+    private function templateStyleExists(int $styleId): bool
+    {
+        $query = $this->db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('id = :id')
+            ->where('template = ' . $this->db->quote('yootheme'))
+            ->where('client_id = 0')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        return (int) $this->db->setQuery($query)->loadResult() > 0;
+    }
+
     /**
      * Check if a module type is installed and available.
      */
@@ -229,6 +351,21 @@ class ThemeExtractToModulesTool extends AbstractTool
             ->where('type = ' . $this->db->quote('module'));
 
         return (int) $this->db->setQuery($query)->loadResult() > 0;
+    }
+
+    private function detectSourceLanguage(): string
+    {
+        $query = $this->db->getQuery(true)
+            ->select(['language', 'COUNT(*) AS cnt'])
+            ->from($this->db->quoteName('#__content'))
+            ->where('state >= 0')
+            ->where('language != ' . $this->db->quote('*'))
+            ->group('language')
+            ->order('cnt DESC');
+
+        $row = $this->db->setQuery($query, 0, 1)->loadAssoc();
+
+        return $row ? (string) $row['language'] : 'ca-ES';
     }
 
     /**
@@ -324,94 +461,73 @@ class ThemeExtractToModulesTool extends AbstractTool
      *
      * This way YOOtheme renders the per-language module instead of the static theme content.
      */
-    private function replaceThemeAreaWithModulePosition(string $area, string $position, int $styleId): bool
+    private function replaceThemeAreaWithModulePosition(
+        string $area,
+        string $position,
+        int $styleId,
+        bool $dryRun,
+    ): array
     {
-        $query = $this->db->getQuery(true)
-            ->select('params')
-            ->from($this->db->quoteName('#__template_styles'))
-            ->where('id = :id')
-            ->bind(':id', $styleId, ParameterType::INTEGER);
+        $params = $this->loadTemplateStyleParams($styleId);
 
-        $paramsJson = $this->db->setQuery($query)->loadResult();
-
-        if (!$paramsJson) {
-            return false;
+        if ($params === null) {
+            return [
+                'requested_replace' => true,
+                'status' => 'not_replaced',
+                'backup_reference' => null,
+            ];
         }
 
-        $params = json_decode($paramsJson, true);
         $config = isset($params['config']) ? json_decode($params['config'], true) : [];
 
         if (!isset($config[$area]['content'])) {
-            return false;
+            return [
+                'requested_replace' => true,
+                'status' => 'not_replaced',
+                'backup_reference' => null,
+            ];
         }
 
-        // Check if already replaced (module_position is already there)
-        $existingContent = json_encode($config[$area]['content']);
-        if (str_contains($existingContent, '"type":"module_position"')) {
-            return false; // Already done
+        $modulePositionLayout = $this->buildModulePositionLayout($position);
+        $existingContent = $config[$area]['content'];
+
+        if ($this->layoutsAreEquivalent($existingContent, $modulePositionLayout)) {
+            return [
+                'requested_replace' => true,
+                'status' => $dryRun ? 'would_keep_replaced' : 'already_replaced',
+                'backup_reference' => null,
+            ];
         }
 
-        // Build the module_position layout
-        $modulePositionLayout = [
-            'type' => 'layout',
-            'children' => [
-                [
-                    'type' => 'section',
-                    'props' => [
-                        'style' => 'default',
-                        'width' => 'default',
-                        'vertical_align' => 'middle',
-                        'image_position' => 'center-center',
-                        'padding_top' => 'none',
-                        'padding_bottom' => 'xsmall',
-                    ],
-                    'children' => [
-                        [
-                            'type' => 'row',
-                            'props' => [],
-                            'children' => [
-                                [
-                                    'type' => 'column',
-                                    'props' => [
-                                        'image_position' => 'center-center',
-                                        'position_sticky_breakpoint' => 'm',
-                                    ],
-                                    'children' => [
-                                        [
-                                            'type' => 'module_position',
-                                            'props' => [
-                                                'layout' => 'stack',
-                                                'breakpoint' => 'm',
-                                                'content' => $position,
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-            'version' => '5.0.24',
-        ];
+        if ($this->layoutContainsModulePosition($existingContent)) {
+            return [
+                'requested_replace' => true,
+                'status' => 'not_replaced',
+                'backup_reference' => null,
+                'warning' => 'Theme area already contains a custom module_position layout that does not match the MirasAI wrapper. Leaving it unchanged.',
+            ];
+        }
+
+        if ($dryRun) {
+            return [
+                'requested_replace' => true,
+                'status' => 'would_replace',
+                'backup_reference' => null,
+            ];
+        }
+
+        $backupReference = $this->storeThemeAreaBackup($styleId, $area, $existingContent, $position);
 
         // Update the config
         $config[$area]['content'] = $modulePositionLayout;
-
         $params['config'] = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $this->writeTemplateStyleParams($styleId, $params);
 
-        // Write back to template_styles by id
-        $query = $this->db->getQuery(true)
-            ->update($this->db->quoteName('#__template_styles'))
-            ->set($this->db->quoteName('params') . ' = ' . $this->db->quote(
-                json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            ))
-            ->where('id = :id')
-            ->bind(':id', $styleId, ParameterType::INTEGER);
-
-        $this->db->setQuery($query)->execute();
-
-        return true;
+        return [
+            'requested_replace' => true,
+            'status' => 'replaced',
+            'backup_reference' => $backupReference,
+        ];
     }
 
     private function resolvePosition(string $area): string
@@ -433,44 +549,62 @@ class ThemeExtractToModulesTool extends AbstractTool
      */
     private function findExistingModule(string $position, string $lang, string $area): ?int
     {
-        $note = self::buildMirasaiNote($area);
-
         $query = $this->db->getQuery(true)
-            ->select('id')
+            ->select(['id', 'title', 'module', 'language', 'note'])
             ->from($this->db->quoteName('#__modules'))
             ->where('module = ' . $this->db->quote('mod_yootheme_builder'))
             ->where('position = :pos')
             ->where('language = :lang')
-            ->where('note = :note')
             ->where('client_id = 0')
             ->bind(':pos', $position)
-            ->bind(':lang', $lang)
-            ->bind(':note', $note);
+            ->bind(':lang', $lang);
 
-        $result = $this->db->setQuery($query)->loadResult();
+        $rows = $this->db->setQuery($query)->loadAssocList();
 
-        return $result ? (int) $result : null;
+        foreach ($rows as $row) {
+            if ($this->isManagedModuleRow($row, $area, $lang)) {
+                return (int) $row['id'];
+            }
+        }
+
+        return null;
     }
 
     /**
      * Detect non-MirasAI mod_yootheme_builder modules at the same position+language.
      */
-    private function findConflictingModule(string $position, string $lang): ?int
+    private function findConflictingModules(string $position, string $lang, string $area): array
     {
         $query = $this->db->getQuery(true)
-            ->select('id')
+            ->select(['id', 'title', 'module', 'language', 'note'])
             ->from($this->db->quoteName('#__modules'))
-            ->where('module = ' . $this->db->quote('mod_yootheme_builder'))
             ->where('position = :pos')
-            ->where('language = :lang')
+            ->where('(language = :lang OR language = ' . $this->db->quote('*') . ')')
             ->where('client_id = 0')
-            ->where('(note IS NULL OR note NOT LIKE ' . $this->db->quote('mirasai:theme_area=%') . ')')
+            ->where('published = 1')
             ->bind(':pos', $position)
             ->bind(':lang', $lang);
 
-        $result = $this->db->setQuery($query)->loadResult();
+        $rows = $this->db->setQuery($query)->loadAssocList();
+        $conflicts = [];
 
-        return $result ? (int) $result : null;
+        foreach ($rows as $row) {
+            if ($this->isManagedModuleRow($row, $area, $lang)) {
+                continue;
+            }
+
+            $conflicts[] = [
+                'language' => $lang,
+                'module_id' => (int) $row['id'],
+                'position' => $position,
+                'existing_module' => $row['module'],
+                'existing_title' => $row['title'],
+                'existing_language' => $row['language'],
+                'reason' => 'Existing published module would also render through this module position.',
+            ];
+        }
+
+        return $conflicts;
     }
 
     /**
@@ -479,6 +613,33 @@ class ThemeExtractToModulesTool extends AbstractTool
     private static function buildMirasaiNote(string $area): string
     {
         return 'mirasai:theme_area=' . $area;
+    }
+
+    /**
+     * Accept both the current marker and the legacy "Created by MirasAI" note
+     * when the module still matches the expected area, title, and language.
+     *
+     * @param array{id?: mixed, title?: mixed, module?: mixed, language?: mixed, note?: mixed} $row
+     */
+    private function isManagedModuleRow(array $row, string $area, string $lang): bool
+    {
+        if (($row['module'] ?? null) !== 'mod_yootheme_builder') {
+            return false;
+        }
+
+        if (($row['language'] ?? null) !== $lang) {
+            return false;
+        }
+
+        $expectedTitle = ucfirst($area) . ' (' . $lang . ')';
+        $note = (string) ($row['note'] ?? '');
+        $title = (string) ($row['title'] ?? '');
+
+        if ($note === self::buildMirasaiNote($area)) {
+            return true;
+        }
+
+        return $note === 'Created by MirasAI' && $title === $expectedTitle;
     }
 
     private function createBuilderModule(
@@ -535,5 +696,169 @@ class ThemeExtractToModulesTool extends AbstractTool
         $this->db->setQuery($query)->execute();
 
         return $moduleId;
+    }
+
+    private function buildModulePositionLayout(string $position): array
+    {
+        return [
+            'type' => 'layout',
+            'children' => [
+                [
+                    'type' => 'section',
+                    'props' => [
+                        'style' => 'default',
+                        'width' => 'default',
+                        'vertical_align' => 'middle',
+                        'image_position' => 'center-center',
+                        'padding_top' => 'none',
+                        'padding_bottom' => 'xsmall',
+                    ],
+                    'children' => [
+                        [
+                            'type' => 'row',
+                            'props' => [],
+                            'children' => [
+                                [
+                                    'type' => 'column',
+                                    'props' => [
+                                        'image_position' => 'center-center',
+                                        'position_sticky_breakpoint' => 'm',
+                                    ],
+                                    'children' => [
+                                        [
+                                            'type' => 'module_position',
+                                            'props' => [
+                                                'layout' => 'stack',
+                                                'breakpoint' => 'm',
+                                                'content' => $position,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'version' => '5.0.24',
+        ];
+    }
+
+    private function loadTemplateStyleParams(int $styleId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select('params')
+            ->from($this->db->quoteName('#__template_styles'))
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        $paramsJson = $this->db->setQuery($query)->loadResult();
+
+        if (!is_string($paramsJson) || $paramsJson === '') {
+            return null;
+        }
+
+        $params = json_decode($paramsJson, true);
+
+        return is_array($params) ? $params : null;
+    }
+
+    private function writeTemplateStyleParams(int $styleId, array $params): void
+    {
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__template_styles'))
+            ->set($this->db->quoteName('params') . ' = ' . $this->db->quote(
+                json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            ))
+            ->where('id = :id')
+            ->bind(':id', $styleId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+    }
+
+    private function layoutsAreEquivalent(array $left, array $right): bool
+    {
+        return json_encode($this->normaliseLayoutForComparison($left), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            === json_encode($this->normaliseLayoutForComparison($right), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function layoutContainsModulePosition(array $node): bool
+    {
+        if (($node['type'] ?? null) === 'module_position') {
+            return true;
+        }
+
+        foreach ($node['children'] ?? [] as $child) {
+            if (is_array($child) && $this->layoutContainsModulePosition($child)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Compare Builder layouts by structure and meaningful module-position data,
+     * ignoring decorative YOOtheme props that legacy wrappers may carry.
+     *
+     * @return array<string, mixed>
+     */
+    private function normaliseLayoutForComparison(array $node): array
+    {
+        $normalised = [
+            'type' => $node['type'] ?? null,
+        ];
+
+        if (($node['type'] ?? null) === 'module_position') {
+            $normalised['content'] = $node['props']['content'] ?? null;
+        }
+
+        $children = [];
+
+        foreach ($node['children'] ?? [] as $child) {
+            if (is_array($child)) {
+                $children[] = $this->normaliseLayoutForComparison($child);
+            }
+        }
+
+        if ($children !== []) {
+            $normalised['children'] = $children;
+        }
+
+        return $normalised;
+    }
+
+    private function storeThemeAreaBackup(
+        int $styleId,
+        string $area,
+        array $content,
+        string $position,
+    ): string {
+        $params = $this->loadTemplateStyleParams($styleId) ?? [];
+        $timestamp = gmdate('YmdHis');
+        $backupReference = sprintf('style:%d:theme-area:%s:%s', $styleId, $area, $timestamp);
+
+        if (!isset($params['mirasai_backups']) || !is_array($params['mirasai_backups'])) {
+            $params['mirasai_backups'] = [];
+        }
+
+        if (!isset($params['mirasai_backups']['theme_areas']) || !is_array($params['mirasai_backups']['theme_areas'])) {
+            $params['mirasai_backups']['theme_areas'] = [];
+        }
+
+        $params['mirasai_backups']['theme_areas'][$backupReference] = [
+            'area' => $area,
+            'position' => $position,
+            'created_at' => gmdate('c'),
+            'content' => $content,
+        ];
+
+        while (count($params['mirasai_backups']['theme_areas']) > self::MIRASAI_BACKUP_LIMIT) {
+            array_shift($params['mirasai_backups']['theme_areas']);
+        }
+
+        $this->writeTemplateStyleParams($styleId, $params);
+
+        return $backupReference;
     }
 }
