@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Mcp;
 
+use Mirasai\Library\Sandbox\EnvironmentGuard;
 use Mirasai\Library\Tool\ToolRegistry;
 
 class McpHandler
@@ -60,6 +61,32 @@ class McpHandler
      */
     private function handleInitialize(array $params): array
     {
+        $environment = EnvironmentGuard::isStaging() ? 'staging' : 'production';
+
+        $instructions = 'MirasAI is an MCP server for Joomla 5. It provides tools for content management, '
+            . 'multilingual translation (including YOOtheme Builder layouts), site inspection, '
+            . 'file operations, database queries, and PHP code execution in a sandboxed environment.'
+            . "\n\n"
+            . 'Getting started: Use system/info to discover the Joomla environment (version, extensions, '
+            . 'languages, template). Use content/list to find articles and their translation status. '
+            . 'Use db/schema to inspect table structures before writing queries with db/query.'
+            . "\n\n"
+            . 'File operations: file/read and file/list work anywhere under the Joomla root. '
+            . 'file/write, file/edit, and file/delete are restricted to the sandbox directory '
+            . '(media/mirasai/sandbox/).'
+            . "\n\n"
+            . 'Sandbox: sandbox/execute-php runs PHP code with automatic DB transaction wrapping. '
+            . 'On error, the transaction is rolled back. DDL statements (CREATE TABLE, ALTER TABLE) '
+            . 'auto-commit and cannot be rolled back — do not mix DDL and DML in a single call. '
+            . 'Use sandbox/status to check the sandbox state.'
+            . "\n\n"
+            . 'Current environment: ' . $environment . '. '
+            . ($environment === 'production'
+                ? 'Destructive tools (file/write, file/edit, file/delete, sandbox/execute-php) are BLOCKED on production.'
+                : 'All tools are available on this staging environment.')
+            . "\n\n"
+            . 'System requirements: VPS, Docker, or dedicated hosting with shell_exec enabled.';
+
         return [
             'protocolVersion' => '2024-11-05',
             'capabilities' => [
@@ -67,9 +94,9 @@ class McpHandler
             ],
             'serverInfo' => [
                 'name' => 'MirasAI',
-                'version' => '0.1.0',
+                'version' => '0.2.0',
             ],
-            'instructions' => 'MirasAI is an MCP server for Joomla. It provides tools for content translation (including YOOtheme Builder layouts), content management, and system inspection. Use system/info to discover the Joomla environment. Use content/list to find articles and their translation status. Use content/read to inspect article content and YOOtheme layouts. Use content/translate to create translations.',
+            'instructions' => $instructions,
         ];
     }
 
@@ -95,6 +122,26 @@ class McpHandler
 
         if (!$tool) {
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
+        }
+
+        // Environment guard: block destructive tools on production
+        $permissions = $tool->getPermissions();
+
+        if (!empty($permissions['destructive']) && EnvironmentGuard::isProduction()) {
+            return [
+                'content' => [
+                    [
+                        'type' => 'text',
+                        'text' => json_encode([
+                            'error' => 'This tool is only available on staging/development environments.',
+                            'tool' => $toolName,
+                            'environment' => 'production',
+                            'hint' => 'Set environment_override = "staging" in MirasAI component configuration if this is a staging site.',
+                        ], JSON_UNESCAPED_UNICODE),
+                    ],
+                ],
+                'isError' => true,
+            ];
         }
 
         try {

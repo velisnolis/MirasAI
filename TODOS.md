@@ -42,6 +42,33 @@
 - **Depends on:** Docker lab funcionant (bootstrap-lab.sh).
 - **Added:** 2026-03-23
 
+### TODO-007: Subprocess isolation per sandbox/execute-php (P2)
+- **What:** Implementar execució de codi PHP en un subprocess dedicat (via `proc_open`) en lloc de `eval()` in-process.
+- **Why:** L'execució in-process amb `eval()` pot corrompre l'estat de la request actual (sessions, output buffers, connexions DB) en cas de fatal error. A més, `set_time_limit` pot ser bypassat per codi avaluat.
+- **Pros:** Aïllament real, timeouts fiables via `pcntl_alarm`, protecció contra OOM i stack overflow.
+- **Cons:** Overhead de crear un subprocess per cada execució, requereix `pcntl` extension, complexitat addicional.
+- **Context:** v1 utilitza `eval()` + `set_time_limit(30)` + `register_shutdown_function` com a mesura acceptable. Aquest TODO captura la millora per a v2.
+- **Depends on:** Ús real que validi la necessitat vs el cost.
+- **Added:** 2026-03-23 via /plan-eng-review
+
+### TODO-008: Extension adapter API (P2)
+- **What:** Permetre que extensions de tercers registrin eines MCP pròpies a través d'una API d'adaptadors.
+- **Why:** Extensibilitat — extensions com Akeeba Backup, Admin Tools, etc. podrien exposar les seves funcionalitats via MCP.
+- **Pros:** Ecosistema obert, valor multiplicat per cada adaptador.
+- **Cons:** One-way door — un cop publicada l'API d'adaptadors, és difícil canviar-la sense trencar compatibilitat.
+- **Context:** Decidit al CEO review com a DEFERRED — dissenyar després d'ús real que validi els patrons.
+- **Depends on:** Experiència real amb les 23 eines actuals.
+- **Added:** 2026-03-23 via /plan-ceo-review
+
+### TODO-009: MCP resources (P3)
+- **What:** Exposar estat de Joomla com a recursos subscriptibles del protocol MCP (resources/list, resources/read).
+- **Why:** Permet als agents subscriure's a canvis en lloc de fer polling.
+- **Pros:** Eficiència, UX millor per a agents que monitoritzen estat.
+- **Cons:** Complexitat de protocol, SSE/streaming requerit.
+- **Context:** Decidit al CEO review com a DEFERRED — tools cobreixen el 80/20, resources és follow-up.
+- **Depends on:** MCP v1 estable amb les 23 eines actuals.
+- **Added:** 2026-03-23 via /plan-ceo-review
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.

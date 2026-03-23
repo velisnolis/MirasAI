@@ -5,20 +5,12 @@ declare(strict_types=1);
 namespace Mirasai\Plugin\System\Mirasai\Extension;
 
 use Joomla\CMS\Plugin\CMSPlugin;
+use Joomla\CMS\Session\Session;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
-use Mirasai\Library\Tool\ContentListTool;
-use Mirasai\Library\Tool\ContentReadTool;
-use Mirasai\Library\Tool\ContentTranslateTool;
-use Mirasai\Library\Tool\ContentCheckLinksTool;
-use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
-use Mirasai\Library\Tool\SystemInfoTool;
-use Mirasai\Library\Tool\TemplateListTool;
-use Mirasai\Library\Tool\TemplateReadTool;
-use Mirasai\Library\Tool\TemplateTranslateTool;
-use Mirasai\Library\Tool\ThemeExtractToModulesTool;
+use Mirasai\Library\Sandbox\SandboxLoader;
 use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
@@ -36,6 +28,13 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
     {
         $app = $this->getApplication();
 
+        // --- Sandbox boot (runs on ALL request types) ---
+        $this->bootSandbox($app);
+
+        // --- Safe mode clear via URL param (requires admin session + CSRF token) ---
+        $this->handleSafeModeClear($app);
+
+        // --- MCP handling (API requests only) ---
         if (!$app instanceof \Joomla\CMS\Application\ApiApplication) {
             return;
         }
@@ -154,19 +153,63 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
 
     private function buildHandler(): McpHandler
     {
-        $registry = new ToolRegistry();
-        $registry->register(new SystemInfoTool());
-        $registry->register(new ContentListTool());
-        $registry->register(new ContentReadTool());
-        $registry->register(new ContentTranslateTool());
-        $registry->register(new ContentCheckLinksTool());
-        $registry->register(new ThemeExtractToModulesTool());
-        $registry->register(new MenuMigrateThemeToModulesTool());
-        $registry->register(new TemplateListTool());
-        $registry->register(new TemplateReadTool());
-        $registry->register(new TemplateTranslateTool());
+        return new McpHandler(ToolRegistry::buildDefault());
+    }
 
-        return new McpHandler($registry);
+    /**
+     * Boot the sandbox loader early in the Joomla lifecycle.
+     *
+     * This runs on every request type (frontend, admin, API) to ensure
+     * crash detection works regardless of how the site is accessed.
+     */
+    private function bootSandbox($app): void
+    {
+        try {
+            $loader = new SandboxLoader();
+            $loader->boot();
+
+            // Store the loader instance so sandbox/status tool can access it
+            $app->getInput()->set('_mirasai_sandbox_loader', serialize([
+                'state' => $loader->getState(),
+                'loaded_files' => $loader->getLoadedFiles(),
+                'crashed_files' => $loader->getCrashedFiles(),
+            ]));
+        } catch (\Throwable) {
+            // Sandbox boot must never crash the site
+        }
+    }
+
+    /**
+     * Handle ?mirasai_safe_mode=clear URL param.
+     *
+     * Requires: active admin session with core.admin + valid CSRF token.
+     */
+    private function handleSafeModeClear($app): void
+    {
+        $input = $app->getInput();
+
+        if ($input->get('mirasai_safe_mode') !== 'clear') {
+            return;
+        }
+
+        try {
+            // Require valid CSRF token
+            if (!Session::checkToken('get')) {
+                return;
+            }
+
+            // Require admin session with core.admin
+            $user = $app->getIdentity();
+
+            if (!$user || $user->guest || !$user->authorise('core.admin')) {
+                return;
+            }
+
+            $loader = new SandboxLoader();
+            $loader->clearSafeMode();
+        } catch (\Throwable) {
+            // Silently ignore errors
+        }
     }
 
     /**

@@ -5,27 +5,11 @@ declare(strict_types=1);
 namespace Mirasai\Plugin\WebServices\Mirasai\Extension;
 
 use Joomla\CMS\Event\Application\BeforeApiRouteEvent;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Uri\Uri;
-use Joomla\Database\DatabaseInterface;
 use Joomla\Event\SubscriberInterface;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
-use Mirasai\Library\Tool\CategoryTranslateTool;
-use Mirasai\Library\Tool\ContentAuditMultilingualTool;
-use Mirasai\Library\Tool\ContentCheckLinksTool;
-use Mirasai\Library\Tool\ContentListTool;
-use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
-use Mirasai\Library\Tool\SiteSetupLanguageSwitcherTool;
-use Mirasai\Library\Tool\TemplateListTool;
-use Mirasai\Library\Tool\TemplateReadTool;
-use Mirasai\Library\Tool\TemplateTranslateTool;
-use Mirasai\Library\Tool\ThemeExtractToModulesTool;
-use Mirasai\Library\Tool\ContentReadTool;
-use Mirasai\Library\Tool\ContentTranslateBatchTool;
-use Mirasai\Library\Tool\ContentTranslateTool;
-use Mirasai\Library\Tool\SystemInfoTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
@@ -152,23 +136,7 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
     private function buildHandler(): McpHandler
     {
-        $registry = new ToolRegistry();
-        $registry->register(new SystemInfoTool());
-        $registry->register(new ContentListTool());
-        $registry->register(new ContentReadTool());
-        $registry->register(new ContentTranslateTool());
-        $registry->register(new ContentTranslateBatchTool());
-        $registry->register(new ContentCheckLinksTool());
-        $registry->register(new ContentAuditMultilingualTool());
-        $registry->register(new CategoryTranslateTool());
-        $registry->register(new SiteSetupLanguageSwitcherTool());
-        $registry->register(new ThemeExtractToModulesTool());
-        $registry->register(new MenuMigrateThemeToModulesTool());
-        $registry->register(new TemplateListTool());
-        $registry->register(new TemplateReadTool());
-        $registry->register(new TemplateTranslateTool());
-
-        return new McpHandler($registry);
+        return new McpHandler(ToolRegistry::buildDefault());
     }
 
     /**

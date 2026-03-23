@@ -31,27 +31,33 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateBatchTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentAuditMultilingualTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/CategoryTranslateTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SiteSetupLanguageSwitcherTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ThemeExtractToModulesTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/MenuMigrateThemeToModulesTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateTranslateTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/EnvironmentGuard.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/SandboxLoader.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/PathValidator.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SandboxStatusTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileReadTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileWriteTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileEditTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileDeleteTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileListTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SandboxExecutePhpTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/DbQueryTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/DbSchemaTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
-use Mirasai\Library\Tool\ContentListTool;
-use Mirasai\Library\Tool\ContentReadTool;
-use Mirasai\Library\Tool\ContentTranslateTool;
-use Mirasai\Library\Tool\SystemInfoTool;
-use Mirasai\Library\Tool\ContentCheckLinksTool;
-use Mirasai\Library\Tool\MenuMigrateThemeToModulesTool;
-use Mirasai\Library\Tool\TemplateListTool;
-use Mirasai\Library\Tool\TemplateReadTool;
-use Mirasai\Library\Tool\TemplateTranslateTool;
-use Mirasai\Library\Tool\ThemeExtractToModulesTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 // --- Authentication ---
@@ -66,19 +72,7 @@ if (!JoomlaApiTokenAuthenticator::authenticate($token)) {
 }
 
 // --- Build handler ---
-$registry = new ToolRegistry();
-$registry->register(new SystemInfoTool());
-$registry->register(new ContentListTool());
-$registry->register(new ContentReadTool());
-$registry->register(new ContentTranslateTool());
-$registry->register(new ContentCheckLinksTool());
-$registry->register(new ThemeExtractToModulesTool());
-$registry->register(new MenuMigrateThemeToModulesTool());
-$registry->register(new TemplateListTool());
-$registry->register(new TemplateReadTool());
-$registry->register(new TemplateTranslateTool());
-
-$handler = new McpHandler($registry);
+$handler = new McpHandler(ToolRegistry::buildDefault());
 
 // --- Handle request ---
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

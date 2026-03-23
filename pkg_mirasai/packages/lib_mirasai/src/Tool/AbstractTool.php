@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mirasai\Library\Tool;
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Filter\OutputFilter;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 
@@ -564,11 +565,7 @@ abstract class AbstractTool implements ToolInterface
      */
     protected function generateAlias(string $title): string
     {
-        $alias = mb_strtolower($title);
-        $alias = preg_replace('/[^a-z0-9\-]/', '-', $alias) ?? $alias;
-        $alias = preg_replace('/-+/', '-', $alias) ?? $alias;
-
-        return trim($alias, '-');
+        return OutputFilter::stringURLSafe($title);
     }
 
     /**
