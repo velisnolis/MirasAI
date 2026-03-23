@@ -12,6 +12,14 @@ namespace Mirasai\Library\Sandbox;
  *   LOADING → CRASHED          (if .loading found on next boot)
  *   CRASHED → SAFE_MODE        (skip sandbox loading)
  *
+ * IMPORTANT: Only PHP files in the `autoload/` subdirectory are loaded
+ * on boot. Files in the sandbox root are for agent file operations
+ * (file/write, file/edit) and are NOT auto-executed.
+ *
+ * Directory layout:
+ *   media/mirasai/sandbox/          ← agent workspace (file/write, etc.)
+ *   media/mirasai/sandbox/autoload/ ← auto-loaded on every Joomla boot
+ *
  * The .loading and .crashed marker files live in the sandbox directory.
  * In safe mode the MCP bridge still works (tools are available) but
  * no sandbox PHP files are auto-loaded.
@@ -35,9 +43,12 @@ class SandboxLoader
 
     private string $state = self::STATE_OK;
 
+    private string $autoloadDir;
+
     public function __construct(?string $sandboxDir = null)
     {
         $this->sandboxDir = $sandboxDir ?? (JPATH_ROOT . '/media/mirasai/sandbox');
+        $this->autoloadDir = $this->sandboxDir . '/autoload';
         $this->loadingMarker = $this->sandboxDir . '/.loading';
         $this->crashedMarker = $this->sandboxDir . '/.crashed';
     }
@@ -49,14 +60,18 @@ class SandboxLoader
      */
     public function boot(): void
     {
-        // Ensure the sandbox directory exists
+        // Ensure the sandbox and autoload directories exist
         if (!is_dir($this->sandboxDir)) {
             @mkdir($this->sandboxDir, 0755, true);
+        }
 
-            if (!is_dir($this->sandboxDir)) {
-                // Cannot create sandbox dir — nothing to do
-                return;
-            }
+        if (!is_dir($this->autoloadDir)) {
+            @mkdir($this->autoloadDir, 0755, true);
+        }
+
+        if (!is_dir($this->sandboxDir)) {
+            // Cannot create sandbox dir — nothing to do
+            return;
         }
 
         // Step 1: Check for .loading marker from a previous failed boot
@@ -76,8 +91,8 @@ class SandboxLoader
             return;
         }
 
-        // Step 3: Normal loading
-        $files = glob($this->sandboxDir . '/*.php');
+        // Step 3: Normal loading — ONLY from the autoload/ subdirectory
+        $files = glob($this->autoloadDir . '/*.php');
 
         if ($files === false || $files === []) {
             $this->state = self::STATE_OK;
@@ -177,18 +192,40 @@ class SandboxLoader
     }
 
     /**
-     * List all PHP files in the sandbox dir.
-     *
-     * @return string[] Bare filenames.
+     * @return string[] Bare filenames in the autoload directory.
      */
-    public function listSandboxFiles(): array
+    public function listAutoloadFiles(): array
     {
-        $files = glob($this->sandboxDir . '/*.php');
+        $files = glob($this->autoloadDir . '/*.php');
 
         if ($files === false) {
             return [];
         }
 
         return array_map('basename', $files);
+    }
+
+    /**
+     * List all files in the sandbox dir (agent workspace, not autoloaded).
+     *
+     * @return string[] Bare filenames.
+     */
+    public function listSandboxFiles(): array
+    {
+        $files = glob($this->sandboxDir . '/*');
+
+        if ($files === false) {
+            return [];
+        }
+
+        // Exclude the autoload subdirectory itself
+        return array_values(array_map('basename', array_filter($files, static function (string $f): bool {
+            return !is_dir($f);
+        })));
+    }
+
+    public function getAutoloadDir(): string
+    {
+        return $this->autoloadDir;
     }
 }

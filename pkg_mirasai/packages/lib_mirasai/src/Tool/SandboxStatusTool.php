@@ -45,9 +45,10 @@ class SandboxStatusTool extends AbstractTool
             'state' => $this->loader->getState(),
             'environment' => EnvironmentGuard::isStaging() ? 'staging' : 'production',
             'sandbox_dir' => basename($this->loader->getSandboxDir()),
+            'sandbox_files' => $this->loader->listSandboxFiles(),
+            'autoload_files' => $this->loader->listAutoloadFiles(),
             'loaded_files' => $this->loader->getLoadedFiles(),
             'crashed_files' => $this->loader->getCrashedFiles(),
-            'sandbox_files' => $this->loader->listSandboxFiles(),
             'php_lint_available' => $this->loader->isPhpLintAvailable(),
         ];
     }
