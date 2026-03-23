@@ -29,6 +29,19 @@
 - **Extra:** `content/audit-multilingual` detecta templates amb text fix compartit, variants per idioma faltants i casos dinàmics purs amb `lang=all`.
 - **Context:** Els templates es llegeixen de `#__extensions.custom_data.templates`; el filtre d'idioma viu a `query.lang` i el layout a `layout`.
 
+### ~~TODO-006: Phase 4 — Integration tests per theme/extract-to-modules~~ ✅ DONE
+- **Completat:** 2026-03-23. Script a `docker/test-extract-to-modules.sh`.
+- **Cobertura:** 6 escenaris del pla Codex:
+  1. Single YOOtheme style — extracció normal amb traduccions
+  2. Múltiples template_styles — resolució per id explícit i fallback a l'actiu
+  3. Mòdul preexistent no-MirasAI — detecció de conflicte sense force
+  4. Re-run idempotent — reusa mòduls existents (modules_reused >= 2)
+  5. dry_run — cap mutació a DB
+  6. replace_theme_area=false — crea mòduls però no modifica l'àrea del tema
+- **Integració:** `smoke.sh` crida el test suite amb `RUN_INTEGRATION=1`.
+- **Depends on:** Docker lab funcionant (bootstrap-lab.sh).
+- **Added:** 2026-03-23
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.

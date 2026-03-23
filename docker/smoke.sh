@@ -71,6 +71,12 @@ main() {
   assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"system/info","arguments":{}},"id":2}' 'yootheme'
 
   echo "Smoke checks passed."
+
+  if [[ "${RUN_INTEGRATION:-0}" == "1" ]]; then
+    echo ""
+    echo "Running integration tests..."
+    "${ROOT_DIR}/docker/test-extract-to-modules.sh"
+  fi
 }
 
 main "$@"
