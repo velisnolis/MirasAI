@@ -69,6 +69,24 @@
 - **Depends on:** MCP v1 estable amb les 23 eines actuals.
 - **Added:** 2026-03-23 via /plan-ceo-review
 
+### TODO-010: Per-tool risk tiers per elevation (P3)
+- **What:** Implementar nivells de risc diferenciats per a cada eina destructiva dins del sistema d'elevació.
+- **Why:** `sandbox/execute-php` (eval()) pot corrompre estat del procés, connexions DB, i sessions — risc molt més alt que `file/write` que opera dins del sandbox. El gate uniforme actual tracta tots els tools destructius igual.
+- **Pros:** Controls més granulars (e.g., eval podria requerir confirmació addicional o durada més curta), millor model de seguretat.
+- **Cons:** Complexitat addicional al UX d'activació, més opcions per l'admin.
+- **Context:** Identificat pel review independent de Codex durant l'eng review de Smart Sudo. v1 usa un gate uniforme — acceptable per single-admin. v2 podria afegir risk tiers amb controls específics per nivell.
+- **Depends on:** Smart Sudo v1 implementat i ús real que validi la necessitat.
+- **Added:** 2026-03-24 via /plan-eng-review (Codex finding)
+
+### TODO-011: Crear DESIGN.md via /design-consultation (P3)
+- **What:** Definir un design system compartit per tots els admin views de MirasAI (dashboard, elevation, futurs).
+- **Why:** El dashboard i l'elevation view usen convencions implícites de Bootstrap 5. Un DESIGN.md formal unificaria tokens de color, tipografia, espaiat i vocabulari de components.
+- **Pros:** Consistència visual entre views, referència per a implementadors, base per a /design-review.
+- **Cons:** Esforç de creació (~30 min amb /design-consultation). Pot ser prematur amb només 2 views.
+- **Context:** Detectat al design review de Smart Sudo. L'elevation view defineix tokens inline (`--mirasai-elevation-*`) que podrien promoure's a sistema compartit.
+- **Depends on:** Smart Sudo v1 implementat (2 admin views existents com a base).
+- **Added:** 2026-03-24 via /plan-design-review
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.

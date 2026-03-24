@@ -30,12 +30,13 @@ build_component_package() {
   local zip_path="$2"
 
   rm -rf "$stage_dir"
-  mkdir -p "${stage_dir}/services" "${stage_dir}/src" "${stage_dir}/tmpl" "${stage_dir}/api"
+  mkdir -p "${stage_dir}/services" "${stage_dir}/src" "${stage_dir}/tmpl" "${stage_dir}/api" "${stage_dir}/sql"
 
   cp "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/mirasai.xml" "${stage_dir}/mirasai.xml"
   cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/services/." "${stage_dir}/services/"
   cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/admin/src/." "${stage_dir}/src/"
   cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/admin/tmpl/." "${stage_dir}/tmpl/"
+  cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/admin/sql/." "${stage_dir}/sql/"
   cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/src/." "${stage_dir}/src/"
   cp -R "${ROOT_DIR}/pkg_mirasai/packages/com_mirasai/src" "${stage_dir}/api/"
 

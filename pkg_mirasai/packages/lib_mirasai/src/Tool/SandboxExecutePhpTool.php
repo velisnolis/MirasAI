@@ -205,6 +205,18 @@ class SandboxExecutePhpTool extends AbstractTool
         ];
     }
 
+    public function getAuditSummary(array $arguments): string
+    {
+        $code = $arguments['code'] ?? '';
+        $firstLine = strtok((string) $code, "\n") ?: '';
+        $lineCount = substr_count((string) $code, "\n") + 1;
+
+        return json_encode([
+            'first_line' => mb_substr($firstLine, 0, 120),
+            'lines' => $lineCount,
+        ], JSON_UNESCAPED_SLASHES);
+    }
+
     /**
      * Safely serialize a return value for JSON encoding.
      *

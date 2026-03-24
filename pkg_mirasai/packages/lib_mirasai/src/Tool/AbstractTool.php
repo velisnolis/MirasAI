@@ -49,6 +49,20 @@ abstract class AbstractTool implements ToolInterface
     }
 
     /**
+     * Return a sanitized summary of the tool arguments for audit logging.
+     *
+     * Default: JSON of argument keys only (no values). Destructive tools
+     * override this with tool-specific sanitization per the Arguments
+     * Sanitization Policy.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public function getAuditSummary(array $arguments): string
+    {
+        return json_encode(['keys' => array_keys($arguments)], JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
      * Convert this tool to MCP tool format.
      *
      * @return array<string, mixed>

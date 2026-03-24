@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Mcp;
 
+use Mirasai\Library\Sandbox\ElevationGrant;
+use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
 use Mirasai\Library\Tool\ToolRegistry;
 
@@ -80,11 +82,29 @@ class McpHandler
             . 'auto-commit and cannot be rolled back — do not mix DDL and DML in a single call. '
             . 'Use sandbox/status to check the sandbox state.'
             . "\n\n"
-            . 'Current environment: ' . $environment . '. '
-            . ($environment === 'production'
-                ? 'Destructive tools (file/write, file/edit, file/delete, sandbox/execute-php) are BLOCKED on production.'
-                : 'All tools are available on this staging environment.')
-            . "\n\n"
+            . 'Current environment: ' . $environment . '. ';
+
+        if ($environment === 'production') {
+            $elevation = new ElevationService();
+            $grant = $elevation->getActiveGrant();
+
+            if ($grant !== null && $grant->isActive()) {
+                $remaining = (int) ceil($grant->getRemainingSeconds() / 60);
+                $scopes = implode(', ', $grant->scopes);
+                $instructions .= "Elevated mode active. {$remaining} minutes remaining. "
+                    . "Allowed tools: [{$scopes}]. All calls are being audited. "
+                    . 'Use elevation/status to check elevation details.';
+            } else {
+                $instructions .= 'Destructive tools (file/write, file/edit, file/delete, sandbox/execute-php) '
+                    . 'are BLOCKED on production. Ask the site administrator to activate elevation '
+                    . 'in the Joomla admin panel (Components → MirasAI → Elevation). '
+                    . 'Use elevation/status to check elevation state.';
+            }
+        } else {
+            $instructions .= 'All tools are available on this staging environment.';
+        }
+
+        $instructions .= "\n\n"
             . 'System requirements: VPS, Docker, or dedicated hosting with shell_exec enabled.';
 
         return [
@@ -124,24 +144,44 @@ class McpHandler
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
-        // Environment guard: block destructive tools on production
+        // Environment guard: block destructive tools on production unless elevated
         $permissions = $tool->getPermissions();
 
         if (!empty($permissions['destructive']) && EnvironmentGuard::isProduction()) {
-            return [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => json_encode([
-                            'error' => 'This tool is only available on staging/development environments.',
-                            'tool' => $toolName,
-                            'environment' => 'production',
-                            'hint' => 'Set environment_override = "staging" in MirasAI component configuration if this is a staging site.',
-                        ], JSON_UNESCAPED_UNICODE),
+            $elevation = new ElevationService();
+
+            if (!$elevation->isElevated($toolName)) {
+                return [
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => json_encode([
+                                'error' => 'This tool requires elevation on production environments.',
+                                'tool' => $toolName,
+                                'environment' => 'production',
+                                'action_required' => 'Ask the site administrator to activate elevation in the Joomla admin panel (Components → MirasAI → Elevation).',
+                                'docs' => 'The administrator must select which tools to enable, set a duration, and acknowledge the risks.',
+                            ], JSON_UNESCAPED_UNICODE),
+                        ],
                     ],
-                ],
-                'isError' => true,
-            ];
+                    'isError' => true,
+                ];
+            }
+
+            // Elevation active — log before execution (result_summary = 'pending')
+            $grant = $elevation->getActiveGrant();
+            $argsSummary = $tool->getAuditSummary($arguments);
+            $auditId = $elevation->logUsage($grant->id, $toolName, $argsSummary);
+
+            try {
+                $result = $tool->handle($arguments);
+                $elevation->finalizeAuditEntry($auditId, isset($result['error']) ? 'error' : 'success');
+
+                return $this->wrapResultWithElevation($result, $grant);
+            } catch (\Throwable $e) {
+                $elevation->finalizeAuditEntry($auditId, 'error');
+                throw $e;
+            }
         }
 
         try {
@@ -182,6 +222,33 @@ class McpHandler
                 'isError' => true,
             ];
         }
+    }
+
+    /**
+     * Wrap a tool result with elevation metadata (_elevation key).
+     *
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function wrapResultWithElevation(array $result, ElevationGrant $grant): array
+    {
+        $result['_elevation'] = [
+            'grant_id' => $grant->id,
+            'remaining_minutes' => (int) ceil($grant->getRemainingSeconds() / 60),
+            'scopes' => $grant->scopes,
+        ];
+
+        $isError = isset($result['error']);
+
+        return [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                ],
+            ],
+            'isError' => $isError,
+        ];
     }
 
     /**

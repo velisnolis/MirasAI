@@ -87,4 +87,11 @@ class FileDeleteTool extends AbstractTool
             'idempotent' => true,
         ];
     }
+
+    public function getAuditSummary(array $arguments): string
+    {
+        return json_encode([
+            'path' => $arguments['path'] ?? '(unknown)',
+        ], JSON_UNESCAPED_SLASHES);
+    }
 }

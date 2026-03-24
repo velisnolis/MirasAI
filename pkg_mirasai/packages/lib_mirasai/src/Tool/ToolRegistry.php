@@ -43,6 +43,7 @@ class ToolRegistry
         $registry->register(new SandboxExecutePhpTool());
         $registry->register(new DbQueryTool());
         $registry->register(new DbSchemaTool());
+        $registry->register(new ElevationStatusTool());
 
         return $registry;
     }

@@ -44,6 +44,8 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/EnvironmentGuard.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/SandboxLoader.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/PathValidator.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/ElevationGrant.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/ElevationService.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SandboxStatusTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileWriteTool.php';
@@ -53,6 +55,7 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/FileListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SandboxExecutePhpTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/DbQueryTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/DbSchemaTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ElevationStatusTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
 
