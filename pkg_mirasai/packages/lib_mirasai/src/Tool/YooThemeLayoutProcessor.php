@@ -170,8 +170,12 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
     /**
      * Walk a decoded layout array and return all translatable text nodes.
      *
+     * Each entry includes a `replacement_key` field (= path + "." + field) that
+     * can be used directly as the key in `yootheme_text_replacements` when calling
+     * content/translate. No concatenation needed on the caller side.
+     *
      * @param array<string, mixed> $layout
-     * @return list<array{path: string, node_type: string, field: string, text: string, format: string}>
+     * @return list<array{path: string, node_type: string, field: string, replacement_key: string, text: string, format: string}>
      */
     public function findTranslatableNodes(array $layout, string $path = 'root'): array
     {
@@ -194,6 +198,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
                 'path' => $path,
                 'node_type' => $nodeType,
                 'field' => (string) $key,
+                'replacement_key' => $path . '.' . (string) $key,
                 'text' => $value,
                 'format' => $this->detectTextFormat($value),
             ];
@@ -298,7 +303,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
 
     /**
      * @param array<string, mixed> $source
-     * @return list<array{path: string, node_type: string, field: string, text: string, format: string}>
+     * @return list<array{path: string, node_type: string, field: string, replacement_key: string, text: string, format: string}>
      */
     private function findSourceTextNodes(array $source, string $path, string $nodeType): array
     {
@@ -313,6 +318,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
                         'path' => $path,
                         'node_type' => $nodeType,
                         'field' => $field,
+                        'replacement_key' => $path . '.' . $field,
                         'text' => $value,
                         'format' => $this->detectTextFormat($value),
                     ];
