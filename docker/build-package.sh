@@ -55,6 +55,7 @@ build_component_package "${STAGE_DIR}/component-stage" "${PACKAGE_DIR}/packages/
 zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/lib_mirasai" "${PACKAGE_DIR}/packages/lib_mirasai.zip"
 zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_system_mirasai" "${PACKAGE_DIR}/packages/plg_system_mirasai.zip"
 zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_webservices_mirasai" "${PACKAGE_DIR}/packages/plg_webservices_mirasai.zip"
+zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_mirasai_yootheme" "${PACKAGE_DIR}/packages/plg_mirasai_yootheme.zip"
 
 rm -f "$OUTPUT_ZIP"
 (

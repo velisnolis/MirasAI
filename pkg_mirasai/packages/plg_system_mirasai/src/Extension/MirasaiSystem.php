@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mirasai\Plugin\System\Mirasai\Extension;
 
 use Joomla\CMS\Plugin\CMSPlugin;
+use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\Session\Session;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
@@ -153,6 +154,10 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
 
     private function buildHandler(): McpHandler
     {
+        // Load all enabled plugins in the 'mirasai' group so they can subscribe
+        // to the onMirasaiCollectTools event fired by ToolRegistry::collectProviders().
+        PluginHelper::importPlugin('mirasai');
+
         return new McpHandler(ToolRegistry::buildDefault());
     }
 

@@ -55,10 +55,12 @@ class ToolRegistry
      * Collect tool providers from installed MirasAI plugins.
      *
      * Strategy:
-     * 1. If Joomla's EventDispatcher is available, fire MirasaiCollectToolsEvent
-     *    (the preferred Joomla-native path used by plg_system_mirasai).
-     * 2. Otherwise (standalone mcp-endpoint.php), fall back to scanning the
-     *    filesystem for plugins/mirasai/*/provider.php files.
+     * 1. Fire MirasaiCollectToolsEvent so Joomla-native plugins can respond
+     *    (used by plg_mirasai_yootheme when loaded via PluginHelper::importPlugin).
+     * 2. Always also scan the filesystem for plugins/mirasai/{plugin}/provider.php
+     *    to cover cases where the Joomla event path produced no providers
+     *    (e.g., the plugin is not yet loaded into the dispatcher).
+     *    The has() guard ensures no duplicate tool registration.
      *
      * Invariants:
      * - Core tools registered in buildDefault() are never removed.
@@ -67,10 +69,24 @@ class ToolRegistry
      */
     public function collectProviders(): void
     {
-        $providers = $this->fireCollectToolsEvent();
+        $eventProviders = $this->fireCollectToolsEvent() ?? [];
+        $fsProviders    = $this->scanFilesystemProviders();
 
-        if ($providers === null) {
-            $providers = $this->scanFilesystemProviders();
+        // Merge: event providers first (higher priority), then filesystem providers.
+        // Deduplicate by provider ID so the same plugin isn't processed twice
+        // when both Joomla event and filesystem scan find the same provider.php.
+        $seen      = [];
+        $providers = [];
+
+        foreach (array_merge($eventProviders, $fsProviders) as $provider) {
+            $id = $provider->getId();
+
+            if (isset($seen[$id])) {
+                continue;
+            }
+
+            $seen[$id]   = true;
+            $providers[] = $provider;
         }
 
         foreach ($providers as $provider) {
@@ -126,7 +142,7 @@ class ToolRegistry
     }
 
     /**
-     * Scan JPATH_PLUGINS/mirasai/*/provider.php for standalone mode.
+     * Scan JPATH_PLUGINS/mirasai/{plugin}/provider.php for standalone mode.
      * Each provider.php must return a ToolProviderInterface instance.
      *
      * @return list<ToolProviderInterface>
