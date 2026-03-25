@@ -6,6 +6,7 @@ namespace Mirasai\Library\Tool;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Filter\OutputFilter;
+use Joomla\CMS\Table\Asset as AssetTable;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 
@@ -48,11 +49,48 @@ abstract class AbstractTool implements ToolInterface
      */
     public function toMcpTool(): array
     {
-        return [
-            'name' => $this->getName(),
+        $tool = [
+            'name'        => $this->getName(),
             'description' => $this->getDescription(),
             'inputSchema' => $this->getInputSchema(),
         ];
+
+        // Expose permission hints as MCP metadata so agents can ask for
+        // user confirmation before calling destructive tools, rather than
+        // discovering the restriction only after the call fails.
+        $metadata = $this->buildMcpMetadata();
+
+        if (!empty($metadata)) {
+            $tool['metadata'] = $metadata;
+        }
+
+        return $tool;
+    }
+
+    /**
+     * Build the optional MCP metadata object for this tool.
+     *
+     * Returns an associative array that will be included as the `metadata`
+     * key in the tools/list response. Override in subclasses to add extra
+     * hints. Return [] (default) to omit the metadata key entirely.
+     *
+     * Standard keys (MCP extension — not part of the core spec):
+     *   destructive       bool  Tool can irreversibly modify or delete data.
+     *   requires_elevation bool  Tool is gated behind Smart Sudo elevation.
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildMcpMetadata(): array
+    {
+        $permissions = $this->getPermissions();
+        $metadata    = [];
+
+        if (!empty($permissions['destructive'])) {
+            $metadata['destructive']        = true;
+            $metadata['requires_elevation'] = true;
+        }
+
+        return $metadata;
     }
 
     // ── Shared helpers ────────────────────────────────────────────
@@ -161,48 +199,26 @@ abstract class AbstractTool implements ToolInterface
     }
 
     /**
-     * Create a Joomla ACL asset for a content item.
+     * Create a Joomla ACL asset for a content item, placed as the last child
+     * of the given parent asset node.
+     *
+     * Delegates to insertAssetNode which uses Joomla\CMS\Table\Asset to
+     * maintain nested set integrity automatically.
      *
      * @param string $assetPrefix  e.g. 'com_content.article', 'com_categories.category'
      * @param string $parentAsset  e.g. 'com_content', 'com_categories'
      */
     protected function createAsset(int $itemId, string $title, string $assetPrefix = 'com_content.article', string $parentAsset = 'com_content'): int
     {
-        $query = $this->db->getQuery(true)
-            ->select('id')
-            ->from($this->db->quoteName('#__assets'))
-            ->where($this->db->quoteName('name') . ' = ' . $this->db->quote($parentAsset));
-
-        $parentId = (int) $this->db->setQuery($query)->loadResult();
+        $parentId = $this->getAssetIdByName($parentAsset);
 
         if (!$parentId) {
             return 0;
         }
 
-        $query = $this->db->getQuery(true)
-            ->select('MAX(rgt)')
-            ->from($this->db->quoteName('#__assets'));
-
-        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
-
         $assetName = $assetPrefix . '.' . $itemId;
 
-        $query = $this->db->getQuery(true)
-            ->insert($this->db->quoteName('#__assets'))
-            ->columns(['parent_id', 'lft', 'rgt', 'level', 'name', 'title', 'rules'])
-            ->values(implode(',', [
-                $parentId,
-                $maxRgt + 1,
-                $maxRgt + 2,
-                3,
-                $this->db->quote($assetName),
-                $this->db->quote($title),
-                $this->db->quote('{}'),
-            ]));
-
-        $this->db->setQuery($query)->execute();
-
-        return (int) $this->db->insertid();
+        return $this->insertAssetNode($parentId, $assetName, $title) ?? 0;
     }
 
     /**
@@ -344,71 +360,36 @@ abstract class AbstractTool implements ToolInterface
     }
 
     /**
-     * Insert an asset as the last child of the given parent, preserving nested set integrity.
+     * Insert an asset as the last child of the given parent, preserving nested
+     * set integrity via Joomla\CMS\Table\Asset (Joomla-native implementation).
+     *
+     * Using setLocation() + store() delegates all lft/rgt bookkeeping and table
+     * locking to the Joomla framework, eliminating the risk of tree corruption
+     * from manual nested set arithmetic.
      */
     protected function insertAssetNode(int $parentAssetId, string $assetName, string $title): ?int
     {
-        $this->lockTables([$this->db->replacePrefix('#__assets') . ' WRITE']);
+        // Re-use existing node (idempotent) to avoid duplicates.
+        $existing = $this->getAssetByName($assetName);
 
-        try {
-            $existing = $this->getAssetByName($assetName);
+        if ($existing) {
+            $this->updateAssetTitle((int) $existing['id'], $title);
 
-            if ($existing) {
-                $this->updateAssetTitle((int) $existing['id'], $title);
-
-                return (int) $existing['id'];
-            }
-
-            $parentAsset = $this->getAssetById($parentAssetId);
-
-            if (!$parentAsset) {
-                return null;
-            }
-
-            $insertAt = (int) $parentAsset['rgt'];
-            $level = (int) $parentAsset['level'] + 1;
-
-            $query = $this->db->getQuery(true)
-                ->update($this->db->quoteName('#__assets'))
-                ->set($this->db->quoteName('rgt') . ' = ' . $this->db->quoteName('rgt') . ' + 2')
-                ->where($this->db->quoteName('rgt') . ' >= :insertAt')
-                ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
-            $this->db->setQuery($query)->execute();
-
-            $query = $this->db->getQuery(true)
-                ->update($this->db->quoteName('#__assets'))
-                ->set($this->db->quoteName('lft') . ' = ' . $this->db->quoteName('lft') . ' + 2')
-                ->where($this->db->quoteName('lft') . ' > :insertAt')
-                ->bind(':insertAt', $insertAt, ParameterType::INTEGER);
-            $this->db->setQuery($query)->execute();
-
-            $query = $this->db->getQuery(true)
-                ->insert($this->db->quoteName('#__assets'))
-                ->columns([
-                    $this->db->quoteName('parent_id'),
-                    $this->db->quoteName('lft'),
-                    $this->db->quoteName('rgt'),
-                    $this->db->quoteName('level'),
-                    $this->db->quoteName('name'),
-                    $this->db->quoteName('title'),
-                    $this->db->quoteName('rules'),
-                ])
-                ->values(implode(',', [
-                    $parentAssetId,
-                    $insertAt,
-                    $insertAt + 1,
-                    $level,
-                    $this->db->quote($assetName),
-                    $this->db->quote($title),
-                    $this->db->quote('{}'),
-                ]));
-
-            $this->db->setQuery($query)->execute();
-
-            return (int) $this->db->insertid();
-        } finally {
-            $this->unlockTables();
+            return (int) $existing['id'];
         }
+
+        /** @var AssetTable $assetTable */
+        $assetTable        = AssetTable::getInstance('Asset', 'JTable', ['dbo' => $this->db]);
+        $assetTable->name  = $assetName;
+        $assetTable->title = $title;
+        $assetTable->rules = '{}';
+        $assetTable->setLocation($parentAssetId, 'last-child');
+
+        if (!$assetTable->store()) {
+            return null;
+        }
+
+        return (int) $assetTable->id;
     }
 
     protected function getAssetIdByName(string $name): ?int
@@ -461,19 +442,6 @@ abstract class AbstractTool implements ToolInterface
             ->bind(':id', $assetId, ParameterType::INTEGER);
 
         $this->db->setQuery($query)->execute();
-    }
-
-    /**
-     * @param list<string> $tables
-     */
-    protected function lockTables(array $tables): void
-    {
-        $this->db->setQuery('LOCK TABLES ' . implode(', ', $tables))->execute();
-    }
-
-    protected function unlockTables(): void
-    {
-        $this->db->setQuery('UNLOCK TABLES')->execute();
     }
 
     /**
