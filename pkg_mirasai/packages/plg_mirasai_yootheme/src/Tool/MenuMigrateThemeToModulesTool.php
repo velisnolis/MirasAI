@@ -2,14 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\Library\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
 
 use Joomla\Database\ParameterType;
+use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\YooThemeHelper;
 
 class MenuMigrateThemeToModulesTool extends AbstractTool
 {
     /** @var list<string> */
     private const SUPPORTED_POSITIONS = ['navbar', 'dialog-mobile'];
+
+    private YooThemeHelper $yooHelper;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->yooHelper = new YooThemeHelper($this->db);
+    }
 
     public function getName(): string
     {
@@ -106,17 +116,17 @@ class MenuMigrateThemeToModulesTool extends AbstractTool
 
         $styleId = isset($arguments['template_style_id'])
             ? (int) $arguments['template_style_id']
-            : $this->resolveActiveYoothemeStyleId();
+            : $this->yooHelper->resolveActiveStyleId();
 
         if (!$styleId) {
             return ['error' => 'No active YOOtheme template style found. Pass template_style_id explicitly if needed.'];
         }
 
-        if (!$this->isYoothemeSiteStyle($styleId)) {
+        if (!$this->yooHelper->isYoothemeSiteStyle($styleId)) {
             return ['error' => "template_style_id {$styleId} is not a site-side YOOtheme style."];
         }
 
-        $themeConfig = $this->loadYoothemeStyleConfig($styleId) ?? [];
+        $themeConfig = $this->yooHelper->loadStyleConfig($styleId) ?? [];
         $themeAssignments = $this->getThemeAssignments($themeConfig, $positions);
 
         $sourceLanguage = $this->detectLikelySourceLanguage();
@@ -682,7 +692,7 @@ class MenuMigrateThemeToModulesTool extends AbstractTool
      */
     private function clearThemeAssignments(int $styleId, array $positions): void
     {
-        $params = $this->loadYoothemeStyleParams($styleId) ?? [];
+        $params = $this->yooHelper->loadStyleParams($styleId) ?? [];
         $configJson = $params['config'] ?? '{}';
         $config = is_string($configJson) ? json_decode($configJson, true) : [];
 
@@ -707,6 +717,6 @@ class MenuMigrateThemeToModulesTool extends AbstractTool
         }
 
         $params['config'] = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $this->writeYoothemeStyleParams($styleId, $params);
+        $this->yooHelper->writeStyleParams($styleId, $params);
     }
 }

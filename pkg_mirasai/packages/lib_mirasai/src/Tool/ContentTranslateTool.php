@@ -141,7 +141,7 @@ class ContentTranslateTool extends AbstractTool
             return $metaValidation;
         }
 
-        if ($this->hasYoothemeLayout((string) ($source['fulltext'] ?? ''))
+        if ((new YooThemeLayoutProcessor())->detectLayout((string) ($source['fulltext'] ?? ''))
             && empty($arguments['translated_fulltext'])
             && empty($arguments['yootheme_text_replacements'])) {
             return [
@@ -359,7 +359,7 @@ class ContentTranslateTool extends AbstractTool
 
         // Option 2: YOOtheme text replacements
         if (!empty($arguments['yootheme_text_replacements'])) {
-            return $this->patchYoothemeLayout(
+            return (new YooThemeLayoutProcessor())->replaceText(
                 $source['fulltext'] ?? '',
                 $arguments['yootheme_text_replacements'],
             );
@@ -367,67 +367,6 @@ class ContentTranslateTool extends AbstractTool
 
         // Fallback: copy source fulltext
         return $source['fulltext'] ?? '';
-    }
-
-    private function hasYoothemeLayout(string $fulltext): bool
-    {
-        return str_starts_with(trim($fulltext), '<!-- {');
-    }
-
-    /**
-     * @param  array<string, string> $replacements
-     */
-    private function patchYoothemeLayout(string $fulltext, array $replacements): string
-    {
-        $fulltext = trim($fulltext);
-
-        if (!str_starts_with($fulltext, '<!-- ')) {
-            return $fulltext;
-        }
-
-        $end = strrpos($fulltext, ' -->');
-
-        if ($end === false) {
-            return $fulltext;
-        }
-
-        $json = substr($fulltext, 5, $end - 5);
-        $layout = json_decode($json, true);
-
-        if ($layout === null) {
-            return $fulltext;
-        }
-
-        $this->applyReplacements($layout, $replacements, 'root');
-
-        $newJson = json_encode($layout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        return '<!-- ' . $newJson . ' -->';
-    }
-
-    /**
-     * @param  array<string, mixed>  $node
-     * @param  array<string, string> $replacements
-     */
-    private function applyReplacements(array &$node, array $replacements, string $path): void
-    {
-        if (isset($node['props']) && is_array($node['props'])) {
-            foreach ($node['props'] as $key => &$value) {
-                $fullPath = "{$path}.{$key}";
-
-                if (isset($replacements[$fullPath]) && is_string($value)) {
-                    $value = $replacements[$fullPath];
-                }
-            }
-        }
-
-        if (isset($node['children']) && is_array($node['children'])) {
-            foreach ($node['children'] as $i => &$child) {
-                $childType = $child['type'] ?? 'unknown';
-                $childPath = "{$path}>{$childType}[{$i}]";
-                $this->applyReplacements($child, $replacements, $childPath);
-            }
-        }
     }
 
     /**

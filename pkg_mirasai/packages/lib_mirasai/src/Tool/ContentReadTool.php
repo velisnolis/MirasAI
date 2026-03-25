@@ -75,17 +75,18 @@ class ContentReadTool extends AbstractTool
         ];
 
         $fulltext = $row['fulltext_raw'] ?? '';
+        $processor = new YooThemeLayoutProcessor();
 
-        if (str_starts_with(trim($fulltext), '<!-- {')) {
+        if ($processor->detectLayout($fulltext)) {
             $result['has_yootheme_builder'] = true;
-            $json = $this->extractYoothemeJson($fulltext);
+            $json = $processor->extractJson($fulltext);
 
             if ($json !== null) {
                 $layout = json_decode($json, true);
 
-                if ($layout !== null) {
+                if (is_array($layout)) {
                     $result['yootheme_layout'] = $layout;
-                    $result['yootheme_translatable_nodes'] = $this->findYoothemeTranslatableNodes($layout);
+                    $result['yootheme_translatable_nodes'] = $processor->findTranslatableNodes($layout);
                 }
             }
         } else {

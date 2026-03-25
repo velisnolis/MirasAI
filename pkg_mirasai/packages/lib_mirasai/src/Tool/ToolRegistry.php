@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Tool;
 
+use Mirasai\Library\Mcp\MirasaiCollectToolsEvent;
+
 class ToolRegistry
 {
     /** @var array<string, ToolInterface> */
     private array $tools = [];
 
     /**
-     * Build a registry pre-populated with all available tools.
+     * Build a registry pre-populated with the 18 core (non-YOOtheme) tools,
+     * then collect additional tools from installed plugins via collectProviders().
      *
-     * Every MCP entrypoint should use this method so the tool list
-     * stays consistent across standalone, system plugin, webservices
-     * plugin and component controller.
+     * Every MCP entrypoint should use this method so the tool list stays
+     * consistent across standalone, system plugin, webservices plugin and
+     * component controller.
      */
     public static function buildDefault(): self
     {
         $registry = new self();
 
+        // Core tools (always available, no external dependencies)
         $registry->register(new SystemInfoTool());
         $registry->register(new ContentListTool());
         $registry->register(new ContentReadTool());
@@ -29,11 +33,6 @@ class ToolRegistry
         $registry->register(new ContentAuditMultilingualTool());
         $registry->register(new CategoryTranslateTool());
         $registry->register(new SiteSetupLanguageSwitcherTool());
-        $registry->register(new ThemeExtractToModulesTool());
-        $registry->register(new MenuMigrateThemeToModulesTool());
-        $registry->register(new TemplateListTool());
-        $registry->register(new TemplateReadTool());
-        $registry->register(new TemplateTranslateTool());
         $registry->register(new SandboxStatusTool());
         $registry->register(new FileReadTool());
         $registry->register(new FileWriteTool());
@@ -44,9 +43,122 @@ class ToolRegistry
         $registry->register(new DbQueryTool());
         $registry->register(new DbSchemaTool());
         $registry->register(new ElevationStatusTool());
+        // NOTE: SiteSetupLanguageSwitcherTool is kept in core (generic Joomla, not YOOtheme-specific)
+
+        // Discover and register tools from plugins
+        $registry->collectProviders();
 
         return $registry;
     }
+
+    /**
+     * Collect tool providers from installed MirasAI plugins.
+     *
+     * Strategy:
+     * 1. If Joomla's EventDispatcher is available, fire MirasaiCollectToolsEvent
+     *    (the preferred Joomla-native path used by plg_system_mirasai).
+     * 2. Otherwise (standalone mcp-endpoint.php), fall back to scanning the
+     *    filesystem for plugins/mirasai/*/provider.php files.
+     *
+     * Invariants:
+     * - Core tools registered in buildDefault() are never removed.
+     * - A provider that throws is caught, logged, and skipped.
+     * - Tool name conflicts: first-registered wins (core always wins).
+     */
+    public function collectProviders(): void
+    {
+        $providers = $this->fireCollectToolsEvent();
+
+        if ($providers === null) {
+            $providers = $this->scanFilesystemProviders();
+        }
+
+        foreach ($providers as $provider) {
+            try {
+                if (!$provider->isAvailable()) {
+                    continue;
+                }
+
+                foreach ($provider->getToolNames() as $toolName) {
+                    if ($this->has($toolName)) {
+                        // Core tool or earlier plugin already registered this name — skip.
+                        trigger_error(
+                            "MirasAI: tool name conflict '{$toolName}' from provider '{$provider->getId()}' — skipped.",
+                            E_USER_WARNING,
+                        );
+                        continue;
+                    }
+
+                    $this->register($provider->createTool($toolName));
+                }
+            } catch (\Throwable $e) {
+                trigger_error(
+                    "MirasAI: provider '{$provider->getId()}' threw during registration: " . $e->getMessage(),
+                    E_USER_WARNING,
+                );
+            }
+        }
+    }
+
+    // ── Plugin discovery helpers ───────────────────────────────────────────────
+
+    /**
+     * Fire onMirasaiCollectTools via Joomla's EventDispatcher.
+     * Returns null when Joomla is not bootstrapped (standalone mode).
+     *
+     * @return list<ToolProviderInterface>|null
+     */
+    private function fireCollectToolsEvent(): ?array
+    {
+        if (!class_exists(\Joomla\CMS\Factory::class, false)) {
+            return null;
+        }
+
+        try {
+            $app = \Joomla\CMS\Factory::getApplication();
+            $event = new MirasaiCollectToolsEvent('onMirasaiCollectTools');
+            $app->getDispatcher()->dispatch('onMirasaiCollectTools', $event);
+
+            return $event->getProviders();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Scan JPATH_PLUGINS/mirasai/*/provider.php for standalone mode.
+     * Each provider.php must return a ToolProviderInterface instance.
+     *
+     * @return list<ToolProviderInterface>
+     */
+    private function scanFilesystemProviders(): array
+    {
+        if (!defined('JPATH_PLUGINS')) {
+            return [];
+        }
+
+        $providers = [];
+        $providerFiles = glob(JPATH_PLUGINS . '/mirasai/*/provider.php') ?: [];
+
+        foreach ($providerFiles as $file) {
+            try {
+                $provider = require $file;
+
+                if ($provider instanceof ToolProviderInterface) {
+                    $providers[] = $provider;
+                }
+            } catch (\Throwable $e) {
+                trigger_error(
+                    "MirasAI: failed to load provider from '{$file}': " . $e->getMessage(),
+                    E_USER_WARNING,
+                );
+            }
+        }
+
+        return $providers;
+    }
+
+    // ── Registry operations ────────────────────────────────────────────────────
 
     public function register(ToolInterface $tool): void
     {

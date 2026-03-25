@@ -6,6 +6,14 @@ namespace Mirasai\Library\Tool;
 
 class ContentAuditMultilingualTool extends AbstractTool
 {
+    private YooThemeHelper $yooHelper;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->yooHelper = new YooThemeHelper($this->db);
+    }
+
     public function getName(): string
     {
         return 'content/audit-multilingual';
@@ -201,13 +209,13 @@ class ContentAuditMultilingualTool extends AbstractTool
      */
     private function auditThemeManagedMenus(): array
     {
-        $styleId = $this->resolveActiveYoothemeStyleId();
+        $styleId = $this->yooHelper->resolveActiveStyleId();
 
         if (!$styleId) {
             return [];
         }
 
-        $config = $this->loadYoothemeStyleConfig($styleId);
+        $config = $this->yooHelper->loadStyleConfig($styleId);
 
         if ($config === null) {
             return [];
@@ -689,7 +697,7 @@ class ContentAuditMultilingualTool extends AbstractTool
      */
     private function auditTemplates(string $sourceLang, array $targetLangs): array
     {
-        $templates = $this->loadYoothemeTemplates();
+        $templates = $this->yooHelper->loadTemplates();
 
         if ($templates === []) {
             return [];
@@ -704,11 +712,11 @@ class ContentAuditMultilingualTool extends AbstractTool
 
             $records[] = [
                 'key' => (string) $key,
-                'name' => $this->getYoothemeTemplateName($template),
+                'name' => $this->yooHelper->getTemplateName($template),
                 'type' => is_string($template['type'] ?? null) ? $template['type'] : '',
-                'language' => $this->getYoothemeTemplateLanguage($template),
-                'has_static_text' => $this->yoothemeTemplateHasStaticText($template),
-                'fingerprint' => $this->buildYoothemeTemplateAssignmentFingerprint($template),
+                'language' => $this->yooHelper->getTemplateLanguage($template),
+                'has_static_text' => $this->yooHelper->templateHasStaticText($template),
+                'fingerprint' => $this->yooHelper->buildTemplateAssignmentFingerprint($template),
             ];
         }
 

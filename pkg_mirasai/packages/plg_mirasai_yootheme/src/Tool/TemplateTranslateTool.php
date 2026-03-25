@@ -2,10 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\Library\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
+
+use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\YooThemeHelper;
+use Mirasai\Library\Tool\YooThemeLayoutProcessor;
 
 class TemplateTranslateTool extends AbstractTool
 {
+    private YooThemeHelper $yooHelper;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->yooHelper = new YooThemeHelper($this->db);
+    }
+
     public function getName(): string
     {
         return 'template/translate';
@@ -94,7 +106,7 @@ class TemplateTranslateTool extends AbstractTool
             return ['error' => "Language {$targetLanguage} is not published."];
         }
 
-        $templates = $this->loadYoothemeTemplates();
+        $templates = $this->yooHelper->loadTemplates();
         $sourceTemplate = $templates[$key] ?? null;
 
         if (!is_array($sourceTemplate)) {
@@ -102,7 +114,7 @@ class TemplateTranslateTool extends AbstractTool
         }
 
         $sourceLanguage = $this->detectLikelySourceLanguage();
-        $sourceTemplateLanguage = $this->getYoothemeTemplateLanguage($sourceTemplate);
+        $sourceTemplateLanguage = $this->yooHelper->getTemplateLanguage($sourceTemplate);
 
         if (($sourceTemplateLanguage !== '' && $sourceTemplateLanguage === $targetLanguage)
             || ($sourceTemplateLanguage === '' && $sourceLanguage === $targetLanguage)
@@ -110,20 +122,20 @@ class TemplateTranslateTool extends AbstractTool
             return ['error' => 'target_language matches the source template language.'];
         }
 
-        $sourceLayout = $this->getYoothemeTemplateLayout($sourceTemplate);
+        $sourceLayout = $this->yooHelper->getTemplateLayout($sourceTemplate);
 
         if ($sourceLayout === null) {
             return ['error' => "Template {$key} has no layout."];
         }
 
-        $hasStaticText = $this->yoothemeTemplateHasStaticText($sourceTemplate);
+        $hasStaticText = $this->yooHelper->templateHasStaticText($sourceTemplate);
         $translatedLayout = $this->resolveTranslatedLayout($sourceLayout, $arguments, $hasStaticText);
 
         if (isset($translatedLayout['error'])) {
             return $translatedLayout;
         }
 
-        $fingerprint = $this->buildYoothemeTemplateAssignmentFingerprint($sourceTemplate);
+        $fingerprint = $this->yooHelper->buildTemplateAssignmentFingerprint($sourceTemplate);
         $existingTargetKey = $this->findTemplateKeyByFingerprintAndLanguage($templates, $fingerprint, $targetLanguage, $key);
 
         if ($existingTargetKey !== null && !$overwrite) {
@@ -133,8 +145,8 @@ class TemplateTranslateTool extends AbstractTool
         $targetKey = $existingTargetKey ?? $this->generateUniqueTemplateKey($templates);
         $targetTemplate = $sourceTemplate;
 
-        $this->setYoothemeTemplateLanguage($targetTemplate, $targetLanguage);
-        $this->setYoothemeTemplateLayout($targetTemplate, $translatedLayout['layout']);
+        $this->yooHelper->setTemplateLanguage($targetTemplate, $targetLanguage);
+        $this->yooHelper->setTemplateLayout($targetTemplate, $translatedLayout['layout']);
         $targetTemplate['name'] = $this->buildTargetTemplateName(
             $sourceTemplate,
             $targetLanguage,
@@ -146,12 +158,12 @@ class TemplateTranslateTool extends AbstractTool
         $sourceLanguageWasScoped = false;
 
         if ($hasStaticText && $sourceTemplateLanguage === '') {
-            $this->setYoothemeTemplateLanguage($sourceTemplate, $sourceLanguage);
+            $this->yooHelper->setTemplateLanguage($sourceTemplate, $sourceLanguage);
             $templates[$key] = $sourceTemplate;
             $sourceLanguageWasScoped = true;
         }
 
-        $this->writeYoothemeTemplates($templates);
+        $this->yooHelper->writeTemplates($templates);
 
         return [
             'source_key' => $key,
@@ -176,7 +188,7 @@ class TemplateTranslateTool extends AbstractTool
             return $explicit;
         }
 
-        $sourceName = $this->getYoothemeTemplateName($sourceTemplate);
+        $sourceName = $this->yooHelper->getTemplateName($sourceTemplate);
         $baseName = preg_replace('/ \([A-Za-z]{2,3}-[A-Za-z]{2,3}\)$/', '', $sourceName) ?: $sourceName;
 
         return trim($baseName) . ' (' . $targetLanguage . ')';
@@ -192,11 +204,11 @@ class TemplateTranslateTool extends AbstractTool
                 continue;
             }
 
-            if ($this->getYoothemeTemplateLanguage($template) !== $language) {
+            if ($this->yooHelper->getTemplateLanguage($template) !== $language) {
                 continue;
             }
 
-            if ($this->buildYoothemeTemplateAssignmentFingerprint($template) === $fingerprint) {
+            if ($this->yooHelper->buildTemplateAssignmentFingerprint($template) === $fingerprint) {
                 return (string) $templateKey;
             }
         }
@@ -210,7 +222,7 @@ class TemplateTranslateTool extends AbstractTool
     private function generateUniqueTemplateKey(array $templates): string
     {
         do {
-            $key = $this->generateYoothemeStorageKey();
+            $key = $this->yooHelper->generateStorageKey();
         } while (isset($templates[$key]));
 
         return $key;
@@ -250,7 +262,7 @@ class TemplateTranslateTool extends AbstractTool
         }
 
         if (!empty($replacements)) {
-            return ['layout' => $this->patchYoothemeLayoutArray($sourceLayout, $replacements)];
+            return ['layout' => (new YooThemeLayoutProcessor())->patchLayoutArray($sourceLayout, $replacements)];
         }
 
         if ($hasStaticText) {

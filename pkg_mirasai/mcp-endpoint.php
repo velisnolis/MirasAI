@@ -24,9 +24,18 @@ $app = $container->get(\Joomla\CMS\Application\SiteApplication::class);
 \Joomla\CMS\Factory::$application = $app;
 
 // Load the MirasAI library
+// Core interfaces
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolInterface.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolProviderInterface.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentLayoutProcessorInterface.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/MirasaiCollectToolsEvent.php';
+// Base class and helpers
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/AbstractTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeLayoutProcessor.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeHelper.php';
+// Registry
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolRegistry.php';
+// Core tools
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
@@ -36,11 +45,6 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentAuditMultilingualTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/CategoryTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SiteSetupLanguageSwitcherTool.php';
-require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ThemeExtractToModulesTool.php';
-require_once JPATH_LIBRARIES . '/mirasai/src/Tool/MenuMigrateThemeToModulesTool.php';
-require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateListTool.php';
-require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateReadTool.php';
-require_once JPATH_LIBRARIES . '/mirasai/src/Tool/TemplateTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/EnvironmentGuard.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/SandboxLoader.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Sandbox/PathValidator.php';
@@ -58,6 +62,15 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/DbSchemaTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ElevationStatusTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/McpHandler.php';
+
+// Plugin autoloading: each provider.php bootstraps its own classes
+foreach (glob(JPATH_PLUGINS . '/mirasai/*/provider.php') ?: [] as $providerFile) {
+    try {
+        require_once $providerFile;
+    } catch (\Throwable $e) {
+        trigger_error("MirasAI: failed to load provider '{$providerFile}': " . $e->getMessage(), E_USER_WARNING);
+    }
+}
 
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;

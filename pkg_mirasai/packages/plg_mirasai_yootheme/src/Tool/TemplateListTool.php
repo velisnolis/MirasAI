@@ -2,10 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\Library\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
+
+use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\YooThemeHelper;
 
 class TemplateListTool extends AbstractTool
 {
+    private YooThemeHelper $yooHelper;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->yooHelper = new YooThemeHelper($this->db);
+    }
+
     public function getName(): string
     {
         return 'template/list';
@@ -39,7 +50,7 @@ class TemplateListTool extends AbstractTool
 
     public function handle(array $arguments): array
     {
-        $templates = $this->loadYoothemeTemplates();
+        $templates = $this->yooHelper->loadTemplates();
         $languageFilter = isset($arguments['language']) ? trim((string) $arguments['language']) : null;
         $typeFilter = isset($arguments['type']) ? trim((string) $arguments['type']) : null;
         $hasStaticFilter = array_key_exists('has_static_text', $arguments)
@@ -53,10 +64,10 @@ class TemplateListTool extends AbstractTool
                 continue;
             }
 
-            $language = $this->getYoothemeTemplateLanguage($template);
+            $language = $this->yooHelper->getTemplateLanguage($template);
             $language = $language === '' ? '*' : $language;
             $type = is_string($template['type'] ?? null) ? (string) $template['type'] : '';
-            $translatableNodes = $this->findYoothemeTemplateTranslatableNodes($template);
+            $translatableNodes = $this->yooHelper->findTemplateTranslatableNodes($template);
             $hasStaticText = $translatableNodes !== [];
 
             if ($languageFilter !== null && $languageFilter !== '' && $language !== $languageFilter) {
@@ -73,13 +84,13 @@ class TemplateListTool extends AbstractTool
 
             $items[] = [
                 'key' => (string) $key,
-                'name' => $this->getYoothemeTemplateName($template),
+                'name' => $this->yooHelper->getTemplateName($template),
                 'type' => $type,
                 'language' => $language,
                 'dynamic_only' => !$hasStaticText,
                 'has_static_text' => $hasStaticText,
                 'translatable_node_count' => count($translatableNodes),
-                'assignment_fingerprint' => $this->buildYoothemeTemplateAssignmentFingerprint($template),
+                'assignment_fingerprint' => $this->yooHelper->buildTemplateAssignmentFingerprint($template),
             ];
         }
 

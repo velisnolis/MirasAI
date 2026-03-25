@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="mirasai" method="upgrade">
+    <name>plg_mirasai_example</name>
+    <version>0.1.0</version>
+    <creationDate>2026-03-25</creationDate>
+    <author>Alex Miras</author>
+    <authorEmail>alex@miras.pro</authorEmail>
+    <description>MirasAI example plugin — minimal reference implementation showing how to add custom MCP tools. See docs/plugin-developer-guide.md.</description>
+    <namespace path="src">Mirasai\Plugin\Mirasai\Example</namespace>
+    <files>
+        <folder plugin="mirasai_example">services</folder>
+        <folder>src</folder>
+    </files>
+</extension>

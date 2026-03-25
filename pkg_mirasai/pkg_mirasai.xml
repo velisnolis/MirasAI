@@ -16,5 +16,6 @@
         <file type="plugin" group="system" id="mirasai">plg_system_mirasai.zip</file>
         <file type="component" id="com_mirasai">com_mirasai.zip</file>
         <file type="plugin" group="webservices" id="mirasai">plg_webservices_mirasai.zip</file>
+        <file type="plugin" group="mirasai" id="yootheme">plg_mirasai_yootheme.zip</file>
     </files>
 </extension>

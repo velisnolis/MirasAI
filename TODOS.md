@@ -51,14 +51,10 @@
 - **Depends on:** Ús real que validi la necessitat vs el cost.
 - **Added:** 2026-03-23 via /plan-eng-review
 
-### TODO-008: Extension adapter API (P2)
+### ~~TODO-008: Extension adapter API (P2)~~ ✅ DONE (v0.4.0)
 - **What:** Permetre que extensions de tercers registrin eines MCP pròpies a través d'una API d'adaptadors.
-- **Why:** Extensibilitat — extensions com Akeeba Backup, Admin Tools, etc. podrien exposar les seves funcionalitats via MCP.
-- **Pros:** Ecosistema obert, valor multiplicat per cada adaptador.
-- **Cons:** One-way door — un cop publicada l'API d'adaptadors, és difícil canviar-la sense trencar compatibilitat.
-- **Context:** Decidit al CEO review com a DEFERRED — dissenyar després d'ús real que validi els patrons.
-- **Depends on:** Experiència real amb les 23 eines actuals.
-- **Added:** 2026-03-23 via /plan-ceo-review
+- **Implemented:** `ToolProviderInterface` + `MirasaiCollectToolsEvent` + `plg_mirasai_yootheme` com a primera implementació de referència.
+- **Done:** 2026-03-25 via plugin architecture refactor
 
 ### TODO-009: MCP resources (P3)
 - **What:** Exposar estat de Joomla com a recursos subscriptibles del protocol MCP (resources/list, resources/read).

@@ -2,13 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\Library\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
 
 use Joomla\Database\ParameterType;
+use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\YooThemeHelper;
+use Mirasai\Library\Tool\YooThemeLayoutProcessor;
 
 class ThemeExtractToModulesTool extends AbstractTool
 {
     private const MIRASAI_BACKUP_LIMIT = 5;
+
+    private YooThemeHelper $yooHelper;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->yooHelper = new YooThemeHelper($this->db);
+    }
 
     /** @var list<string> */
     private const TEXT_PROPS = [
@@ -273,7 +284,7 @@ class ThemeExtractToModulesTool extends AbstractTool
             $translatedLayout = $layout;
 
             if (isset($translations[$lang]) && is_array($translations[$lang])) {
-                $this->applyReplacements($translatedLayout, $translations[$lang], 'root');
+                $translatedLayout = (new YooThemeLayoutProcessor())->patchLayoutArray($translatedLayout, $translations[$lang]);
             }
 
             $content = json_encode($translatedLayout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -481,30 +492,6 @@ class ThemeExtractToModulesTool extends AbstractTool
         }
 
         return $results;
-    }
-
-    /**
-     * @param  array<string, mixed>  $node
-     * @param  array<string, string> $replacements
-     */
-    private function applyReplacements(array &$node, array $replacements, string $path): void
-    {
-        if (isset($node['props']) && is_array($node['props'])) {
-            foreach ($node['props'] as $key => &$value) {
-                $fullPath = "{$path}.{$key}";
-
-                if (isset($replacements[$fullPath]) && is_string($value)) {
-                    $value = $replacements[$fullPath];
-                }
-            }
-        }
-
-        if (isset($node['children']) && is_array($node['children'])) {
-            foreach ($node['children'] as $i => &$child) {
-                $childType = $child['type'] ?? 'unknown';
-                $this->applyReplacements($child, $replacements, "{$path}>{$childType}[{$i}]");
-            }
-        }
     }
 
     /**
