@@ -13,7 +13,11 @@ class ContentReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads a single article by ID, including full content, YOOtheme Builder layout JSON (if present), and metadata. When a YOOtheme layout is detected, returns yootheme_translatable_nodes — each node includes a replacement_key field ready to use directly in yootheme_text_replacements when calling content/translate.';
+        return 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category. '
+            . 'For standard articles: introtext and fulltext contain the article HTML. '
+            . 'For YOOtheme Builder articles (has_yootheme_builder=true): returns yootheme_translatable_nodes — '
+            . 'an array of {path, field, replacement_key, text, format}. '
+            . 'Use each node\'s replacement_key as the key in yootheme_text_replacements when calling content/translate.';
     }
 
     public function getInputSchema(): array

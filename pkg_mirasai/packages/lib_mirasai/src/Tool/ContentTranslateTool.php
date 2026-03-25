@@ -15,7 +15,11 @@ class ContentTranslateTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Translates an article to a target language. Duplicates the article, sets the target language, creates the language association, and optionally accepts pre-translated content. For YOOtheme articles, the layout structure is preserved — only text nodes are replaced.';
+        return 'Creates or updates a translated version of an article. YOU must provide the translated content — '
+            . 'this tool does NOT auto-translate. For standard articles: provide translated_title + translated_introtext '
+            . '(and translated_fulltext if the source has fulltext). For YOOtheme Builder articles: provide translated_title + '
+            . 'yootheme_text_replacements (a map of replacement_key → translated text, obtained from content/read). '
+            . 'The tool handles article creation, menu item, category mapping, language associations, and asset permissions.';
     }
 
     public function getInputSchema(): array

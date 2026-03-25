@@ -73,6 +73,29 @@ class McpHandler
             . 'languages, template). Use content/list to find articles and their translation status. '
             . 'Use db/schema to inspect table structures before writing queries with db/query.'
             . "\n\n"
+            . 'Translation workflow:'
+            . "\n"
+            . '1. content/list — discover articles and their existing translations per language.'
+            . "\n"
+            . '2. content/read — read the source article. The response includes:'
+            . "\n"
+            . '   - introtext and fulltext for standard Joomla articles.'
+            . "\n"
+            . '   - yootheme_translatable_nodes (with replacement_key) for YOOtheme Builder articles.'
+            . "\n"
+            . '3. Translate the text yourself (the MCP server does NOT auto-translate).'
+            . "\n"
+            . '4. content/translate — create or update the translation:'
+            . "\n"
+            . '   - Standard articles: pass translated_title + translated_introtext (+ translated_fulltext if needed).'
+            . "\n"
+            . '   - YOOtheme articles: pass translated_title + yootheme_text_replacements '
+            . '(use the replacement_key from step 2 as the key, translated text as the value).'
+            . "\n"
+            . '   The tool handles article creation, menu item, language associations, and asset permissions.'
+            . "\n"
+            . '5. content/audit-multilingual — verify completeness across all languages.'
+            . "\n\n"
             . 'File operations: file/read and file/list work anywhere under the Joomla root. '
             . 'file/write, file/edit, and file/delete are restricted to the sandbox directory '
             . '(media/mirasai/sandbox/).'
@@ -114,7 +137,7 @@ class McpHandler
             ],
             'serverInfo' => [
                 'name' => 'MirasAI',
-                'version' => '0.2.0',
+                'version' => '0.4.0',
             ],
             'instructions' => $instructions,
         ];
