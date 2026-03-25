@@ -25,7 +25,10 @@ class TemplateTranslateTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Duplicates a YOOtheme Builder template to a target language, preserves its assignment, and only translates fixed text nodes in the layout.';
+        return 'Creates a translated copy of a YOOtheme Builder page template. YOU must provide the translated text — '
+            . 'this tool does NOT auto-translate. Pass yootheme_text_replacements (replacement_key → translated text, from template/read). '
+            . 'The tool duplicates the template, sets its language filter to the target language, and patches the text nodes. '
+            . 'The original template\'s assignment and layout structure are preserved.';
     }
 
     public function getInputSchema(): array

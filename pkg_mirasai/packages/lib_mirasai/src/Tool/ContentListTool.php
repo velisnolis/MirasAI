@@ -13,7 +13,11 @@ class ContentListTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Lists articles with their language, category, publication state, and existing translation associations. Use to discover which articles need translation.';
+        return 'Lists articles with their language, category, publication state, and existing translation associations. '
+            . 'Each article includes an "associations" object mapping language codes to article IDs (e.g. {"es-ES": 24, "en-GB": 35}). '
+            . 'Missing languages in associations = missing translations. '
+            . 'Filter by language, category_id, or has_yootheme. '
+            . 'Example workflow: call content/list → find articles where target language is missing → call content/read + content/translate for each.';
     }
 
     public function getInputSchema(): array

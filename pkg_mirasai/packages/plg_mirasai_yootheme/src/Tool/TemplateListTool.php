@@ -24,7 +24,10 @@ class TemplateListTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Lists YOOtheme Builder templates stored in custom_data, including their assignment type, language filter, and whether they contain fixed translatable text.';
+        return 'Lists YOOtheme Builder page templates (NOT articles — these are page-level layout overrides stored in the theme\'s custom_data). '
+            . 'Templates control how specific pages look (e.g. a custom blog layout, a landing page template). '
+            . 'Returns each template\'s key, assignment type, language filter, and whether it has translatable static text. '
+            . 'Use template/read to inspect a specific template, then template/translate to create a language-specific copy.';
     }
 
     public function getInputSchema(): array

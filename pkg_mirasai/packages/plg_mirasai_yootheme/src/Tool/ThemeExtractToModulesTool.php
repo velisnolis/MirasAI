@@ -35,7 +35,11 @@ class ThemeExtractToModulesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Extracts a YOOtheme Builder theme area (footer, header, etc.) into per-language Joomla modules. Three steps: (1) creates mod_yootheme_builder modules per language with translated content, (2) replaces the theme area\'s Builder content with a module_position element that loads the per-language modules, (3) YOOtheme then serves the correct module based on the visitor\'s language.';
+        return 'Converts a YOOtheme theme area (footer, header, top-bar, etc.) from a single-language Builder layout into per-language Joomla modules. '
+            . 'Use this when content/audit-multilingual reports "theme area not translated". '
+            . 'YOU must provide translated text in the "translations" parameter — this tool does NOT auto-translate. '
+            . 'The tool creates one mod_yootheme_builder module per language, then replaces the original Builder content with a module_position element '
+            . 'so YOOtheme serves the correct language automatically. Use dry_run=true first to preview changes.';
     }
 
     public function getInputSchema(): array

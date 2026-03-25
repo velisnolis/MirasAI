@@ -24,7 +24,9 @@ class TemplateReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads a single YOOtheme Builder template from custom_data, including its assignment metadata, layout JSON, and fixed translatable text nodes.';
+        return 'Reads a single YOOtheme Builder page template by key. Returns its assignment metadata, full layout JSON, '
+            . 'and an array of translatable_nodes with replacement_key (same format as content/read\'s yootheme_translatable_nodes). '
+            . 'Use the replacement_key values in template/translate\'s yootheme_text_replacements.';
     }
 
     public function getInputSchema(): array

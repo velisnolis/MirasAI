@@ -28,7 +28,12 @@ class MenuMigrateThemeToModulesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Migrates YOOtheme-managed menus to per-language Joomla mod_menu modules in navbar and dialog-mobile positions. Supports dry runs, safe reuse of compatible modules, and clearing theme menu assignments once modules are resolved.';
+        return 'Migrates navigation menus from YOOtheme theme config to per-language Joomla mod_menu modules. '
+            . 'Use this when content/audit-multilingual reports "menu managed by theme, not translatable". '
+            . 'YOOtheme can hardcode a single menutype in the theme — this tool moves that to proper Joomla modules '
+            . 'with language assignments so each language gets its own menu. '
+            . 'Supports navbar and dialog-mobile positions. Use dry_run=true first to preview. '
+            . 'Provide menutype_map to assign different menutypes per language (e.g. {"en-GB": "mainmenu-en"}).';
     }
 
     public function getInputSchema(): array

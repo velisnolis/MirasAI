@@ -31,9 +31,10 @@ class DbQueryTool extends AbstractTool
     public function getDescription(): string
     {
         return 'Execute read-only SQL queries (SELECT, SHOW) via the Joomla database layer. '
-            . 'Write operations (INSERT, UPDATE, DELETE, etc.) are blocked. '
-            . 'Default row limit: 500 (max: 5000). Use specific column names instead of SELECT * for large tables. '
-            . 'The Joomla table prefix (#__) is automatically resolved.';
+            . 'Write operations are blocked. Default limit: 500 rows (max: 5000). '
+            . 'Use #__ as the table prefix — it resolves automatically. '
+            . 'Example: "SELECT id, title, language FROM #__content WHERE state = 1 LIMIT 10". '
+            . 'Use db/schema first to discover table structure.';
     }
 
     public function getInputSchema(): array

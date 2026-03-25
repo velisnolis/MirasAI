@@ -13,7 +13,10 @@ class ContentTranslateBatchTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Translates multiple articles to a target language in a single call. Each article requires its own translated_title and yootheme_text_replacements. Returns per-article results with any link warnings. After all translations, runs check-links to fix any newly fixable internal links.';
+        return 'Translates multiple articles to a target language in a single call. '
+            . 'Each article in the array requires translated_title. For standard articles, also provide translated_introtext '
+            . '(and translated_fulltext if the source has fulltext). For YOOtheme articles, provide yootheme_text_replacements instead. '
+            . 'Returns per-article results with any link warnings. After all translations, runs check-links to fix internal links automatically.';
     }
 
     public function getInputSchema(): array

@@ -26,7 +26,9 @@ class FileReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Read the content of a file. Accessible anywhere under the Joomla root directory.';
+        return 'Reads the content of a file anywhere under the Joomla root directory. Returns the raw file content as text. '
+            . 'Useful for inspecting configuration.php, template overrides, language .ini files, or plugin code. '
+            . 'Path is relative to Joomla root (e.g. "language/en-GB/en-GB.ini", "templates/yootheme/config.php").';
     }
 
     public function getInputSchema(): array

@@ -15,7 +15,9 @@ class CategoryTranslateTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Translates a Joomla category to a target language. Duplicates the category, sets the target language, creates the association and asset.';
+        return 'Creates a translated version of a Joomla category. YOU must provide translated_title (and optionally translated_description) — '
+            . 'this tool does NOT auto-translate. It duplicates the category, sets the target language, and creates the language association and asset. '
+            . 'Translate categories before articles so that content/translate can auto-map articles to the correct target category.';
     }
 
     public function getInputSchema(): array
