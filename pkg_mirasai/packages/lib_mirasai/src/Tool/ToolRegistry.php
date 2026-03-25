@@ -8,12 +8,22 @@ use Mirasai\Library\Mcp\MirasaiCollectToolsEvent;
 
 class ToolRegistry
 {
-    /** @var array<string, ToolInterface> */
+    /**
+     * Stores either a live ToolInterface instance (already resolved)
+     * or a class-string (lazy — instantiated on first access).
+     *
+     * @var array<string, ToolInterface|class-string<ToolInterface>>
+     */
     private array $tools = [];
 
     /**
-     * Build a registry pre-populated with the 18 core (non-YOOtheme) tools,
+     * Build a registry pre-populated with the 19 core (non-YOOtheme) tools,
      * then collect additional tools from installed plugins via collectProviders().
+     *
+     * Core tools are registered lazily (class-string only). They are
+     * instantiated on demand — i.e., only when a tool is actually called or
+     * its schema is serialised for tools/list. A simple ping or elevation
+     * check no longer pays the cost of constructing all 19+ tool objects.
      *
      * Every MCP entrypoint should use this method so the tool list stays
      * consistent across standalone, system plugin, webservices plugin and
@@ -23,32 +33,48 @@ class ToolRegistry
     {
         $registry = new self();
 
-        // Core tools (always available, no external dependencies)
-        $registry->register(new SystemInfoTool());
-        $registry->register(new ContentListTool());
-        $registry->register(new ContentReadTool());
-        $registry->register(new ContentTranslateTool());
-        $registry->register(new ContentTranslateBatchTool());
-        $registry->register(new ContentCheckLinksTool());
-        $registry->register(new ContentAuditMultilingualTool());
-        $registry->register(new CategoryTranslateTool());
-        $registry->register(new SiteSetupLanguageSwitcherTool());
-        $registry->register(new SandboxStatusTool());
-        $registry->register(new FileReadTool());
-        $registry->register(new FileWriteTool());
-        $registry->register(new FileEditTool());
-        $registry->register(new FileDeleteTool());
-        $registry->register(new FileListTool());
-        $registry->register(new SandboxExecutePhpTool());
-        $registry->register(new DbQueryTool());
-        $registry->register(new DbSchemaTool());
-        $registry->register(new ElevationStatusTool());
-        // NOTE: SiteSetupLanguageSwitcherTool is kept in core (generic Joomla, not YOOtheme-specific)
+        // Core tools — registered lazily by class name.
+        $registry->registerLazy('system/info',                 SystemInfoTool::class);
+        $registry->registerLazy('content/list',                ContentListTool::class);
+        $registry->registerLazy('content/read',                ContentReadTool::class);
+        $registry->registerLazy('content/translate',           ContentTranslateTool::class);
+        $registry->registerLazy('content/translate-batch',     ContentTranslateBatchTool::class);
+        $registry->registerLazy('content/check-links',         ContentCheckLinksTool::class);
+        $registry->registerLazy('content/audit-multilingual',  ContentAuditMultilingualTool::class);
+        $registry->registerLazy('category/translate',          CategoryTranslateTool::class);
+        $registry->registerLazy('site/setup-language-switcher', SiteSetupLanguageSwitcherTool::class);
+        $registry->registerLazy('sandbox/status',              SandboxStatusTool::class);
+        $registry->registerLazy('file/read',                   FileReadTool::class);
+        $registry->registerLazy('file/write',                  FileWriteTool::class);
+        $registry->registerLazy('file/edit',                   FileEditTool::class);
+        $registry->registerLazy('file/delete',                 FileDeleteTool::class);
+        $registry->registerLazy('file/list',                   FileListTool::class);
+        $registry->registerLazy('sandbox/execute-php',         SandboxExecutePhpTool::class);
+        $registry->registerLazy('db/query',                    DbQueryTool::class);
+        $registry->registerLazy('db/schema',                   DbSchemaTool::class);
+        $registry->registerLazy('elevation/status',            ElevationStatusTool::class);
 
-        // Discover and register tools from plugins
+        // Discover and register tools from plugins.
+        // Plugin tools go through ToolProviderInterface::createTool() which is
+        // already a factory; they arrive as live instances and are stored as-is.
         $registry->collectProviders();
 
         return $registry;
+    }
+
+    /**
+     * Register a tool lazily by class name.
+     *
+     * The tool is only instantiated the first time get($name) is called.
+     * Prefer this over register() for tools whose constructors touch I/O
+     * (DB connections, file system, HTTP) to avoid paying that cost on
+     * every request regardless of which tools are actually used.
+     *
+     * @param class-string<ToolInterface> $class
+     */
+    public function registerLazy(string $name, string $class): void
+    {
+        $this->tools[$name] = $class;
     }
 
     /**
@@ -176,31 +202,77 @@ class ToolRegistry
 
     // ── Registry operations ────────────────────────────────────────────────────
 
+    /**
+     * Register a live tool instance (eager).
+     *
+     * Used by collectProviders() for plugin-provided tools that arrive as
+     * already-constructed instances from ToolProviderInterface::createTool().
+     */
     public function register(ToolInterface $tool): void
     {
         $this->tools[$tool->getName()] = $tool;
     }
 
+    /**
+     * Resolve and return a tool by name, instantiating lazily if needed.
+     *
+     * Returns null when the name is not registered.
+     */
     public function get(string $name): ?ToolInterface
     {
-        return $this->tools[$name] ?? null;
-    }
+        $entry = $this->tools[$name] ?? null;
 
-    public function has(string $name): bool
-    {
-        return isset($this->tools[$name]);
+        if ($entry === null) {
+            return null;
+        }
+
+        // Lazy entry: class-string — instantiate once and cache.
+        if (is_string($entry)) {
+            $this->tools[$name] = new $entry();
+        }
+
+        /** @var ToolInterface */
+        return $this->tools[$name];
     }
 
     /**
+     * Check whether a tool name is registered (lazy or eager).
+     */
+    public function has(string $name): bool
+    {
+        return array_key_exists($name, $this->tools);
+    }
+
+    /**
+     * Return all tool names registered in this registry.
+     *
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return array_keys($this->tools);
+    }
+
+    /**
+     * Return all tools as live instances, resolving any lazy entries.
+     *
      * @return array<string, ToolInterface>
      */
     public function all(): array
     {
+        foreach (array_keys($this->tools) as $name) {
+            $this->get($name); // Resolve lazy entries in-place.
+        }
+
+        /** @var array<string, ToolInterface> */
         return $this->tools;
     }
 
     /**
      * Return all tools in MCP tools/list format.
+     *
+     * Iterates tool names and resolves each lazily, so only tools whose
+     * schemas are actually needed get instantiated.
      *
      * @return list<array<string, mixed>>
      */
@@ -208,8 +280,12 @@ class ToolRegistry
     {
         $list = [];
 
-        foreach ($this->tools as $tool) {
-            $list[] = $tool->toMcpTool();
+        foreach (array_keys($this->tools) as $name) {
+            $tool = $this->get($name);
+
+            if ($tool !== null) {
+                $list[] = $tool->toMcpTool();
+            }
         }
 
         return $list;
