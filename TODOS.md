@@ -83,6 +83,46 @@
 - **Depends on:** Smart Sudo v1 implementat (2 admin views existents com a base).
 - **Added:** 2026-03-24 via /plan-design-review
 
+### TODO-012: Dashboard admin — sincronitzar amb ToolRegistry i versió real (P1)
+- **What:** Actualitzar el dashboard de `com_mirasai` perquè reflecteixi l'estat real del sistema.
+- **Why:** Ara mateix mostra v0.1.0 (hauria de ser v0.4.0), només 4 tools hardcodejades (hauria de ser 25), i les descripcions són en català i estàtiques — no reflecteixen les descripcions MCP reals.
+- **Subtasques:**
+  1. **Versió centralitzada:** Definir la versió en un sol lloc (constant o `version.php`) i consumir-la tant des del dashboard com des de `McpHandler::handleInitialize()`.
+  2. **Tools dinàmiques:** El dashboard ha de cridar `ToolRegistry::buildDefault()` per llistar totes les tools amb les seves descripcions reals, en lloc de mantenir una llista duplicada.
+  3. **Diferenciar core vs addon:** Afegir una columna o badge que indiqui si cada tool és **core** (lib_mirasai) o **addon/plugin** (plg_mirasai_yootheme, etc.), amb l'origen (nom del plugin).
+  4. **Enllaç a gestió de plugins:** Afegir un link directe a la pàgina de plugins de Joomla (`Extensions → Plugins`, filtrat per grup `mirasai`) perquè l'admin pugui publicar/despublicar addons sense sortir del context MirasAI.
+  5. **Indicador d'estat per addon:** Mostrar si cada plugin addon està habilitat o deshabilitat a Joomla, amb acció ràpida per canviar-ho.
+  6. **Explicació `*` a traduccions:** L'entrada `*` a la taula de traduccions (1 article, 0 YOOtheme) no és clara — afegir tooltip o nota explicant que són articles sense idioma assignat (`language = '*'`).
+- **Context:** El dashboard és la "part humana" de MirasAI. Ara que les descripcions MCP estan polides per agents, el dashboard hauria de ser igual de clar per humans.
+- **Depends on:** Cap.
+- **Added:** 2026-03-25
+
+### TODO-013: ToolRegistry — exposar origen de cada tool (core vs plugin) (P2)
+- **What:** Afegir metadata d'origen a cada tool registrada (core, plugin name, plugin group).
+- **Why:** El dashboard necessita saber si una tool ve de `lib_mirasai` (core) o d'un plugin (`plg_mirasai_yootheme`, etc.) per mostrar-ho a l'admin. També útil per a `tools/list` — podria incloure `metadata.provider` al MCP.
+- **Implementació proposada:**
+  - `registerLazy()` accepta un tercer paràmetre opcional `string $provider = 'core'`.
+  - `register()` pren l'origen del `ToolProviderInterface::getId()`.
+  - Nou mètode `getProvider(string $name): string` al registry.
+  - `toMcpToolsList()` inclou `metadata.provider` opcionalment.
+- **Pros:** Dashboard pot diferenciar tools, admin sap d'on ve cada tool, debugging més fàcil.
+- **Cons:** Canvi menor a ToolRegistry API.
+- **Depends on:** TODO-012.
+- **Added:** 2026-03-25
+
+### TODO-014: Gestió d'addons des del dashboard (P2)
+- **What:** Permetre publicar/despublicar plugins del grup `mirasai` directament des del dashboard de MirasAI.
+- **Why:** L'admin hauria de poder activar/desactivar addons (com plg_mirasai_yootheme) sense navegar a Extensions → Plugins i buscar manualment.
+- **Implementació proposada:**
+  - Secció "Addons" al dashboard amb llista de plugins del grup `mirasai`.
+  - Toggle per habilitar/deshabilitar cada addon (crida a l'API de Joomla o update directe a `#__extensions`).
+  - Mostrar les tools que cada addon aporta (usant TODO-013).
+  - Estat: habilitat/deshabilitat/no instal·lat.
+- **Pros:** UX integrada, l'admin no ha de conèixer la gestió de plugins de Joomla.
+- **Cons:** Requereix permisos d'admin i validació de seguretat.
+- **Depends on:** TODO-013.
+- **Added:** 2026-03-25
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.
