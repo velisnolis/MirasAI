@@ -669,7 +669,7 @@ class ContentTranslateTool extends AbstractTool
             ];
         }
 
-        // Check if a menu item already exists for this translated article
+        // Check if a menu item already exists for this translated article (by article link).
         $query = $this->db->getQuery(true)
             ->select('id')
             ->from($this->db->quoteName('#__menu'))
@@ -686,55 +686,85 @@ class ContentTranslateTool extends AbstractTool
             ];
         }
 
-        // Get max lft/rgt for menu tree positioning
+        // Check if a menu item with the same alias already exists in the target language.
+        // This can happen when a previously existing article was deleted from #__content
+        // but its menu item was left behind (orphaned). Reuse it by updating its link.
         $query = $this->db->getQuery(true)
-            ->select('MAX(rgt)')
+            ->select('id')
             ->from($this->db->quoteName('#__menu'))
-            ->where('client_id = 0');
+            ->where('alias = ' . $this->db->quote($alias))
+            ->where('language = ' . $this->db->quote($targetLang))
+            ->where('client_id = 0')
+            ->where('menutype = ' . $this->db->quote($targetMenuType));
 
-        $maxRgt = (int) $this->db->setQuery($query)->loadResult();
+        $orphanedMenuItemId = (int) ($this->db->setQuery($query)->loadResult() ?: 0);
 
-        // Create the menu item — copy all relevant attributes from source
+        if ($orphanedMenuItemId) {
+            // Reuse the orphaned item: point it to the new article.
+            $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
+            $updateQuery = $this->db->getQuery(true)
+                ->update($this->db->quoteName('#__menu'))
+                ->set('link = ' . $this->db->quote($link))
+                ->set('title = ' . $this->db->quote($title))
+                ->where('id = ' . $orphanedMenuItemId);
+            $this->db->setQuery($updateQuery)->execute();
+
+            // Remove any stale association before creating the new one.
+            $delAssocQuery = $this->db->getQuery(true)
+                ->delete($this->db->quoteName('#__associations'))
+                ->where('context = ' . $this->db->quote('com_menus.item'))
+                ->where('id = ' . $orphanedMenuItemId);
+            $this->db->setQuery($delAssocQuery)->execute();
+
+            $this->createMenuAssociation((int) $sourceMenuItem['id'], $orphanedMenuItemId);
+
+            return [
+                'action' => 'reused_orphan',
+                'menu_item_id' => $orphanedMenuItemId,
+                'source_menu_item_id' => (int) $sourceMenuItem['id'],
+                'note' => 'Reused existing orphaned menu item (same alias, updated link to new article).',
+            ];
+        }
+
+        // Create a new menu item using Joomla\CMS\Table\Menu to preserve nested set integrity.
         $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
 
-        $columns = [
-            'menutype', 'title', 'alias', 'path', 'link', 'type',
-            'published', 'parent_id', 'level', 'component_id',
-            'access', 'params', 'lft', 'rgt', 'home', 'language',
-            'client_id', 'note', 'img', 'template_style_id', 'browserNav',
-        ];
+        /** @var \Joomla\CMS\Table\Menu $menuTable */
+        $menuTable = \Joomla\CMS\Table\Table::getInstance('Menu', 'JTable', ['dbo' => $this->db]);
 
-        $values = [
-            $this->db->quote($targetMenuType),
-            $this->db->quote($title),
-            $this->db->quote($alias),
-            $this->db->quote($alias),
-            $this->db->quote($link),
-            $this->db->quote($sourceMenuItem['type'] ?: 'component'),
-            (int) $sourceMenuItem['published'],        // preserve published state
-            1,                                         // always top-level in target menu (parent_id=1 = root)
-            1,                                         // level 1
-            (int) $sourceMenuItem['component_id'],
-            (int) $sourceMenuItem['access'],           // preserve access level
-            $this->db->quote($sourceMenuItem['params'] ?: '{}'),  // preserve all params (menu_show, pageclass_sfx, etc.)
-            $maxRgt + 1,
-            $maxRgt + 2,
-            (int) $sourceMenuItem['home'],
-            $this->db->quote($targetLang),
-            0,
-            $this->db->quote($sourceMenuItem['note'] ?? ''),          // preserve note
-            $this->db->quote($sourceMenuItem['img'] ?? ''),           // preserve icon
-            (int) ($sourceMenuItem['template_style_id'] ?? 0),        // preserve template style
-            (int) ($sourceMenuItem['browserNav'] ?? 0),               // preserve browser navigation
-        ];
+        $menuTable->menutype          = $targetMenuType;
+        $menuTable->title             = $title;
+        $menuTable->alias             = $alias;
+        $menuTable->path              = $alias;
+        $menuTable->link              = $link;
+        $menuTable->type              = $sourceMenuItem['type'] ?: 'component';
+        $menuTable->published         = (int) $sourceMenuItem['published'];
+        $menuTable->component_id      = (int) $sourceMenuItem['component_id'];
+        $menuTable->access            = (int) $sourceMenuItem['access'];
+        $menuTable->params            = $sourceMenuItem['params'] ?: '{}';
+        $menuTable->home              = (int) $sourceMenuItem['home'];
+        $menuTable->language          = $targetLang;
+        $menuTable->client_id         = 0;
+        $menuTable->note              = $sourceMenuItem['note'] ?? '';
+        $menuTable->img               = $sourceMenuItem['img'] ?? '';
+        $menuTable->template_style_id = (int) ($sourceMenuItem['template_style_id'] ?? 0);
+        $menuTable->browserNav        = (int) ($sourceMenuItem['browserNav'] ?? 0);
 
-        $query = 'INSERT INTO ' . $this->db->quoteName('#__menu')
-            . ' (' . implode(',', array_map([$this->db, 'quoteName'], $columns)) . ')'
-            . ' VALUES (' . implode(',', $values) . ')';
+        // Find the root item for the target menu to use as parent.
+        $rootQuery = $this->db->getQuery(true)
+            ->select('id')
+            ->from($this->db->quoteName('#__menu'))
+            ->where('menutype = ' . $this->db->quote($targetMenuType))
+            ->where('parent_id = 1')
+            ->where('client_id = 0')
+            ->setLimit(1);
 
-        $this->db->setQuery($query)->execute();
+        $parentMenuId = (int) ($this->db->setQuery($rootQuery)->loadResult() ?: 1);
+        $menuTable->setLocation($parentMenuId, 'last-child');
 
-        $newMenuItemId = (int) $this->db->insertid();
+        $menuTable->store();
+
+        $newMenuItemId = (int) $menuTable->id;
 
         // Create menu item association
         $this->createMenuAssociation((int) $sourceMenuItem['id'], $newMenuItemId);
