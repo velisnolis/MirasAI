@@ -5,7 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/.docker-build"
 STAGE_DIR="${BUILD_DIR}/package-stage"
 PACKAGE_DIR="${STAGE_DIR}/pkg_mirasai"
-OUTPUT_ZIP="${BUILD_DIR}/pkg_mirasai-lab.zip"
+VERSION="$(grep -m1 -oE '<version>[^<]+' "${ROOT_DIR}/pkg_mirasai/pkg_mirasai.xml" | sed 's/<version>//')"
+OUTPUT_ZIP="${BUILD_DIR}/pkg_mirasai-${VERSION}.zip"
+LATEST_ZIP="${BUILD_DIR}/pkg_mirasai-lab.zip"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -57,10 +59,12 @@ zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_system_mirasai" "${PACKAG
 zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_webservices_mirasai" "${PACKAGE_DIR}/packages/plg_webservices_mirasai.zip"
 zip_dir_contents "${ROOT_DIR}/pkg_mirasai/packages/plg_mirasai_yootheme" "${PACKAGE_DIR}/packages/plg_mirasai_yootheme.zip"
 
-rm -f "$OUTPUT_ZIP"
+rm -f "$OUTPUT_ZIP" "$LATEST_ZIP"
 (
   cd "$PACKAGE_DIR"
   zip -qr "$OUTPUT_ZIP" .
 )
+
+cp "$OUTPUT_ZIP" "$LATEST_ZIP"
 
 echo "$OUTPUT_ZIP"
