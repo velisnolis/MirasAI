@@ -84,6 +84,7 @@ cat > "$UPDATE_FEED" <<EOF
     <description>MirasAI package for Joomla. MCP server, admin dashboard, and optional YOOtheme tools.</description>
     <element>pkg_mirasai</element>
     <type>package</type>
+    <client>site</client>
     <version>${VERSION}</version>
     <infourl title="MirasAI">${INFO_URL}</infourl>
     <downloads>

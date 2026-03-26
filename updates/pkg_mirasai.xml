@@ -5,6 +5,7 @@
     <description>MirasAI package for Joomla. MCP server, admin dashboard, and optional YOOtheme tools.</description>
     <element>pkg_mirasai</element>
     <type>package</type>
+    <client>site</client>
     <version>0.4.3</version>
     <infourl title="MirasAI">https://github.com/velisnolis/MirasAI/releases/tag/v0.4.3</infourl>
     <downloads>
