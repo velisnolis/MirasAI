@@ -20,7 +20,7 @@ The current workspace includes a substantial hardening and packaging pass:
 - the admin dashboard now reflects registry health, configured languages, and addon availability more accurately
 - elevation admin actions now enforce ACL checks and the history view no longer uses an `N+1` query
 
-These changes were validated on the Boira reference site at [boiraesdeveniments.com](https://www.boiraesdeveniments.com/).
+These changes were validated on a private staging/reference Joomla site outside the repository.
 
 ## Package Contents
 
@@ -264,9 +264,9 @@ The tool:
 - marks managed modules with `note = "mirasai:menu_position=<position>;menutype=<menutype>"`
 - clears the YOOtheme menu assignments only after all required per-language modules are resolved
 
-## Boira Reference State
+## Reference Validation State
 
-The staging site at [boiraesdeveniments.com](https://www.boiraesdeveniments.com/) is the reference validation case for multilingual and dashboard behavior.
+The current package has been validated against a private staging/reference Joomla site for multilingual and dashboard behavior.
 
 Known good reference state:
 
