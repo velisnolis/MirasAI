@@ -1,10 +1,42 @@
 # MirasAI
 
-MirasAI is a Joomla extension package that exposes a focused MCP server for multilingual content operations, with first-class support for YOOtheme Pro content and theme configuration.
+MirasAI is a Joomla extension package that exposes a focused MCP server for content operations, multilingual workflows, system inspection, and optional YOOtheme-specific tooling.
 
-## Current MCP Subset
+The current package supports Joomla 5/6 and is designed to work in three modes:
 
-MirasAI implements a narrow MCP v1 subset:
+- core-only Joomla sites, without YOOtheme
+- Joomla sites with the optional YOOtheme addon enabled
+- staging and production sites with different safety rules
+
+## What Changed Recently
+
+The current workspace includes a substantial hardening and packaging pass:
+
+- MCP access is now restricted to `Super Users` via `core.admin`
+- environment detection is fail-closed and defaults to `production`
+- sandbox writable files are separated from auto-loaded PHP files
+- provider loading is centralized in `ToolRegistry`
+- the API component packaging/layout is fixed
+- the admin dashboard now reflects registry health, configured languages, and addon availability more accurately
+- elevation admin actions now enforce ACL checks and the history view no longer uses an `N+1` query
+
+These changes were validated on the Boira reference site at [boiraesdeveniments.com](https://www.boiraesdeveniments.com/).
+
+## Package Contents
+
+The package installs:
+
+- `lib_mirasai`
+- `plg_system_mirasai`
+- `plg_webservices_mirasai`
+- `com_mirasai`
+- optional addon: `plg_mirasai_yootheme`
+
+The example addon in `pkg_mirasai/packages/plg_mirasai_example` is kept as a development reference and is not included in the installable package.
+
+## MCP Surface
+
+MirasAI currently implements a narrow MCP subset:
 
 - `initialize`
 - `tools/list`
@@ -18,7 +50,9 @@ It does not currently implement:
 - MCP sampling
 - MCP roots
 
-## Current Built-In Tools
+## Core Tools
+
+These tools are available without YOOtheme:
 
 - `system/info`
 - `content/list`
@@ -29,11 +63,163 @@ It does not currently implement:
 - `content/audit-multilingual`
 - `category/translate`
 - `site/setup-language-switcher`
+- `sandbox/status`
+- `file/read`
+- `file/write`
+- `file/edit`
+- `file/delete`
+- `file/list`
+- `sandbox/execute-php`
+- `db/query`
+- `db/schema`
+- `elevation/status`
+
+## Optional YOOtheme Tools
+
+When the YOOtheme addon is installed and available, MirasAI also exposes:
+
 - `theme/extract-to-modules`
 - `menu/migrate-theme-to-modules`
 - `template/list`
 - `template/read`
 - `template/translate`
+
+If the addon plugin is installed but YOOtheme is not present, the dashboard should show the addon as `Unavailable` while the core tools remain usable.
+
+## Security Model
+
+### Authentication
+
+MirasAI accepts Joomla API tokens, but only users authorized for `core.admin` are allowed to authenticate to MCP.
+
+Practical effect:
+
+- a valid token from a normal manager/editor is rejected
+- `Super Users` can access the MCP endpoint
+
+Relevant code:
+
+- `pkg_mirasai/packages/lib_mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php`
+
+### Environment Gating
+
+Production is the default.
+
+Staging must be configured explicitly through one of:
+
+- MirasAI component config: `environment_override = staging`
+- Joomla config: `mirasai_environment_override = staging`
+- environment variable: `MIRASAI_ENV=staging`
+
+Relevant code:
+
+- `pkg_mirasai/packages/lib_mirasai/src/Sandbox/EnvironmentGuard.php`
+- `pkg_mirasai/packages/com_mirasai/mirasai.xml`
+
+### Sandbox Separation
+
+Writable sandbox files and auto-loaded PHP files are now separated:
+
+- writable workspace: `media/mirasai/sandbox/`
+- boot auto-load path: `media/mirasai/autoload/`
+
+Relevant code:
+
+- `pkg_mirasai/packages/lib_mirasai/src/Sandbox/SandboxLoader.php`
+
+### SQL Guarding
+
+`db/query` is still observational only, but it is now stricter:
+
+- only single `SELECT` and `SHOW`
+- blocks patterns like `INTO OUTFILE`, `LOAD_FILE`, `SLEEP`, `BENCHMARK`, `FOR UPDATE`, `CALL`, `PREPARE`, and similar dangerous constructs
+
+Relevant code:
+
+- `pkg_mirasai/packages/lib_mirasai/src/Tool/DbQueryTool.php`
+
+## Admin Dashboard
+
+The admin dashboard now aims to describe the real runtime state instead of only extension install state.
+
+It includes:
+
+- global dashboard state: `ACTIVE`, `DEGRADED`, `INACTIVE`
+- registry health and warning count
+- configured languages, even when a published language has zero articles
+- core tools grouped separately from addon tools
+- addon/provider accordions with `Active`, `Unavailable`, or `Disabled`
+- client connection snippets for common MCP clients
+
+Relevant code:
+
+- `pkg_mirasai/packages/com_mirasai/admin/src/View/Dashboard/HtmlView.php`
+- `pkg_mirasai/packages/com_mirasai/admin/tmpl/dashboard/default.php`
+
+## Elevation Admin
+
+The elevation admin UI is meant for production-gated destructive operations.
+
+Recent changes:
+
+- controller actions now enforce ACL checks
+- history aggregation no longer performs a query per row
+- view strings are much more consistently internationalized
+
+Relevant code:
+
+- `pkg_mirasai/packages/com_mirasai/admin/src/Controller/ElevationController.php`
+- `pkg_mirasai/packages/com_mirasai/admin/src/View/Elevation/HtmlView.php`
+- `pkg_mirasai/packages/com_mirasai/admin/tmpl/elevation/default.php`
+- `pkg_mirasai/packages/com_mirasai/admin/tmpl/elevation/confirm.php`
+
+## Installation
+
+### Joomla Admin
+
+1. Build the package zip
+2. In Joomla admin, install the generated `pkg_mirasai-lab.zip`
+3. Enable:
+   - `plg_system_mirasai`
+   - `plg_webservices_mirasai`
+4. If you use YOOtheme, also enable:
+   - `plg_mirasai_yootheme`
+5. Open `Components > MirasAI`
+
+### Post-Install Checks
+
+1. Confirm the dashboard loads
+2. Confirm the MCP endpoint appears as:
+   - `/api/v1/mirasai/mcp`
+3. Create a Joomla API token for a `Super User`
+4. Test `tools/list`
+
+Example:
+
+```bash
+curl -X POST https://your-site.example/api/v1/mirasai/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-Joomla-Token: YOUR_TOKEN" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'
+```
+
+## Building The Installable Package
+
+Build the package with:
+
+```bash
+./docker/build-package.sh
+```
+
+Output:
+
+- `.docker-build/pkg_mirasai-lab.zip`
+
+The build script assembles the component admin files, API files, library, and plugins into a Joomla package zip.
+
+Relevant file:
+
+- `docker/build-package.sh`
 
 ## Multilingual Workflows
 
@@ -56,7 +242,7 @@ MirasAI treats them as multilingual-ready only when:
 - no template exists for that assignment, or
 - the template is fully dynamic and shared across all languages
 
-If a template contains fixed text, the v1 strategy is to duplicate it per language and assign the target language directly on the template.
+If a template contains fixed text, the current strategy is to duplicate it per language and assign the target language directly on the template.
 
 ### Header Menus
 
@@ -80,18 +266,14 @@ The tool:
 
 ## Boira Reference State
 
-The staging site at [boiraesdeveniments.com](https://www.boiraesdeveniments.com/) is the reference validation case for the header-menu workflow.
+The staging site at [boiraesdeveniments.com](https://www.boiraesdeveniments.com/) is the reference validation case for multilingual and dashboard behavior.
 
-Correct state on that site:
+Known good reference state:
 
-- YOOtheme menu assignments for `navbar` and `dialog-mobile` are already empty
-- per-language `mod_menu` modules exist for `ca-ES`, `es-ES`, and `en-GB`
-- the migration tool should return a no-op style dry run (`already_cleared` plus module reuse, no creation)
-
-## Notes
-
-- Module translation outside the header-menu workflow, such as multilingual footer or other shared modules, remains a separate concern from article translation.
-- The standalone endpoint at `mcp-endpoint.php` is kept aligned with the same tool registry as the Joomla plugin entrypoints.
+- core extensions enabled
+- MCP endpoint responding
+- dashboard loading with grouped tool accordions
+- `tools/list` returning the full registered tool set
 
 ## Docker Integration Lab
 
@@ -99,12 +281,12 @@ The repository includes a Docker-based integration lab intended to run canonical
 
 This lab is primarily for:
 
-- reproducible Joomla 5 + MySQL bring-up
+- reproducible Joomla 5/6 + MySQL bring-up
 - installing YOOtheme Pro from a local package outside the repo
 - installing the current MirasAI workspace into a fresh Joomla instance
 - running minimal smoke checks against the MCP endpoint
 
-It is not meant to replace staging QA. The primary goal is integration safety and a reproducible local-ish lab.
+It is not meant to replace staging QA.
 
 ### Files
 
@@ -120,32 +302,12 @@ It is not meant to replace staging QA. The primary goal is integration safety an
 - `curl`, `php`, and `zip`
 - a checked-out copy of this repository
 - a local YOOtheme Pro package path available on the VM, outside the repo
-- if the host sits behind the Spanish Cloudflare/R2 ISP blocks, Docker may need Cloudflare WARP or equivalent egress bypass to pull `mysql:8.4` and `joomla:5-apache`
 
 ### Initial Setup
 
 1. Copy `.env.example` to `.env`
 2. Set secure MySQL and Joomla admin passwords
-3. Keep `.env` values shell-safe. In particular, avoid unquoted spaces in values such as `JOOMLA_SITE_NAME` or `JOOMLA_ADMIN_NAME`
-4. Set `YOOTHEME_PACKAGE_PATH` to the absolute path of a local YOOtheme Pro zip or extracted folder
-5. Run `docker compose up -d`
-6. Run `./docker/bootstrap-lab.sh`
-7. Run `./docker/smoke.sh`
-
-The bootstrap script is designed to be idempotent:
-
-- it skips Joomla install if `configuration.php` already exists
-- it rebuilds the current MirasAI package from the workspace
-- it installs the MirasAI runtime pieces needed for MCP (`lib_mirasai`, `plg_system_mirasai`, `plg_webservices_mirasai`) and attempts `com_mirasai` as a best-effort optional step
-- it provisions a Joomla API token for the configured admin user and writes the MCP token to `.docker-build/mcp-token.txt`
-
-### Proxmox Host Model
-
-The canonical deployment model for this lab is:
-
-- Proxmox host provides the persistent VM
-- Docker runs inside that VM
-- the repository defines the lab with Compose and scripts
-- YOOtheme Pro is provided via a host-local path configured in `.env`
-
-This keeps the repo portable while still optimizing for a shared, persistent integration host.
+3. Set `YOOTHEME_PACKAGE_PATH` to the absolute path of a local YOOtheme Pro zip or extracted folder
+4. Run `docker compose up -d`
+5. Run `./docker/bootstrap-lab.sh`
+6. Run `./docker/smoke.sh`

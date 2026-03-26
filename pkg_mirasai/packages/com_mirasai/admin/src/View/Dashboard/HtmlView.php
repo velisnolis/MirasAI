@@ -38,13 +38,33 @@ class HtmlView extends BaseHtmlView
     protected array $toolsByDomain = [];
 
     /** @var list<array<string, mixed>> */
+    protected array $toolGroups = [];
+
+    /** @var list<array<string, mixed>> */
     protected array $coreExtensions = [];
 
     /** @var list<array<string, mixed>> */
     protected array $addonPlugins = [];
 
+    /** @var int */
+    protected int $configuredLanguageCount = 0;
+
+    /** @var array<string, array<string, mixed>> */
+    protected array $addonProviderSummary = [];
+
     /** @var bool */
     protected bool $elevationActive = false;
+
+    /** @var string */
+    protected string $dashboardStatus = 'inactive';
+
+    /** @var bool */
+    protected bool $registryReady = false;
+
+    /** @var int */
+    protected int $registryWarningCount = 0;
+
+    private const EXPECTED_CORE_EXTENSION_COUNT = 4;
 
     public function display($tpl = null): void
     {
@@ -52,19 +72,26 @@ class HtmlView extends BaseHtmlView
         $this->mcpEndpoint = rtrim(\Joomla\CMS\Uri\Uri::root(), '/') . '/api/v1/mirasai/mcp';
         $this->systemInfo = $this->getSystemInfo();
         $this->translationStats = $this->getTranslationStats();
+        $this->configuredLanguageCount = $this->getConfiguredLanguageCount();
 
         // Extensions — separate core from addons
         [$this->coreExtensions, $this->addonPlugins] = $this->getExtensions();
         $this->allCoreEnabled = $this->checkAllCoreEnabled();
 
         // Tools — from ToolRegistry (dynamic, no hardcoding)
-        $this->toolSummary = $this->getToolSummary();
+        $registry = $this->buildRegistry();
+        $this->registryReady = $registry !== null;
+        $this->toolSummary = $registry?->toToolSummaryList() ?? [];
         $this->toolsByDomain = $this->groupToolsByDomain($this->toolSummary);
+        $this->addonProviderSummary = $this->buildAddonProviderSummary($registry);
+        $this->toolGroups = $this->buildToolGroups();
+        $this->registryWarningCount = $registry?->hasWarnings() ? count($registry->getWarnings()) : 0;
+        $this->dashboardStatus = $this->determineDashboardStatus();
 
         // Elevation
         $this->elevationActive = $this->checkElevation();
 
-        ToolbarHelper::title('MirasAI', 'bolt');
+        ToolbarHelper::title(Text::_('COM_MIRASAI_DASHBOARD_TITLE'), 'bolt');
 
         parent::display($tpl);
     }
@@ -98,6 +125,18 @@ class HtmlView extends BaseHtmlView
     {
         $db = Factory::getContainer()->get(DatabaseInterface::class);
 
+        $languageQuery = $db->getQuery(true)
+            ->select([
+                $db->quoteName('lang_code', 'language'),
+                $db->quoteName('title'),
+            ])
+            ->from($db->quoteName('#__languages'))
+            ->where($db->quoteName('published') . ' = 1')
+            ->order($db->quoteName('ordering'));
+
+        /** @var list<array{language: string, title: string}> $languages */
+        $languages = $db->setQuery($languageQuery)->loadAssocList() ?: [];
+
         $query = $db->getQuery(true)
             ->select([
                 'c.language',
@@ -109,7 +148,49 @@ class HtmlView extends BaseHtmlView
             ->group('c.language')
             ->order('c.language');
 
-        return $db->setQuery($query)->loadAssocList() ?: [];
+        /** @var list<array{language: string, total: string, with_yootheme: string}> $contentStats */
+        $contentStats = $db->setQuery($query)->loadAssocList() ?: [];
+        $contentByLanguage = [];
+
+        foreach ($contentStats as $row) {
+            $contentByLanguage[(string) $row['language']] = $row;
+        }
+
+        $stats = [];
+
+        foreach ($languages as $language) {
+            $code = (string) $language['language'];
+            $row = $contentByLanguage[$code] ?? ['total' => 0, 'with_yootheme' => 0];
+            $stats[] = [
+                'language' => $code,
+                'title' => (string) $language['title'],
+                'total' => (int) $row['total'],
+                'with_yootheme' => (int) $row['with_yootheme'],
+            ];
+        }
+
+        if (isset($contentByLanguage['*'])) {
+            $stats[] = [
+                'language' => '*',
+                'title' => Text::_('COM_MIRASAI_TRANSLATIONS_ALL_LANGUAGES'),
+                'total' => (int) $contentByLanguage['*']['total'],
+                'with_yootheme' => (int) $contentByLanguage['*']['with_yootheme'],
+            ];
+        }
+
+        return $stats;
+    }
+
+    private function getConfiguredLanguageCount(): int
+    {
+        $db = Factory::getContainer()->get(DatabaseInterface::class);
+
+        $query = $db->getQuery(true)
+            ->select('COUNT(*)')
+            ->from($db->quoteName('#__languages'))
+            ->where($db->quoteName('published') . ' = 1');
+
+        return (int) $db->setQuery($query)->loadResult();
     }
 
     /**
@@ -155,28 +236,39 @@ class HtmlView extends BaseHtmlView
 
     private function checkAllCoreEnabled(): bool
     {
+        if (count($this->coreExtensions) !== self::EXPECTED_CORE_EXTENSION_COUNT) {
+            return false;
+        }
+
         foreach ($this->coreExtensions as $ext) {
             if (!(int) $ext['enabled']) {
                 return false;
             }
         }
 
-        // Also check we found at least the minimum core extensions
-        return count($this->coreExtensions) >= 2;
+        return true;
     }
 
-    /**
-     * @return list<array{name: string, description: string, provider: string, destructive: bool}>
-     */
-    private function getToolSummary(): array
+    private function buildRegistry(): ?ToolRegistry
     {
         try {
-            $registry = ToolRegistry::buildDefault();
-
-            return $registry->toToolSummaryList();
+            return ToolRegistry::buildDefault();
         } catch (\Throwable) {
-            return [];
+            return null;
         }
+    }
+
+    private function determineDashboardStatus(): string
+    {
+        if (!$this->allCoreEnabled || !$this->registryReady) {
+            return 'inactive';
+        }
+
+        if ($this->registryWarningCount > 0) {
+            return 'degraded';
+        }
+
+        return 'active';
     }
 
     /**
@@ -208,5 +300,99 @@ class HtmlView extends BaseHtmlView
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildToolGroups(): array
+    {
+        $groups = [];
+        $coreTools = array_values(array_filter(
+            $this->toolSummary,
+            static fn (array $tool): bool => ($tool['provider'] ?? 'unknown') === 'core',
+        ));
+
+        $groups[] = [
+            'id' => 'core',
+            'title' => Text::_('COM_MIRASAI_TOOLS_CORE_SECTION'),
+            'subtitle' => Text::_('COM_MIRASAI_TOOLS_CORE_HELPER'),
+            'state' => $this->allCoreEnabled ? 'active' : 'disabled',
+            'count' => count($coreTools),
+            'provider_name' => Text::_('COM_MIRASAI_TOOLS_CORE'),
+            'tools_by_domain' => $this->groupToolsByDomain($coreTools),
+            'open' => true,
+        ];
+
+        foreach ($this->addonPlugins as $addon) {
+            $element = (string) ($addon['element'] ?? '');
+            $enabled = (bool) ((int) ($addon['enabled'] ?? 0));
+            $providerInfo = $this->addonProviderSummary[$element] ?? [
+                'provider_id' => '',
+                'provider_name' => '',
+                'available' => false,
+                'registered_tools' => 0,
+            ];
+
+            $providerId = (string) ($providerInfo['provider_id'] ?? '');
+            $addonTools = array_values(array_filter(
+                $this->toolSummary,
+                static fn (array $tool): bool => $providerId !== '' && ($tool['provider'] ?? 'unknown') === $providerId,
+            ));
+
+            $state = !$enabled ? 'disabled' : ((bool) ($providerInfo['available'] ?? false) ? 'active' : 'unavailable');
+            $subtitle = match ($state) {
+                'disabled' => Text::_('COM_MIRASAI_TOOLS_GROUP_DISABLED'),
+                'unavailable' => Text::_('COM_MIRASAI_TOOLS_GROUP_UNAVAILABLE'),
+                default => Text::_('COM_MIRASAI_TOOLS_GROUP_ACTIVE'),
+            };
+
+            $groups[] = [
+                'id' => 'addon-' . $element,
+                'title' => (string) ($providerInfo['provider_name'] ?: $element),
+                'subtitle' => $subtitle,
+                'state' => $state,
+                'count' => count($addonTools),
+                'provider_name' => (string) ($providerInfo['provider_name'] ?: $element),
+                'plugin_element' => $element,
+                'tools_by_domain' => $this->groupToolsByDomain($addonTools),
+                'open' => false,
+            ];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildAddonProviderSummary(?ToolRegistry $registry): array
+    {
+        $providerMap = $registry?->getProviderSummaryMap() ?? [];
+        $summary = [];
+
+        $providersByElement = [];
+
+        foreach ($providerMap as $providerInfo) {
+            $element = (string) ($providerInfo['plugin_element'] ?? '');
+
+            if ($element !== '') {
+                $providersByElement[$element] = $providerInfo;
+            }
+        }
+
+        foreach ($this->addonPlugins as $addon) {
+            $element = (string) ($addon['element'] ?? '');
+            $providerInfo = $providersByElement[$element] ?? null;
+
+            $summary[$element] = [
+                'provider_id' => (string) ($providerInfo['id'] ?? ''),
+                'provider_name' => (string) ($providerInfo['name'] ?? ''),
+                'available' => (bool) ($providerInfo['available'] ?? false),
+                'registered_tools' => (int) ($providerInfo['registered_tools'] ?? 0),
+            ];
+        }
+
+        return $summary;
     }
 }

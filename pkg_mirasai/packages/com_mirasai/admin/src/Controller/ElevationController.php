@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Mirasai\Component\Mirasai\Administrator\Controller;
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Session\Session;
-use Joomla\Database\DatabaseInterface;
 use Mirasai\Library\Sandbox\ElevationService;
 
 /**
@@ -23,6 +23,7 @@ class ElevationController extends BaseController
      */
     public function confirm(): void
     {
+        $this->assertAdminAccess();
         Session::checkToken() or jexit('Invalid Token');
 
         $input = $this->input;
@@ -40,13 +41,13 @@ class ElevationController extends BaseController
         $scopes = array_values(array_intersect($scopes, $validScopes));
 
         if (empty($scopes)) {
-            $this->setMessage('Select at least one tool scope.', 'error');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_SCOPE_REQUIRED'), 'error');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
 
         if (\strlen(trim($reason)) < 10) {
-            $this->setMessage('Reason must be at least 10 characters.', 'error');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_REASON_SHORT'), 'error');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
@@ -56,7 +57,7 @@ class ElevationController extends BaseController
         $existing = $elevation->getActiveGrant();
         if ($existing !== null) {
             $remaining = (int) ceil($existing->getRemainingSeconds() / 60);
-            $this->setMessage("Elevation already active ({$remaining} min remaining). Revoke it first.", 'warning');
+            $this->setMessage(Text::sprintf('COM_MIRASAI_ELEVATION_MSG_ALREADY_ACTIVE', $remaining), 'warning');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
@@ -77,13 +78,14 @@ class ElevationController extends BaseController
      */
     public function activate(): void
     {
+        $this->assertAdminAccess();
         Session::checkToken() or jexit('Invalid Token');
 
         $input = $this->input;
         $acknowledged = $input->getBool('acknowledged', false);
 
         if (!$acknowledged) {
-            $this->setMessage('You must acknowledge the risks before activating.', 'error');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_ACK_REQUIRED'), 'error');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
@@ -93,7 +95,7 @@ class ElevationController extends BaseController
         $pending = $session->get('mirasai.elevation.pending');
 
         if (empty($pending) || empty($pending['scopes'])) {
-            $this->setMessage('No pending elevation request. Please start again.', 'error');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_NO_PENDING'), 'error');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
@@ -112,7 +114,7 @@ class ElevationController extends BaseController
             );
 
             $remaining = (int) ceil($grant->getRemainingSeconds() / 60);
-            $this->setMessage("Smart Sudo activated — {$remaining} minutes remaining. All destructive calls are being audited.", 'success');
+            $this->setMessage(Text::sprintf('COM_MIRASAI_ELEVATION_MSG_ACTIVATED', $remaining), 'success');
         } catch (\RuntimeException $e) {
             $this->setMessage($e->getMessage(), 'error');
         }
@@ -125,12 +127,13 @@ class ElevationController extends BaseController
      */
     public function revoke(): void
     {
+        $this->assertAdminAccess();
         Session::checkToken() or jexit('Invalid Token');
 
         $grantId = $this->input->getInt('grant_id', 0);
 
         if ($grantId <= 0) {
-            $this->setMessage('Invalid grant ID.', 'error');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_INVALID_GRANT'), 'error');
             $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
             return;
         }
@@ -138,9 +141,9 @@ class ElevationController extends BaseController
         try {
             $elevation = new ElevationService();
             $elevation->revoke($grantId);
-            $this->setMessage('Elevation revoked. Destructive tools are now BLOCKED.', 'warning');
+            $this->setMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_REVOKED'), 'warning');
         } catch (\Throwable $e) {
-            $this->setMessage('Failed to revoke: ' . $e->getMessage(), 'error');
+            $this->setMessage(Text::sprintf('COM_MIRASAI_ELEVATION_MSG_REVOKE_FAILED', $e->getMessage()), 'error');
         }
 
         $this->setRedirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
@@ -152,6 +155,7 @@ class ElevationController extends BaseController
      */
     public function auditfeed(): void
     {
+        $this->assertAdminAccess();
         Session::checkToken() or jexit('Invalid Token');
 
         $grantId = $this->input->getInt('grant_id', 0);
@@ -189,5 +193,15 @@ class ElevationController extends BaseController
         }
 
         Factory::getApplication()->close();
+    }
+
+    private function assertAdminAccess(): void
+    {
+        $user = Factory::getApplication()->getIdentity();
+
+        if (!$user || $user->guest || !$user->authorise('core.admin')) {
+            http_response_code(403);
+            jexit('Forbidden');
+        }
     }
 }

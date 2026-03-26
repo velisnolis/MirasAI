@@ -6,6 +6,7 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\HTML\HTMLHelper;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 
 /** @var \Mirasai\Component\Mirasai\Administrator\View\Elevation\HtmlView $this */
@@ -14,7 +15,7 @@ $pending = $this->pendingElevation;
 
 // If no pending data, redirect back
 if (empty($pending) || empty($pending['scopes'])) {
-    Factory::getApplication()->enqueueMessage('No pending elevation request. Please start again.', 'error');
+    Factory::getApplication()->enqueueMessage(Text::_('COM_MIRASAI_ELEVATION_MSG_NO_PENDING'), 'error');
     Factory::getApplication()->redirect(Route::_('index.php?option=com_mirasai&view=elevation', false));
     return;
 }
@@ -34,9 +35,9 @@ foreach ($scopes as $s) {
 $durationText = match ($duration) {
     15 => '15 minutes',
     30 => '30 minutes',
-    60 => '1 hour',
-    120 => '2 hours',
-    default => $duration . ' minutes',
+    60 => Text::_('COM_MIRASAI_ELEVATION_DURATION_60'),
+    120 => Text::_('COM_MIRASAI_ELEVATION_DURATION_120'),
+    default => Text::sprintf('COM_MIRASAI_ELEVATION_DURATION_FALLBACK', $duration),
 };
 
 // Determine which risk bullets apply
@@ -59,51 +60,50 @@ $hasExecTool = in_array('sandbox/execute-php', $scopes, true);
 </style>
 
 <a href="<?php echo Route::_('index.php?option=com_mirasai&view=elevation'); ?>" class="btn btn-outline-secondary btn-sm mb-3">
-    ← Back to scope selection
+    <?php echo Text::_('COM_MIRASAI_ELEVATION_BACK'); ?>
 </a>
 
 <div class="confirm-summary">
-    <strong>You are granting the AI agent access to:</strong>
+    <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_CONFIRM_SUMMARY'); ?></strong>
     <div class="mt-2 mb-2">
         <?php foreach ($scopes as $s): ?>
             <span class="badge bg-warning text-dark me-1 fs-6"><?php echo htmlspecialchars($s); ?></span>
         <?php endforeach; ?>
     </div>
     <div>
-        for <strong><?php echo $durationText; ?></strong> on <strong class="text-danger">PRODUCTION</strong>
+        <?php echo Text::sprintf('COM_MIRASAI_ELEVATION_CONFIRM_DURATION', $durationText); ?> <strong class="text-danger"><?php echo Text::_('COM_MIRASAI_ELEVATION_CONFIRM_PRODUCTION'); ?></strong>
     </div>
     <div class="text-muted small mt-1">
-        Reason: <?php echo htmlspecialchars($reason); ?>
+        <?php echo Text::_('COM_MIRASAI_ELEVATION_REASON'); ?>: <?php echo htmlspecialchars($reason); ?>
     </div>
 </div>
 
 <div class="card mb-4">
     <div class="card-header">
-        <h3 class="card-title mb-0">Step 2 — Risk acknowledgment</h3>
+        <h3 class="card-title mb-0"><?php echo Text::_('COM_MIRASAI_ELEVATION_STEP2_TITLE'); ?></h3>
     </div>
     <div class="card-body">
         <ul class="risk-bullets">
             <?php if ($hasFileTools): ?>
                 <li>
-                    <strong>Modifies files</strong> — The agent can create, edit, and delete files in the sandbox directory
+                    <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_FILES_TITLE'); ?></strong> — <?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_FILES_DESC'); ?>
                 </li>
             <?php endif; ?>
             <?php if ($hasExecTool): ?>
                 <li>
-                    <strong>Executes PHP</strong> — The agent can run arbitrary PHP code via eval() with DB transaction wrapping
+                    <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_EXEC_TITLE'); ?></strong> — <?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_EXEC_DESC'); ?>
                 </li>
             <?php endif; ?>
             <li>
-                <strong>All actions logged</strong> — Every destructive call is recorded with tool name and arguments
+                <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_AUDIT_TITLE'); ?></strong> — <?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_AUDIT_DESC'); ?>
             </li>
             <li>
-                <strong>Time-limited</strong> — Access automatically expires after <?php echo $durationText; ?>
+                <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_RISK_TIME_TITLE'); ?></strong> — <?php echo Text::sprintf('COM_MIRASAI_ELEVATION_RISK_TIME_DESC', $durationText); ?>
             </li>
         </ul>
 
         <div class="alert alert-light border mt-3">
-            <strong>Recommended:</strong> Use SSH or a staging copy for destructive operations when possible.
-            Only use production elevation for time-sensitive fixes you understand the risks of.
+            <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_RECOMMENDED'); ?></strong> <?php echo Text::_('COM_MIRASAI_ELEVATION_RECOMMENDED_DESC'); ?>
         </div>
 
         <form method="post" id="form-activate"
@@ -118,7 +118,7 @@ $hasExecTool = in_array('sandbox/execute-php', $scopes, true);
                        onchange="document.getElementById('btn-activate').disabled = !this.checked;
                                  document.getElementById('btn-activate').setAttribute('aria-disabled', !this.checked ? 'true' : 'false');">
                 <label class="form-check-label fw-bold" for="acknowledge-risks">
-                    I understand the risks and accept responsibility
+                    <?php echo Text::_('COM_MIRASAI_ELEVATION_ACK_LABEL'); ?>
                 </label>
             </div>
 
@@ -127,8 +127,8 @@ $hasExecTool = in_array('sandbox/execute-php', $scopes, true);
 
             <button type="submit" class="btn btn-warning btn-lg" id="btn-activate"
                     disabled aria-disabled="true"
-                    title="Check the risk acknowledgment to continue">
-                Activate Smart Sudo
+                    title="<?php echo Text::_('COM_MIRASAI_ELEVATION_ACK_TITLE'); ?>">
+                <?php echo Text::_('COM_MIRASAI_ELEVATION_ACTIVATE'); ?>
             </button>
         </form>
     </div>

@@ -9,6 +9,34 @@ use Mirasai\Library\Mcp\MirasaiCollectToolsEvent;
 class ToolRegistry
 {
     /**
+     * Static metadata for core tools so the admin dashboard can summarize them
+     * without instantiating every lazy tool on page load.
+     *
+     * @var array<string, array{description: string, destructive: bool}>
+     */
+    private const CORE_TOOL_METADATA = [
+        'system/info' => ['description' => 'Returns comprehensive Joomla runtime information: CMS version, PHP version, DB engine, installed languages, active extensions with status, template summary (name, style ID, language assignments), YOOtheme version, environment detection, and MirasAI capabilities.', 'destructive' => false],
+        'content/list' => ['description' => 'Lists articles with their language, category, publication state, and existing translation associations.', 'destructive' => false],
+        'content/read' => ['description' => 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category.', 'destructive' => false],
+        'content/translate' => ['description' => 'Creates or updates a translated version of an article. YOU must provide the translated content.', 'destructive' => false],
+        'content/translate-batch' => ['description' => 'Translates multiple articles to a target language in a single call.', 'destructive' => false],
+        'content/check-links' => ['description' => 'Scans translated articles for internal links pointing to articles that lack a translation in the same language. Reports broken links and optionally rewrites them to point to the translated version when available.', 'destructive' => false],
+        'content/audit-multilingual' => ['description' => 'Scans the entire Joomla site and returns a structured diagnostic of multilingual completeness. Reports gaps in articles, menus, modules, categories, metadata, language switcher, and theme areas. Each gap includes the MCP tool call needed to fix it.', 'destructive' => false],
+        'category/translate' => ['description' => 'Creates a translated version of a Joomla category. YOU must provide translated_title (and optionally translated_description).', 'destructive' => false],
+        'site/setup-language-switcher' => ['description' => 'Checks if a language switcher exists and, if not, creates and publishes a mod_languages module in the appropriate position. Detects YOOtheme theme positions automatically.', 'destructive' => false],
+        'sandbox/status' => ['description' => 'Returns the current state of the MirasAI sandbox: whether it is active, its state (ok/loading/crashed/safe_mode), loaded files, crashed files, and environment detection.', 'destructive' => false],
+        'file/read' => ['description' => 'Reads the content of a file anywhere under the Joomla root directory. Returns the raw file content as text.', 'destructive' => false],
+        'file/write' => ['description' => 'Write content to a file in the sandbox directory (media/mirasai/sandbox/). PHP files are syntax-validated before writing. Supports overwrite and append modes, and UTF-8 or base64 encoding.', 'destructive' => true],
+        'file/edit' => ['description' => 'Replace a string in a file within the sandbox directory. By default, old_string must appear exactly once. Set replace_all=true for multiple replacements. PHP files are syntax-validated after editing.', 'destructive' => true],
+        'file/delete' => ['description' => 'Delete a file from the sandbox directory (media/mirasai/sandbox/).', 'destructive' => true],
+        'file/list' => ['description' => 'List directory contents anywhere under the Joomla root. Default depth=1 (non-recursive). Max depth=3, max 500 entries.', 'destructive' => false],
+        'sandbox/execute-php' => ['description' => 'Execute PHP code in a sandboxed environment with transaction wrapping.', 'destructive' => true],
+        'db/query' => ['description' => 'Execute read-only SQL queries (SELECT, SHOW) via the Joomla database layer.', 'destructive' => false],
+        'db/schema' => ['description' => 'Inspect database table structure. Returns column names, types, nullability, keys, and defaults.', 'destructive' => false],
+        'elevation/status' => ['description' => 'Check the current elevation status for destructive tools.', 'destructive' => false],
+    ];
+
+    /**
      * Stores either a live ToolInterface instance (already resolved)
      * or a class-string (lazy — instantiated on first access).
      *
@@ -25,6 +53,27 @@ class ToolRegistry
      * @var array<string, string>
      */
     private array $providers = [];
+
+    /**
+     * Lightweight metadata for tools, used by the admin dashboard.
+     *
+     * @var array<string, array{description: string, destructive: bool}>
+     */
+    private array $toolMetadata = [];
+
+    /**
+     * Provider registration summaries keyed by provider ID.
+     *
+     * @var array<string, array{id: string, name: string, available: bool, registered_tools: int}>
+     */
+    private array $providerSummaries = [];
+
+    /**
+     * Non-fatal registry warnings surfaced to the admin dashboard.
+     *
+     * @var list<string>
+     */
+    private array $warnings = [];
 
     /**
      * Build a registry pre-populated with the 19 core (non-YOOtheme) tools,
@@ -44,25 +93,25 @@ class ToolRegistry
         $registry = new self();
 
         // Core tools — registered lazily by class name.
-        $registry->registerLazy('system/info',                 SystemInfoTool::class);
-        $registry->registerLazy('content/list',                ContentListTool::class);
-        $registry->registerLazy('content/read',                ContentReadTool::class);
-        $registry->registerLazy('content/translate',           ContentTranslateTool::class);
-        $registry->registerLazy('content/translate-batch',     ContentTranslateBatchTool::class);
-        $registry->registerLazy('content/check-links',         ContentCheckLinksTool::class);
-        $registry->registerLazy('content/audit-multilingual',  ContentAuditMultilingualTool::class);
-        $registry->registerLazy('category/translate',          CategoryTranslateTool::class);
-        $registry->registerLazy('site/setup-language-switcher', SiteSetupLanguageSwitcherTool::class);
-        $registry->registerLazy('sandbox/status',              SandboxStatusTool::class);
-        $registry->registerLazy('file/read',                   FileReadTool::class);
-        $registry->registerLazy('file/write',                  FileWriteTool::class);
-        $registry->registerLazy('file/edit',                   FileEditTool::class);
-        $registry->registerLazy('file/delete',                 FileDeleteTool::class);
-        $registry->registerLazy('file/list',                   FileListTool::class);
-        $registry->registerLazy('sandbox/execute-php',         SandboxExecutePhpTool::class);
-        $registry->registerLazy('db/query',                    DbQueryTool::class);
-        $registry->registerLazy('db/schema',                   DbSchemaTool::class);
-        $registry->registerLazy('elevation/status',            ElevationStatusTool::class);
+        $registry->registerLazy('system/info',                 SystemInfoTool::class, 'core', self::CORE_TOOL_METADATA['system/info']);
+        $registry->registerLazy('content/list',                ContentListTool::class, 'core', self::CORE_TOOL_METADATA['content/list']);
+        $registry->registerLazy('content/read',                ContentReadTool::class, 'core', self::CORE_TOOL_METADATA['content/read']);
+        $registry->registerLazy('content/translate',           ContentTranslateTool::class, 'core', self::CORE_TOOL_METADATA['content/translate']);
+        $registry->registerLazy('content/translate-batch',     ContentTranslateBatchTool::class, 'core', self::CORE_TOOL_METADATA['content/translate-batch']);
+        $registry->registerLazy('content/check-links',         ContentCheckLinksTool::class, 'core', self::CORE_TOOL_METADATA['content/check-links']);
+        $registry->registerLazy('content/audit-multilingual',  ContentAuditMultilingualTool::class, 'core', self::CORE_TOOL_METADATA['content/audit-multilingual']);
+        $registry->registerLazy('category/translate',          CategoryTranslateTool::class, 'core', self::CORE_TOOL_METADATA['category/translate']);
+        $registry->registerLazy('site/setup-language-switcher', SiteSetupLanguageSwitcherTool::class, 'core', self::CORE_TOOL_METADATA['site/setup-language-switcher']);
+        $registry->registerLazy('sandbox/status',              SandboxStatusTool::class, 'core', self::CORE_TOOL_METADATA['sandbox/status']);
+        $registry->registerLazy('file/read',                   FileReadTool::class, 'core', self::CORE_TOOL_METADATA['file/read']);
+        $registry->registerLazy('file/write',                  FileWriteTool::class, 'core', self::CORE_TOOL_METADATA['file/write']);
+        $registry->registerLazy('file/edit',                   FileEditTool::class, 'core', self::CORE_TOOL_METADATA['file/edit']);
+        $registry->registerLazy('file/delete',                 FileDeleteTool::class, 'core', self::CORE_TOOL_METADATA['file/delete']);
+        $registry->registerLazy('file/list',                   FileListTool::class, 'core', self::CORE_TOOL_METADATA['file/list']);
+        $registry->registerLazy('sandbox/execute-php',         SandboxExecutePhpTool::class, 'core', self::CORE_TOOL_METADATA['sandbox/execute-php']);
+        $registry->registerLazy('db/query',                    DbQueryTool::class, 'core', self::CORE_TOOL_METADATA['db/query']);
+        $registry->registerLazy('db/schema',                   DbSchemaTool::class, 'core', self::CORE_TOOL_METADATA['db/schema']);
+        $registry->registerLazy('elevation/status',            ElevationStatusTool::class, 'core', self::CORE_TOOL_METADATA['elevation/status']);
 
         // Discover and register tools from plugins.
         // Plugin tools go through ToolProviderInterface::createTool() which is
@@ -83,10 +132,14 @@ class ToolRegistry
      * @param class-string<ToolInterface> $class
      * @param string $provider  Origin identifier ('core' for built-in, or provider ID for plugins)
      */
-    public function registerLazy(string $name, string $class, string $provider = 'core'): void
+    public function registerLazy(string $name, string $class, string $provider = 'core', ?array $metadata = null): void
     {
         $this->tools[$name] = $class;
         $this->providers[$name] = $provider;
+
+        if ($metadata !== null) {
+            $this->toolMetadata[$name] = $metadata;
+        }
     }
 
     /**
@@ -128,28 +181,49 @@ class ToolRegistry
         }
 
         foreach ($providers as $provider) {
+            $providerId = $provider->getId();
+            $registeredTools = 0;
+
             try {
-                if (!$provider->isAvailable()) {
+                $available = $provider->isAvailable();
+                $this->providerSummaries[$providerId] = [
+                    'id' => $providerId,
+                    'name' => $provider->getName(),
+                    'available' => $available,
+                    'registered_tools' => 0,
+                    'plugin_element' => $this->inferPluginElement($providerId),
+                ];
+
+                if (!$available) {
                     continue;
                 }
 
                 foreach ($provider->getToolNames() as $toolName) {
                     if ($this->has($toolName)) {
                         // Core tool or earlier plugin already registered this name — skip.
-                        trigger_error(
-                            "MirasAI: tool name conflict '{$toolName}' from provider '{$provider->getId()}' — skipped.",
-                            E_USER_WARNING,
-                        );
+                        $this->warn("MirasAI: tool name conflict '{$toolName}' from provider '{$providerId}' — skipped.");
                         continue;
                     }
 
-                    $this->register($provider->createTool($toolName), $provider->getId());
+                    $tool = $provider->createTool($toolName);
+                    $this->register($tool, $providerId);
+                    $this->toolMetadata[$toolName] = [
+                        'description' => $tool->getDescription(),
+                        'destructive' => !empty($tool->getPermissions()['destructive']),
+                    ];
+                    $registeredTools++;
                 }
+
+                $this->providerSummaries[$providerId]['registered_tools'] = $registeredTools;
             } catch (\Throwable $e) {
-                trigger_error(
-                    "MirasAI: provider '{$provider->getId()}' threw during registration: " . $e->getMessage(),
-                    E_USER_WARNING,
-                );
+                $this->providerSummaries[$providerId] = [
+                    'id' => $providerId,
+                    'name' => $provider->getName(),
+                    'available' => false,
+                    'registered_tools' => $registeredTools,
+                    'plugin_element' => $this->inferPluginElement($providerId),
+                ];
+                $this->warn("MirasAI: provider '{$providerId}' threw during registration: " . $e->getMessage());
             }
         }
     }
@@ -169,6 +243,10 @@ class ToolRegistry
         }
 
         try {
+            if (class_exists(\Joomla\CMS\Plugin\PluginHelper::class, false)) {
+                \Joomla\CMS\Plugin\PluginHelper::importPlugin('mirasai');
+            }
+
             $app = \Joomla\CMS\Factory::getApplication();
             $event = new MirasaiCollectToolsEvent('onMirasaiCollectTools');
             $app->getDispatcher()->dispatch('onMirasaiCollectTools', $event);
@@ -202,10 +280,7 @@ class ToolRegistry
                     $providers[] = $provider;
                 }
             } catch (\Throwable $e) {
-                trigger_error(
-                    "MirasAI: failed to load provider from '{$file}': " . $e->getMessage(),
-                    E_USER_WARNING,
-                );
+                $this->warn("MirasAI: failed to load provider from '{$file}': " . $e->getMessage());
             }
         }
 
@@ -298,23 +373,43 @@ class ToolRegistry
         $list = [];
 
         foreach ($this->tools as $name => $entry) {
-            $tool = $this->get($name);
-
-            if ($tool === null) {
+            try {
+                $metadata = $this->getToolMetadata($name, $entry);
+            } catch (\Throwable $e) {
+                $this->warn("MirasAI: failed to summarize tool '{$name}': " . $e->getMessage());
                 continue;
             }
 
-            $permissions = $tool->getPermissions();
-
             $list[] = [
                 'name'        => $name,
-                'description' => $tool->getDescription(),
+                'description' => $metadata['description'],
                 'provider'    => $this->providers[$name] ?? 'unknown',
-                'destructive' => !empty($permissions['destructive']),
+                'destructive' => $metadata['destructive'],
             ];
         }
 
         return $list;
+    }
+
+    /**
+     * @return array<string, array{id: string, name: string, available: bool, registered_tools: int, plugin_element: string}>
+     */
+    public function getProviderSummaryMap(): array
+    {
+        return $this->providerSummaries;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getWarnings(): array
+    {
+        return $this->warnings;
+    }
+
+    public function hasWarnings(): bool
+    {
+        return $this->warnings !== [];
     }
 
     /**
@@ -353,5 +448,47 @@ class ToolRegistry
         }
 
         return $list;
+    }
+
+    /**
+     * @param ToolInterface|class-string<ToolInterface> $entry
+     * @return array{description: string, destructive: bool}
+     */
+    private function getToolMetadata(string $name, ToolInterface|string $entry): array
+    {
+        if (isset($this->toolMetadata[$name])) {
+            return $this->toolMetadata[$name];
+        }
+
+        if (\is_string($entry)) {
+            /** @var ToolInterface $tool */
+            $tool = new $entry();
+        } else {
+            $tool = $entry;
+        }
+
+        $metadata = [
+            'description' => $tool->getDescription(),
+            'destructive' => !empty($tool->getPermissions()['destructive']),
+        ];
+
+        $this->toolMetadata[$name] = $metadata;
+
+        return $metadata;
+    }
+
+    private function warn(string $message): void
+    {
+        $this->warnings[] = $message;
+        trigger_error($message, E_USER_WARNING);
+    }
+
+    private function inferPluginElement(string $providerId): string
+    {
+        if (str_starts_with($providerId, 'mirasai.')) {
+            return substr($providerId, strlen('mirasai.'));
+        }
+
+        return $providerId;
     }
 }

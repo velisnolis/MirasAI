@@ -12,13 +12,13 @@ namespace Mirasai\Library\Sandbox;
  *   LOADING → CRASHED          (if .loading found on next boot)
  *   CRASHED → SAFE_MODE        (skip sandbox loading)
  *
- * IMPORTANT: Only PHP files in the `autoload/` subdirectory are loaded
- * on boot. Files in the sandbox root are for agent file operations
- * (file/write, file/edit) and are NOT auto-executed.
+ * IMPORTANT: Writable sandbox files and auto-loaded PHP files live in
+ * separate directories. Agent file operations write to sandbox/, while
+ * boot-time PHP autoloading reads only from media/mirasai/autoload/.
  *
  * Directory layout:
- *   media/mirasai/sandbox/          ← agent workspace (file/write, etc.)
- *   media/mirasai/sandbox/autoload/ ← auto-loaded on every Joomla boot
+ *   media/mirasai/sandbox/  ← agent workspace (file/write, etc.)
+ *   media/mirasai/autoload/ ← auto-loaded on every Joomla boot
  *
  * The .loading and .crashed marker files live in the sandbox directory.
  * In safe mode the MCP bridge still works (tools are available) but
@@ -48,7 +48,7 @@ class SandboxLoader
     public function __construct(?string $sandboxDir = null)
     {
         $this->sandboxDir = $sandboxDir ?? (JPATH_ROOT . '/media/mirasai/sandbox');
-        $this->autoloadDir = $this->sandboxDir . '/autoload';
+        $this->autoloadDir = JPATH_ROOT . '/media/mirasai/autoload';
         $this->loadingMarker = $this->sandboxDir . '/.loading';
         $this->crashedMarker = $this->sandboxDir . '/.crashed';
     }

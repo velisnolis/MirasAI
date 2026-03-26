@@ -15,12 +15,30 @@ class DbQueryTool extends AbstractTool
     private const DEFAULT_LIMIT = 500;
     private const MAX_LIMIT = 5000;
     private const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
+    private const ALLOWED_QUERY_PATTERN = '/^\s*(SELECT|SHOW)\b/i';
 
     /**
-     * Patterns that indicate a write/modify operation.
+     * Read-looking SQL features that are still unsafe or non-observational.
      */
-    private const WRITE_PATTERNS = [
-        '/^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|RENAME|GRANT|REVOKE|LOCK|UNLOCK)\b/i',
+    private const BLOCKED_PATTERNS = [
+        '/;\s*\S+/s',                    // multiple statements
+        '/\bINTO\s+OUTFILE\b/i',
+        '/\bINTO\s+DUMPFILE\b/i',
+        '/\bLOAD_FILE\s*\(/i',
+        '/\bSLEEP\s*\(/i',
+        '/\bBENCHMARK\s*\(/i',
+        '/\bGET_LOCK\s*\(/i',
+        '/\bRELEASE_LOCK\s*\(/i',
+        '/\bFOR\s+UPDATE\b/i',
+        '/\bLOCK\s+IN\s+SHARE\s+MODE\b/i',
+        '/\bINTO\b(?!\s*@)/i',          // allow SELECT ... INTO @var? No: block everything except SHOW handled above
+        '/\bSET\s+@/i',
+        '/\bPREPARE\b/i',
+        '/\bEXECUTE\b/i',
+        '/\bDEALLOCATE\b/i',
+        '/\bHANDLER\b/i',
+        '/\bDO\b\s+/i',
+        '/\bCALL\b\s+/i',
     ];
 
     public function getName(): string
@@ -66,9 +84,10 @@ class DbQueryTool extends AbstractTool
             return ['error' => 'Missing required parameter: sql'];
         }
 
-        // Security check: block write operations
-        if ($this->isWriteQuery($sql)) {
-            return ['error' => 'Only read-only queries (SELECT, SHOW) are allowed. Write operations are blocked.'];
+        $validationError = $this->validateQuery($sql);
+
+        if ($validationError !== null) {
+            return ['error' => $validationError];
         }
 
         try {
@@ -133,22 +152,34 @@ class DbQueryTool extends AbstractTool
         ];
     }
 
-    /**
-     * Check if a SQL query is a write operation.
-     */
-    private function isWriteQuery(string $sql): bool
+    private function validateQuery(string $sql): ?string
     {
-        // Strip comments
-        $cleaned = preg_replace('/\/\*.*?\*\//s', '', $sql) ?? $sql;
-        $cleaned = preg_replace('/--[^\n]*/', '', $cleaned);
-        $cleaned = trim($cleaned);
+        $cleaned = $this->stripSqlComments($sql);
+        $trimmed = trim($cleaned);
 
-        foreach (self::WRITE_PATTERNS as $pattern) {
-            if (preg_match($pattern, $cleaned)) {
-                return true;
+        if ($trimmed === '') {
+            return 'Query is empty after removing comments.';
+        }
+
+        if (!preg_match(self::ALLOWED_QUERY_PATTERN, $trimmed)) {
+            return 'Only single SELECT or SHOW queries are allowed.';
+        }
+
+        foreach (self::BLOCKED_PATTERNS as $pattern) {
+            if (preg_match($pattern, $trimmed)) {
+                return 'This query uses a blocked SQL feature. Only observational SELECT/SHOW queries are allowed.';
             }
         }
 
-        return false;
+        return null;
+    }
+
+    private function stripSqlComments(string $sql): string
+    {
+        $cleaned = preg_replace('/\/\*.*?\*\//s', '', $sql) ?? $sql;
+        $cleaned = preg_replace('/--[^\n]*/', '', $cleaned);
+        $cleaned = preg_replace('/#[^\n]*/', '', $cleaned) ?? $cleaned;
+
+        return trim($cleaned);
     }
 }

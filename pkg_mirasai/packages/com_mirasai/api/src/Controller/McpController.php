@@ -13,10 +13,6 @@ class McpController extends ApiController
     protected $contentType = 'mcp';
     protected $default_view = 'mcp';
 
-    /**
-     * Handle POST requests — JSON-RPC over HTTP.
-     * Overrides the parent completely to handle MCP protocol.
-     */
     public function add()
     {
         $handler = $this->buildHandler();
@@ -52,9 +48,6 @@ class McpController extends ApiController
         return $this;
     }
 
-    /**
-     * Handle GET requests — SSE endpoint for MCP streaming.
-     */
     public function displayList()
     {
         header('Content-Type: text/event-stream');
@@ -96,4 +89,4 @@ class McpController extends ApiController
     {
         return new McpHandler(ToolRegistry::buildDefault());
     }
-}
+};

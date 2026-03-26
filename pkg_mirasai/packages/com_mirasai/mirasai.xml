@@ -35,8 +35,26 @@
         </files>
     </administration>
 
+    <config>
+        <fields name="params">
+            <fieldset name="basic" label="MirasAI">
+                <field
+                    name="environment_override"
+                    type="list"
+                    label="Environment"
+                    description="Controls whether destructive tools are treated as production-gated or staging-allowed."
+                    default="production"
+                >
+                    <option value="production">Production</option>
+                    <option value="staging">Staging</option>
+                </field>
+            </fieldset>
+        </fields>
+    </config>
+
     <api>
         <files folder="api">
+            <folder>services</folder>
             <folder>src</folder>
         </files>
     </api>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Joomla\CMS\Session\Session;
 
@@ -50,8 +51,8 @@ foreach ($toolScopes as $toolName => $info) {
 
 <!-- Tabs — uses Joomla's HTMLHelper uitab which loads web component assets -->
 <?php
-$elevationLabel = 'Elevation' . ($grant ? ' ●' : '');
-$historyLabel = 'History' . ($this->historyTotal > 0 ? ' (' . $this->historyTotal . ')' : '');
+$elevationLabel = Text::_('COM_MIRASAI_ELEVATION_TAB') . ($grant ? ' ●' : '');
+$historyLabel = Text::_('COM_MIRASAI_ELEVATION_HISTORY_TAB') . ($this->historyTotal > 0 ? ' (' . $this->historyTotal . ')' : '');
 $defaultTab = $activeTab === 'history' ? 'tab-history' : 'tab-elevation';
 echo HTMLHelper::_('uitab.startTabSet', 'elevationTabs', ['active' => $defaultTab, 'recall' => true, 'breakpoint' => 768]);
 echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationLabel);
@@ -63,7 +64,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
         <div class="row align-items-center">
             <div class="col-lg-6">
                 <span class="mirasai-countdown" role="timer" aria-live="polite"
-                      aria-label="Elevation time remaining"
+                      aria-label="<?php echo Text::_('COM_MIRASAI_ELEVATION_TIME_REMAINING'); ?>"
                       id="mirasai-countdown"
                       data-remaining-seconds="<?php echo $grant->getRemainingSeconds(); ?>">
                     <?php
@@ -71,7 +72,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                     echo sprintf('%d:%02d', intdiv($secs, 60), $secs % 60);
                     ?>
                 </span>
-                <span class="text-muted ms-2">remaining</span>
+                <span class="text-muted ms-2"><?php echo Text::_('COM_MIRASAI_ELEVATION_REMAINING'); ?></span>
 
                 <div class="mt-2">
                     <?php foreach ($grant->scopes as $scope): ?>
@@ -84,12 +85,12 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
             </div>
             <div class="col-lg-6 text-lg-end mt-3 mt-lg-0">
                 <form method="post" action="<?php echo Route::_('index.php?option=com_mirasai&task=elevation.revoke'); ?>"
-                      onsubmit="return confirm('Revoke elevation now? The AI agent will immediately lose access to destructive tools.');">
+                      onsubmit="return confirm('<?php echo Text::_('COM_MIRASAI_ELEVATION_CONFIRM_REVOKE'); ?>');">
                     <input type="hidden" name="grant_id" value="<?php echo $grant->id; ?>">
                     <?php echo HTMLHelper::_('form.token'); ?>
                     <button type="submit" class="btn btn-danger btn-lg"
-                            aria-label="Revoke elevation now — stops all destructive tool access immediately">
-                        Revoke Now
+                            aria-label="<?php echo Text::_('COM_MIRASAI_ELEVATION_REVOKE_ARIA'); ?>">
+                        <?php echo Text::_('COM_MIRASAI_ELEVATION_REVOKE_NOW'); ?>
                     </button>
                 </form>
             </div>
@@ -99,13 +100,13 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
     <!-- Copyable snippet -->
     <div class="card mb-4">
         <div class="card-body">
-            <label class="form-label fw-bold small">Paste this to your AI agent:</label>
+            <label class="form-label fw-bold small"><?php echo Text::_('COM_MIRASAI_ELEVATION_SNIPPET_LABEL'); ?></label>
             <div class="input-group">
                 <input type="text" class="form-control form-control-sm" readonly id="elevation-snippet"
-                       value="Elevation activated: <?php echo htmlspecialchars(implode(', ', $grant->scopes)); ?> enabled for <?php echo (int) ceil($grant->getRemainingSeconds() / 60); ?> minutes. You can now retry destructive operations.">
+                       value="<?php echo htmlspecialchars(Text::sprintf('COM_MIRASAI_ELEVATION_SNIPPET_VALUE', implode(', ', $grant->scopes), (int) ceil($grant->getRemainingSeconds() / 60))); ?>">
                 <button class="btn btn-outline-secondary btn-sm" type="button"
                         onclick="navigator.clipboard.writeText(document.getElementById('elevation-snippet').value)">
-                    <span class="icon-copy"></span> Copy
+                    <span class="icon-copy"></span> <?php echo Text::_('COM_MIRASAI_COPY'); ?>
                 </button>
             </div>
         </div>
@@ -114,25 +115,25 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
     <!-- Live Audit Log -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0">Live Audit Log</h3>
-            <span class="badge bg-secondary" id="mirasai-use-count"><?php echo $grant->useCount; ?> calls</span>
+            <h3 class="card-title mb-0"><?php echo Text::_('COM_MIRASAI_ELEVATION_AUDIT_TITLE'); ?></h3>
+            <span class="badge bg-secondary" id="mirasai-use-count"><?php echo Text::sprintf('COM_MIRASAI_ELEVATION_CALLS_COUNT', $grant->useCount); ?></span>
         </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-striped table-sm" id="mirasai-audit-table">
                     <thead>
                         <tr>
-                            <th scope="col" style="width:15%">Time</th>
-                            <th scope="col" style="width:15%">Tool</th>
-                            <th scope="col" style="width:55%">Summary</th>
-                            <th scope="col" style="width:15%">Result</th>
+                            <th scope="col" style="width:15%"><?php echo Text::_('COM_MIRASAI_ELEVATION_COL_TIME'); ?></th>
+                            <th scope="col" style="width:15%"><?php echo Text::_('COM_MIRASAI_ELEVATION_COL_TOOL'); ?></th>
+                            <th scope="col" style="width:55%"><?php echo Text::_('COM_MIRASAI_ELEVATION_COL_SUMMARY'); ?></th>
+                            <th scope="col" style="width:15%"><?php echo Text::_('COM_MIRASAI_ELEVATION_COL_RESULT'); ?></th>
                         </tr>
                     </thead>
                     <tbody id="mirasai-audit-body">
                         <?php if (empty($this->auditLog)): ?>
                             <tr id="mirasai-audit-empty">
                                 <td colspan="4" class="text-center text-muted py-4">
-                                    No tool calls yet. Activity appears here as the AI agent uses elevated tools.
+                                    <?php echo Text::_('COM_MIRASAI_ELEVATION_AUDIT_EMPTY'); ?>
                                 </td>
                             </tr>
                         <?php else: ?>
@@ -185,7 +186,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
             remaining--;
             if (remaining <= 0) {
                 clearInterval(timer);
-                countdownEl.textContent = 'EXPIRED';
+                countdownEl.textContent = '<?php echo Text::_('COM_MIRASAI_ELEVATION_EXPIRED'); ?>';
                 countdownEl.closest('.mirasai-status-banner').className = 'mirasai-status-banner mirasai-status-expired';
                 const revokeForm = document.querySelector('form[action*="elevation.revoke"]');
                 if (revokeForm) revokeForm.style.display = 'none';
@@ -193,7 +194,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                 // Show expiry message
                 const msg = document.createElement('div');
                 msg.className = 'alert alert-secondary mt-3';
-                msg.textContent = 'Elevation expired — destructive tools are now BLOCKED.';
+                msg.textContent = '<?php echo Text::_('COM_MIRASAI_ELEVATION_EXPIRED_MSG'); ?>';
                 countdownEl.closest('.mirasai-status-banner').after(msg);
 
                 // Auto-redirect after 5s
@@ -232,7 +233,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
 
                     // Update use count
                     if (typeof data.use_count === 'number') {
-                        document.getElementById('mirasai-use-count').textContent = data.use_count + ' calls';
+                        document.getElementById('mirasai-use-count').textContent = data.use_count + ' <?php echo Text::_('COM_MIRASAI_ELEVATION_CALLS_SUFFIX'); ?>';
                     }
 
                     // Check if expired server-side
@@ -250,7 +251,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                     pollFailures++;
                     if (pollFailures >= 3) {
                         document.getElementById('mirasai-use-count').innerHTML =
-                            '<span class="text-warning">Connection lost</span>';
+                            '<span class="text-warning"><?php echo Text::_('COM_MIRASAI_ELEVATION_CONNECTION_LOST'); ?></span>';
                     }
                 });
         }, 30000);
@@ -332,16 +333,16 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
 <?php else: ?>
     <!-- ==================== INACTIVE STATE ==================== -->
     <div class="mirasai-status-banner mirasai-status-blocked" role="status" aria-live="polite">
-        <strong>Destructive tools are BLOCKED on production.</strong>
+        <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_BLOCKED_TITLE'); ?></strong>
         <div class="text-muted small mt-1">
-            Activate Smart Sudo to temporarily enable destructive AI agent tools with a time limit and audit trail.
+            <?php echo Text::_('COM_MIRASAI_ELEVATION_BLOCKED_DESC'); ?>
         </div>
     </div>
 
     <form method="post" action="<?php echo Route::_('index.php?option=com_mirasai&task=elevation.confirm'); ?>">
         <div class="card mb-4">
             <div class="card-header">
-                <h3 class="card-title mb-0">Step 1 — Select tools and duration</h3>
+                <h3 class="card-title mb-0"><?php echo Text::_('COM_MIRASAI_ELEVATION_STEP1_TITLE'); ?></h3>
             </div>
             <div class="card-body">
                 <!-- Tool scopes grouped -->
@@ -349,12 +350,12 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="select-all-scopes"
                                onchange="document.querySelectorAll('.scope-check').forEach(c => c.checked = this.checked)">
-                        <label class="form-check-label fw-bold" for="select-all-scopes">Select All</label>
+                        <label class="form-check-label fw-bold" for="select-all-scopes"><?php echo Text::_('COM_MIRASAI_ELEVATION_SELECT_ALL'); ?></label>
                     </div>
 
                     <?php foreach ($grouped as $groupName => $tools): ?>
                         <fieldset class="scope-group mb-3 ms-3">
-                            <legend><?php echo htmlspecialchars($groupName); ?></legend>
+                            <legend><?php echo htmlspecialchars(Text::_($groupName)); ?></legend>
                             <?php foreach ($tools as $toolName => $info): ?>
                                 <div class="scope-item">
                                     <div class="form-check">
@@ -362,11 +363,11 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                                                name="scopes[]" value="<?php echo htmlspecialchars($toolName); ?>"
                                                id="scope-<?php echo md5($toolName); ?>">
                                         <label class="form-check-label" for="scope-<?php echo md5($toolName); ?>">
-                                            <?php echo htmlspecialchars($info['label']); ?>
+                                            <?php echo htmlspecialchars(Text::_($info['label'])); ?>
                                         </label>
                                     </div>
                                     <code><?php echo htmlspecialchars($toolName); ?></code>
-                                    <span class="text-muted"><?php echo htmlspecialchars($info['description']); ?></span>
+                                    <span class="text-muted"><?php echo htmlspecialchars(Text::_($info['description'])); ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </fieldset>
@@ -376,12 +377,12 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                 <!-- Duration -->
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <label for="elevation-duration" class="form-label fw-bold">Duration</label>
+                        <label for="elevation-duration" class="form-label fw-bold"><?php echo Text::_('COM_MIRASAI_ELEVATION_DURATION'); ?></label>
                         <select class="form-select" name="duration" id="elevation-duration">
-                            <option value="15">15 minutes</option>
-                            <option value="30">30 minutes</option>
-                            <option value="60" selected>1 hour</option>
-                            <option value="120">2 hours</option>
+                            <option value="15"><?php echo Text::_('COM_MIRASAI_ELEVATION_DURATION_15'); ?></option>
+                            <option value="30"><?php echo Text::_('COM_MIRASAI_ELEVATION_DURATION_30'); ?></option>
+                            <option value="60" selected><?php echo Text::_('COM_MIRASAI_ELEVATION_DURATION_60'); ?></option>
+                            <option value="120"><?php echo Text::_('COM_MIRASAI_ELEVATION_DURATION_120'); ?></option>
                         </select>
                     </div>
                 </div>
@@ -389,11 +390,11 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                 <!-- Reason -->
                 <div class="mb-3">
                     <label for="elevation-reason" class="form-label fw-bold">
-                        Reason <span class="text-muted fw-normal">(min 10 characters)</span>
+                        <?php echo Text::_('COM_MIRASAI_ELEVATION_REASON'); ?> <span class="text-muted fw-normal"><?php echo Text::_('COM_MIRASAI_ELEVATION_REASON_HINT'); ?></span>
                     </label>
                     <textarea class="form-control" name="reason" id="elevation-reason"
                               rows="2" minlength="10" required
-                              placeholder="Describe why you need destructive access (e.g., 'Emergency fix for broken article layout')"
+                              placeholder="<?php echo Text::_('COM_MIRASAI_ELEVATION_REASON_PLACEHOLDER'); ?>"
                     ></textarea>
                     <div class="form-text text-end">
                         <span id="reason-count">0</span> / 500
@@ -403,7 +404,7 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
             <div class="card-footer">
                 <?php echo HTMLHelper::_('form.token'); ?>
                 <button type="submit" class="btn btn-outline-warning">
-                    Continue to confirmation →
+                    <?php echo Text::_('COM_MIRASAI_ELEVATION_CONTINUE'); ?>
                 </button>
             </div>
         </div>
@@ -430,20 +431,20 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
 
     <?php if (empty($this->history)): ?>
         <div class="text-center text-muted py-5">
-            <p class="fs-5">No past elevations.</p>
-            <p>When you activate and use Smart Sudo, completed sessions will appear here.</p>
+            <p class="fs-5"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_EMPTY_TITLE'); ?></p>
+            <p><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_EMPTY_DESC'); ?></p>
         </div>
     <?php else: ?>
         <div class="table-responsive">
             <table class="table table-striped table-sm">
                 <thead>
                     <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col" class="d-none d-md-table-cell">Duration</th>
-                        <th scope="col">Scopes</th>
-                        <th scope="col" class="d-none d-md-table-cell">Reason</th>
-                        <th scope="col">Calls</th>
-                        <th scope="col">Outcome</th>
+                        <th scope="col"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_DATE'); ?></th>
+                        <th scope="col" class="d-none d-md-table-cell"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_DURATION'); ?></th>
+                        <th scope="col"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_SCOPES'); ?></th>
+                        <th scope="col" class="d-none d-md-table-cell"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_REASON'); ?></th>
+                        <th scope="col"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_CALLS'); ?></th>
+                        <th scope="col"><?php echo Text::_('COM_MIRASAI_ELEVATION_HISTORY_OUTCOME'); ?></th>
                         <th scope="col"></th>
                     </tr>
                 </thead>
@@ -456,13 +457,13 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
 
                         if ($hasErrors) {
                             $outcomeClass = 'bg-danger';
-                            $outcomeText = 'Errors';
+                            $outcomeText = Text::_('COM_MIRASAI_ELEVATION_OUTCOME_ERRORS');
                         } elseif ($isRevoked) {
                             $outcomeClass = 'bg-warning text-dark';
-                            $outcomeText = 'Revoked';
+                            $outcomeText = Text::_('COM_MIRASAI_ELEVATION_OUTCOME_REVOKED');
                         } else {
                             $outcomeClass = 'bg-success';
-                            $outcomeText = 'Expired';
+                            $outcomeText = Text::_('COM_MIRASAI_ELEVATION_OUTCOME_EXPIRED');
                         }
 
                         $issued = new \DateTimeImmutable($row['issued_at'], new \DateTimeZone('UTC'));
@@ -489,9 +490,9 @@ echo HTMLHelper::_('uitab.addTab', 'elevationTabs', 'tab-elevation', $elevationL
                         </tr>
                         <tr class="history-detail" style="display:none" data-detail-for="<?php echo (int) $row['id']; ?>">
                             <td colspan="7" class="p-3" style="background: color-mix(in srgb, currentColor 8%, transparent);">
-                                <strong>Audit log</strong> — <?php echo (int) $row['total_calls']; ?> calls
+                                <strong><?php echo Text::_('COM_MIRASAI_ELEVATION_AUDIT_TITLE'); ?></strong> — <?php echo Text::sprintf('COM_MIRASAI_ELEVATION_CALLS_COUNT', (int) $row['total_calls']); ?>
                                 <div class="mt-2" id="history-audit-<?php echo (int) $row['id']; ?>">
-                                    <em class="text-muted">Click to load...</em>
+                                    <em class="text-muted"><?php echo Text::_('COM_MIRASAI_ELEVATION_CLICK_TO_LOAD'); ?></em>
                                 </div>
                             </td>
                         </tr>

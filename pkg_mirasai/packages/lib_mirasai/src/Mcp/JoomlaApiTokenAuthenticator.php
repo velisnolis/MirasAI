@@ -81,6 +81,11 @@ final class JoomlaApiTokenAuthenticator
             return null;
         }
 
+        // MCP access is restricted to site super users.
+        if (!$user->authorise('core.admin')) {
+            return null;
+        }
+
         return $user;
     }
 

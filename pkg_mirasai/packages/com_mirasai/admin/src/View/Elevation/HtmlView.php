@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mirasai\Component\Mirasai\Administrator\View\Elevation;
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Session\Session;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -48,24 +49,24 @@ class HtmlView extends BaseHtmlView
     /** Destructive tools available for elevation */
     public const TOOL_SCOPES = [
         'file/write' => [
-            'label' => 'Write files',
-            'group' => 'FILES',
-            'description' => 'Can create/overwrite sandbox files',
+            'label' => 'COM_MIRASAI_ELEVATION_SCOPE_WRITE_LABEL',
+            'group' => 'COM_MIRASAI_ELEVATION_GROUP_FILES',
+            'description' => 'COM_MIRASAI_ELEVATION_SCOPE_WRITE_DESC',
         ],
         'file/edit' => [
-            'label' => 'Edit files',
-            'group' => 'FILES',
-            'description' => 'Can modify sandbox files in-place',
+            'label' => 'COM_MIRASAI_ELEVATION_SCOPE_EDIT_LABEL',
+            'group' => 'COM_MIRASAI_ELEVATION_GROUP_FILES',
+            'description' => 'COM_MIRASAI_ELEVATION_SCOPE_EDIT_DESC',
         ],
         'file/delete' => [
-            'label' => 'Delete files',
-            'group' => 'FILES',
-            'description' => 'Can remove sandbox files',
+            'label' => 'COM_MIRASAI_ELEVATION_SCOPE_DELETE_LABEL',
+            'group' => 'COM_MIRASAI_ELEVATION_GROUP_FILES',
+            'description' => 'COM_MIRASAI_ELEVATION_SCOPE_DELETE_DESC',
         ],
         'sandbox/execute-php' => [
-            'label' => 'Execute PHP',
-            'group' => 'EXECUTION',
-            'description' => 'Runs PHP via eval() with DB transaction',
+            'label' => 'COM_MIRASAI_ELEVATION_SCOPE_EXEC_LABEL',
+            'group' => 'COM_MIRASAI_ELEVATION_GROUP_EXECUTION',
+            'description' => 'COM_MIRASAI_ELEVATION_SCOPE_EXEC_DESC',
         ],
     ];
 
@@ -74,7 +75,7 @@ class HtmlView extends BaseHtmlView
         $app = Factory::getApplication();
         $this->activeTab = $app->getInput()->getString('tab', 'elevation');
 
-        ToolbarHelper::title('MirasAI — Smart Sudo', 'lock');
+        ToolbarHelper::title(Text::_('COM_MIRASAI_ELEVATION_TITLE'), 'lock');
 
         // Load elevation state
         $elevation = new ElevationService();
@@ -118,28 +119,17 @@ class HtmlView extends BaseHtmlView
         // Load page
         $query = $db->getQuery(true)
             ->select('g.*')
+            ->select('COUNT(a.id) AS total_calls')
+            ->select("SUM(CASE WHEN a.result_summary = 'error' THEN 1 ELSE 0 END) AS error_count")
             ->from($db->quoteName('#__mirasai_elevation_grants', 'g'))
+            ->leftJoin($db->quoteName('#__mirasai_elevation_audit', 'a') . ' ON a.grant_id = g.id')
             ->where('(' . $db->quoteName('g.revoked_at') . ' IS NOT NULL OR '
                 . $db->quoteName('g.expires_at') . ' <= NOW())')
+            ->group('g.id')
             ->order($db->quoteName('g.issued_at') . ' DESC');
 
         $db->setQuery($query, $limitstart, $limit);
         $rows = $db->loadAssocList() ?: [];
-
-        // Attach audit counts and error flag
-        foreach ($rows as &$row) {
-            $q = $db->getQuery(true)
-                ->select([
-                    'COUNT(*) AS total_calls',
-                    "SUM(CASE WHEN result_summary = 'error' THEN 1 ELSE 0 END) AS error_count",
-                ])
-                ->from($db->quoteName('#__mirasai_elevation_audit'))
-                ->where($db->quoteName('grant_id') . ' = ' . (int) $row['id']);
-
-            $stats = $db->setQuery($q)->loadAssoc();
-            $row['total_calls'] = (int) ($stats['total_calls'] ?? 0);
-            $row['error_count'] = (int) ($stats['error_count'] ?? 0);
-        }
 
         $this->history = $rows;
     }

@@ -7,29 +7,14 @@ namespace Mirasai\Library\Sandbox;
 use Joomla\CMS\Factory;
 
 /**
- * Detect whether the current Joomla site is a staging/dev environment
+ * Detect whether the current Joomla site is a staging environment
  * or a production site.
  *
- * Any positive signal → staging.  No signal → assume production.
- *
- * Gated tools (destructive=true) are blocked on production.
+ * Fail-closed: production is the default. Staging must be configured
+ * explicitly via component params, Joomla global config, or MIRASAI_ENV.
  */
 class EnvironmentGuard
 {
-    private const STAGING_DOMAIN_PATTERNS = [
-        'staging.',
-        'dev.',
-        '.test',
-        '.local',
-        'localhost',
-    ];
-
-    private const PRIVATE_IP_PREFIXES = [
-        '127.',
-        '10.',
-        '192.168.',
-    ];
-
     /**
      * @var bool|null  Cached result for the duration of the request.
      */
@@ -86,126 +71,54 @@ class EnvironmentGuard
      */
     private static function detect(): bool
     {
-        // 1. Explicit config override (highest priority)
-        if (self::checkConfigOverride()) {
+        $mode = self::getConfiguredMode();
+
+        if ($mode === 'staging') {
             return true;
         }
 
-        // 2. Domain patterns
-        if (self::checkDomain()) {
-            return true;
+        if ($mode === 'production') {
+            return false;
         }
 
-        // 3. Private IP
-        if (self::checkPrivateIp()) {
-            return true;
-        }
-
-        // 4. Joomla debug flag
-        if (self::checkDebug()) {
-            return true;
-        }
-
-        // 5. Joomla error_reporting level
-        if (self::checkErrorReporting()) {
-            return true;
-        }
-
-        // No signal matched → assume production
+        // Unknown / unset modes default to production.
         return false;
     }
 
-    private static function checkConfigOverride(): bool
+    private static function getConfiguredMode(): ?string
     {
         try {
             $app = Factory::getApplication();
             $params = $app->bootComponent('com_mirasai')->getComponentParametersByView('dashboard');
 
-            if ($params && $params->get('environment_override') === 'staging') {
-                return true;
+            if ($params) {
+                $value = strtolower(trim((string) $params->get('environment_override', '')));
+
+                if (\in_array($value, ['production', 'staging'], true)) {
+                    return $value;
+                }
             }
         } catch (\Throwable) {
             // Component not installed or params not available — skip
         }
 
-        // Also check Joomla global config for a fallback
         try {
             $config = Factory::getApplication()->getConfig();
-            if ($config->get('mirasai_environment_override') === 'staging') {
-                return true;
+            $value = strtolower(trim((string) $config->get('mirasai_environment_override', '')));
+
+            if (\in_array($value, ['production', 'staging'], true)) {
+                return $value;
             }
         } catch (\Throwable) {
             // ignore
         }
 
-        return false;
-    }
+        $env = strtolower(trim((string) ($_SERVER['MIRASAI_ENV'] ?? getenv('MIRASAI_ENV') ?: '')));
 
-    private static function checkDomain(): bool
-    {
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        $host = strtolower($host);
-
-        foreach (self::STAGING_DOMAIN_PATTERNS as $pattern) {
-            if (str_contains($host, $pattern)) {
-                return true;
-            }
+        if (\in_array($env, ['production', 'staging'], true)) {
+            return $env;
         }
 
-        return false;
-    }
-
-    private static function checkPrivateIp(): bool
-    {
-        $ip = $_SERVER['SERVER_ADDR'] ?? '';
-
-        if ($ip === '') {
-            return false;
-        }
-
-        // Check simple prefixes
-        foreach (self::PRIVATE_IP_PREFIXES as $prefix) {
-            if (str_starts_with($ip, $prefix)) {
-                return true;
-            }
-        }
-
-        // Check 172.16.0.0/12 range
-        if (str_starts_with($ip, '172.')) {
-            $parts = explode('.', $ip);
-            if (isset($parts[1])) {
-                $second = (int) $parts[1];
-                if ($second >= 16 && $second <= 31) {
-                    return true;
-                }
-            }
-        }
-
-        // IPv6 loopback
-        if ($ip === '::1') {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static function checkDebug(): bool
-    {
-        try {
-            return (bool) Factory::getApplication()->get('debug', false);
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    private static function checkErrorReporting(): bool
-    {
-        try {
-            $level = Factory::getApplication()->get('error_reporting', '');
-
-            return \in_array($level, ['maximum', 'development'], true);
-        } catch (\Throwable) {
-            return false;
-        }
+        return null;
     }
 }
