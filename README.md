@@ -31,8 +31,15 @@ The package installs:
 - `plg_webservices_mirasai`
 - `com_mirasai`
 - optional addon: `plg_mirasai_yootheme`
+- optional addon: `plg_mirasai_rereplacer`
 
 The example addon in `pkg_mirasai/packages/plg_mirasai_example` is kept as a development reference and is not included in the installable package.
+
+Related docs:
+
+- `docs/plugin-developer-guide.md`
+- `docs/rereplacer-agent-guide.md`
+- `docs/rereplacer-phase1-spec.md`
 
 ## MCP Surface
 
@@ -83,6 +90,21 @@ When the YOOtheme addon is installed and available, MirasAI also exposes:
 - `template/list`
 - `template/read`
 - `template/translate`
+
+When the ReReplacer addon is installed and available, MirasAI also exposes:
+
+- `rereplacer/list-items`
+- `rereplacer/read-item`
+- `rereplacer/create-item-simple`
+- `rereplacer/update-item-simple`
+- `rereplacer/publish-item`
+- `rereplacer/preview-match-scope`
+- `conditions/list`
+- `conditions/read`
+
+When ReReplacer PRO and Conditions are both available, MirasAI also exposes:
+
+- `rereplacer/attach-condition`
 
 If the addon plugin is installed but YOOtheme is not present, the dashboard should show the addon as `Unavailable` while the core tools remain usable.
 

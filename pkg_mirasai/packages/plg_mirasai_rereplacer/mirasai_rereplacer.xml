@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="mirasai" method="upgrade">
+    <name>plg_mirasai_rereplacer</name>
+    <version>0.4.5</version>
+    <creationDate>2026-03-26</creationDate>
+    <author>Alex Miras</author>
+    <authorEmail>alex@miras.pro</authorEmail>
+    <description>MirasAI ReReplacer plugin: exposes safe Phase 1 tools for inspecting and managing simple ReReplacer items and reusable Conditions sets.</description>
+    <namespace path="src">Mirasai\Plugin\Mirasai\Rereplacer</namespace>
+    <files>
+        <file>provider.php</file>
+        <folder plugin="rereplacer">services</folder>
+        <folder>src</folder>
+    </files>
+</extension>

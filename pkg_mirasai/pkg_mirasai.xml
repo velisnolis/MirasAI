@@ -2,7 +2,7 @@
 <extension version="5.0" type="package" method="upgrade">
     <name>MirasAI</name>
     <packagename>mirasai</packagename>
-    <version>0.4.4</version>
+    <version>0.4.5</version>
     <creationDate>2026-03-26</creationDate>
     <author>Alex Miras</author>
     <authorEmail>alex@miras.pro</authorEmail>
@@ -17,6 +17,7 @@
         <file type="component" id="com_mirasai">com_mirasai.zip</file>
         <file type="plugin" group="webservices" id="mirasai">plg_webservices_mirasai.zip</file>
         <file type="plugin" group="mirasai" id="yootheme">plg_mirasai_yootheme.zip</file>
+        <file type="plugin" group="mirasai" id="rereplacer">plg_mirasai_rereplacer.zip</file>
     </files>
 
     <updateservers>

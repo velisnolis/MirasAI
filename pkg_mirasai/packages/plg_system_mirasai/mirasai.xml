@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="plugin" group="system" method="upgrade">
     <name>plg_system_mirasai</name>
-    <version>0.4.4</version>
+    <version>0.4.5</version>
     <creationDate>2026-03-21</creationDate>
     <author>Alex Miras</author>
     <authorEmail>alex@miras.pro</authorEmail>

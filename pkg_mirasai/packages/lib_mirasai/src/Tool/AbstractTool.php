@@ -24,6 +24,7 @@ abstract class AbstractTool implements ToolInterface
         return [
             'readonly' => true,
             'destructive' => false,
+            'requires_elevation' => false,
             'idempotent' => true,
         ];
     }
@@ -75,7 +76,7 @@ abstract class AbstractTool implements ToolInterface
      * hints. Return [] (default) to omit the metadata key entirely.
      *
      * Standard keys (MCP extension — not part of the core spec):
-     *   destructive       bool  Tool can irreversibly modify or delete data.
+     *   destructive        bool  Tool can modify or delete data.
      *   requires_elevation bool  Tool is gated behind Smart Sudo elevation.
      *
      * @return array<string, mixed>
@@ -86,7 +87,10 @@ abstract class AbstractTool implements ToolInterface
         $metadata    = [];
 
         if (!empty($permissions['destructive'])) {
-            $metadata['destructive']        = true;
+            $metadata['destructive'] = true;
+        }
+
+        if (!empty($permissions['requires_elevation'])) {
             $metadata['requires_elevation'] = true;
         }
 

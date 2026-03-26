@@ -13,6 +13,7 @@ use Joomla\Database\DatabaseInterface;
 use Mirasai\Library\Mirasai;
 use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Tool\ToolRegistry;
+use Mirasai\Plugin\Mirasai\Rereplacer\Support\RereplacerService;
 
 class HtmlView extends BaseHtmlView
 {
@@ -230,8 +231,63 @@ class HtmlView extends BaseHtmlView
             ->order('name');
 
         $addons = $db->setQuery($query)->loadAssocList() ?: [];
+        $addons = $this->dedupeAddonPlugins($addons);
 
         return [$core, $addons];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $addons
+     * @return list<array<string, mixed>>
+     */
+    private function dedupeAddonPlugins(array $addons): array
+    {
+        $canonical = [];
+
+        foreach ($addons as $addon) {
+            $element = (string) ($addon['element'] ?? '');
+            $key = $this->canonicalAddonElement($element);
+            $current = $canonical[$key] ?? null;
+
+            if ($current === null || $this->shouldPreferAddonRow($addon, $current)) {
+                $canonical[$key] = $addon;
+            }
+        }
+
+        return array_values($canonical);
+    }
+
+    private function canonicalAddonElement(string $element): string
+    {
+        return str_starts_with($element, 'mirasai_')
+            ? substr($element, strlen('mirasai_'))
+            : $element;
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     * @param array<string, mixed> $current
+     */
+    private function shouldPreferAddonRow(array $candidate, array $current): bool
+    {
+        $candidateElement = (string) ($candidate['element'] ?? '');
+        $currentElement = (string) ($current['element'] ?? '');
+
+        $candidateIsCanonical = $candidateElement === $this->canonicalAddonElement($candidateElement);
+        $currentIsCanonical = $currentElement === $this->canonicalAddonElement($currentElement);
+
+        if ($candidateIsCanonical !== $currentIsCanonical) {
+            return $candidateIsCanonical;
+        }
+
+        $candidateEnabled = (int) ($candidate['enabled'] ?? 0);
+        $currentEnabled = (int) ($current['enabled'] ?? 0);
+
+        if ($candidateEnabled !== $currentEnabled) {
+            return $candidateEnabled > $currentEnabled;
+        }
+
+        return strcmp($candidateElement, $currentElement) < 0;
     }
 
     private function checkAllCoreEnabled(): bool
@@ -355,6 +411,7 @@ class HtmlView extends BaseHtmlView
                 'count' => count($addonTools),
                 'provider_name' => (string) ($providerInfo['provider_name'] ?: $element),
                 'plugin_element' => $element,
+                'capability_note' => $this->buildAddonCapabilityNote($element, $providerInfo),
                 'tools_by_domain' => $this->groupToolsByDomain($addonTools),
                 'open' => false,
             ];
@@ -399,5 +456,24 @@ class HtmlView extends BaseHtmlView
         }
 
         return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $providerInfo
+     */
+    private function buildAddonCapabilityNote(string $element, array $providerInfo): string
+    {
+        if ($element !== 'rereplacer') {
+            return '';
+        }
+
+        try {
+            $db = Factory::getContainer()->get(DatabaseInterface::class);
+            $service = new RereplacerService($db);
+
+            return $service->buildCapabilityNote();
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }

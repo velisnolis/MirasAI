@@ -168,10 +168,12 @@ class McpHandler
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
-        // Environment guard: block destructive tools on production unless elevated
+        // Environment guard: block tools that explicitly require elevation on
+        // production unless elevated.
         $permissions = $tool->getPermissions();
+        $requiresElevation = !empty($permissions['requires_elevation']);
 
-        if (!empty($permissions['destructive']) && EnvironmentGuard::isProduction()) {
+        if ($requiresElevation && EnvironmentGuard::isProduction()) {
             $elevation = new ElevationService();
 
             if (!$elevation->isElevated($toolName)) {

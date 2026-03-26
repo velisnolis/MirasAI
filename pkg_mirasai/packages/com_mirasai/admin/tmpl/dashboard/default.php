@@ -471,6 +471,11 @@ $clientConfigs = [
                             data-bs-parent="#mirasai-tools-accordion"
                         >
                             <div class="accordion-body">
+                                <?php if (!empty($group['capability_note'])): ?>
+                                    <div class="alert alert-info mb-3">
+                                        <?php echo htmlspecialchars((string) $group['capability_note']); ?>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if (empty($group['tools_by_domain'])): ?>
                                     <p class="text-muted mb-0"><?php echo Text::_('COM_MIRASAI_TOOLS_GROUP_EMPTY'); ?></p>
                                 <?php else: ?>

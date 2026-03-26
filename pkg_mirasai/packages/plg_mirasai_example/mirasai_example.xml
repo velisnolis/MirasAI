@@ -8,6 +8,7 @@
     <description>MirasAI example plugin — minimal reference implementation showing how to add custom MCP tools. See docs/plugin-developer-guide.md.</description>
     <namespace path="src">Mirasai\Plugin\Mirasai\Example</namespace>
     <files>
+        <file>provider.php</file>
         <folder plugin="mirasai_example">services</folder>
         <folder>src</folder>
     </files>

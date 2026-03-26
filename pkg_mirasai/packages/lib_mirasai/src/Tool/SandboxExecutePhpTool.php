@@ -201,6 +201,7 @@ class SandboxExecutePhpTool extends AbstractTool
         return [
             'readonly' => false,
             'destructive' => true,
+            'requires_elevation' => true,
             'idempotent' => false,
         ];
     }
