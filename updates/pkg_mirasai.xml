@@ -5,10 +5,10 @@
     <description>MirasAI package for Joomla. MCP server, admin dashboard, and optional YOOtheme tools.</description>
     <element>pkg_mirasai</element>
     <type>package</type>
-    <version>0.4.2</version>
-    <infourl title="MirasAI">https://github.com/velisnolis/MirasAI/releases/tag/v0.4.2</infourl>
+    <version>0.4.3</version>
+    <infourl title="MirasAI">https://github.com/velisnolis/MirasAI/releases/tag/v0.4.3</infourl>
     <downloads>
-      <downloadurl type="full" format="zip">https://github.com/velisnolis/MirasAI/releases/download/v0.4.2/pkg_mirasai-0.4.2.zip</downloadurl>
+      <downloadurl type="full" format="zip">https://github.com/velisnolis/MirasAI/releases/download/v0.4.3/pkg_mirasai-0.4.3.zip</downloadurl>
     </downloads>
     <tags>
       <tag>stable</tag>
@@ -16,6 +16,6 @@
     <maintainer>Alex Miras</maintainer>
     <maintainerurl>https://miras.pro</maintainerurl>
     <targetplatform name="joomla" version="[56]\.[0-9]+"/>
-    <sha256>a6720e6f81b47690ba190f8bb8650d7a16b5e7a469136c3f1b95a1cc9617d304</sha256>
+    <sha256>8f1fa6a450fc2363fac1d0933e1c607014b0e9009fcb5590e08f9511842d0cca</sha256>
   </update>
 </updates>
