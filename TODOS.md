@@ -83,32 +83,92 @@
 - **Depends on:** Smart Sudo v1 implementat (2 admin views existents com a base).
 - **Added:** 2026-03-24 via /plan-design-review
 
-### TODO-012: Dashboard admin — sincronitzar amb ToolRegistry i versió real (P1)
-- **What:** Actualitzar el dashboard de `com_mirasai` perquè reflecteixi l'estat real del sistema.
-- **Why:** Ara mateix mostra v0.1.0 (hauria de ser v0.4.0), només 4 tools hardcodejades (hauria de ser 25), i les descripcions són en català i estàtiques — no reflecteixen les descripcions MCP reals.
+### ~~TODO-012: Dashboard admin — redisseny complet amb decisions de design review (P1)~~ ✅ DONE
+- **What:** Redissenyar el dashboard de `com_mirasai` per reflectir l'estat real del sistema amb jerarquia visual intencionada.
+- **Why:** Ara mateix mostra v0.1.0 (hauria de ser v0.4.0), només 10 tools hardcodejades (hauria de ser 25), i les descripcions són en català i estàtiques. El layout és 5 cards apilades sense jerarquia — triga 3 hard rejections de disseny (card grid genèric, cards sense interacció, stacked cards).
 - **Subtasques:**
-  1. **Versió centralitzada:** Definir la versió en un sol lloc (constant o `version.php`) i consumir-la tant des del dashboard com des de `McpHandler::handleInitialize()`.
-  2. **Tools dinàmiques:** El dashboard ha de cridar `ToolRegistry::buildDefault()` per llistar totes les tools amb les seves descripcions reals, en lloc de mantenir una llista duplicada.
-  3. **Diferenciar core vs addon:** Afegir una columna o badge que indiqui si cada tool és **core** (lib_mirasai) o **addon/plugin** (plg_mirasai_yootheme, etc.), amb l'origen (nom del plugin).
-  4. **Enllaç a gestió de plugins:** Afegir un link directe a la pàgina de plugins de Joomla (`Extensions → Plugins`, filtrat per grup `mirasai`) perquè l'admin pugui publicar/despublicar addons sense sortir del context MirasAI.
-  5. **Indicador d'estat per addon:** Mostrar si cada plugin addon està habilitat o deshabilitat a Joomla, amb acció ràpida per canviar-ho.
-  6. **Explicació `*` a traduccions:** L'entrada `*` a la taula de traduccions (1 article, 0 YOOtheme) no és clara — afegir tooltip o nota explicant que són articles sense idioma assignat (`language = '*'`).
+  1. **Versió centralitzada:** Definir `MIRASAI_VERSION` com a constant PHP a `lib_mirasai`. Dashboard i `McpHandler::handleInitialize()` la llegeixen d'allà.
+  2. **Tools dinàmiques:** El dashboard crida `ToolRegistry::buildDefault()` per llistar totes les tools amb les seves descripcions MCP reals (truncades a ~100 chars). Zero manteniment de descripcions duplicades.
+  3. **Diferenciar core vs addon:** Columna/badge que indica l'origen de cada tool (requereix TODO-013).
+  4. **Secció Addons:** Llista de plugins del grup `mirasai` amb toggle, tool count, i link a gestió de plugins Joomla (TODO-014).
+  5. **Explicació `*` a traduccions:** Tooltip/nota per `language = '*'` (articles sense idioma assignat).
+  6. **Status badge core-only:** El badge ACTIU/INACTIU comprova només core extensions (lib_mirasai, plg_system_mirasai, plg_webservices_mirasai). Addons es mostren a la seva secció.
+  7. **i18n:** Totes les strings amb `Text::_('COM_MIRASAI_...')`. Dashboard ha de ser traduïble. Distribuir només `en-GB.com_mirasai.ini`. La comunitat pot traduir via Joomla language overrides.
+  8. **Fix extensions query:** La query actual (`element = 'mirasai' OR element = 'com_mirasai'`) no troba les extensions correctes. Cal filtrar per `(type='library' AND element='mirasai') OR (type='plugin' AND folder='system' AND element='mirasai') OR (type='plugin' AND folder='webservices' AND element='mirasai') OR (type='component' AND element='com_mirasai')` per core. Addons: `type='plugin' AND folder='mirasai'`.
+  9. **toToolSummaryList():** Usar el nou mètode de TODO-013 per obtenir la llista de tools sense instanciar-les.
+- **Design Decisions (review 2026-03-27):**
+  - **Layout:** Banner d'estat full-width a dalt (no card) → Sistema+Traduccions en 2 columnes → Tools agrupades per domini → Addons com a secció separada.
+  - **Banner d'estat:** Full-width, prominent. Mostra: versió, badge ACTIU/INACTIU, endpoint amb copy, resum (N tools · N idiomes · Elevation: ON/OFF).
+  - **Tools agrupades:** Per domini (`content/*`, `template/*`, `theme/*`, `menu/*`, `system/*`, `sandbox/*`, `file/*`, `db/*`, `elevation/*`). Cada grup mostra: nom tool en `<code>`, descripció MCP truncada, badge core/addon, indicador 🔴 si destructiu.
+  - **Empty states:** Cada secció té un empty state amb missatge càlid i CTA (ex: "No articles yet. Create content →", "No addons installed. Browse addons →").
+  - **Onboarding:** Bloc col·lapsable a la primera visita: 3 passos (habilitar plugins, copiar endpoint, crear API token). Es detecta amb `localStorage` o paràmetre de sessió.
+  - **Curl example:** Dins `<details>` col·lapsable sota les tools. Visible per qui el necessiti, ocult per defecte.
+  - **Anti-slop rules:** Màxim 3 colors de badge (success=actiu, secondary=inactiu, warning=alerta). Sense icones decoratives. Copy d'utilitat (no aspiracional). Cards només per addons (perquè són interactius). Estil nadiu Joomla Bootstrap 5.
+  - **Responsive:** Bootstrap responsive per defecte. Mobile: banner compacte, columnes stacked, tools taula responsiva.
+  - **A11y:** ARIA landmarks (banner=status, main=tools, complementary=addons). Copy button accessible. Addon toggles focusables.
+  - **CSS tokens:** Reusar els tokens de l'Elevation view com a base compartida, promoure a namespace `--mirasai-*`.
+  - **Mockup ASCII del layout objectiu:**
+    ```
+    ┌──────────────────────────────────────────────────────┐
+    │  ⚡ MirasAI v0.4.0                      ACTIU  🟢   │
+    │  Endpoint: https://...api/v1/mirasai/mcp    [Copy]  │
+    │  25 tools · 3 idiomes · Elevation: OFF              │
+    └──────────────────────────────────────────────────────┘
+    ┌──────────────┐  ┌──────────────────────────────────┐
+    │  SISTEMA     │  │  TRADUCCIONS                     │
+    │  Joomla 6.0  │  │  ca-ES ████ 9 (8 YT)            │
+    │  PHP 8.4     │  │  en-GB ████ 9 (8 YT)            │
+    │  YOOtheme 5  │  │  es-ES ████ 9 (8 YT)            │
+    └──────────────┘  └──────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┐
+    │  TOOLS (25)                   [Core ▾] [Addon ▾]    │
+    │  CONTENT (6) ─────────────────────────────── Core   │
+    │  ├ content/list     Lists articles with...          │
+    │  ├ content/read     Reads a single article...       │
+    │  ├ content/translate Creates or updates...    🔴    │
+    │  └ ...                                              │
+    │  YOOTHEME (5) ───────────── plg_mirasai_yootheme   │
+    │  ├ theme/extract    Extracts a YOOtheme...   🔴    │
+    │  └ ...                                              │
+    └──────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┐
+    │  ADDONS                    [Manage plugins →]       │
+    │  ┌────────────┐  ┌────────────┐                     │
+    │  │ YOOtheme 🟢│  │ Example 🟢 │                     │
+    │  │ 5 tools    │  │ 1 tool     │                     │
+    │  └────────────┘  └────────────┘                     │
+    └──────────────────────────────────────────────────────┘
+    ```
 - **Context:** El dashboard és la "part humana" de MirasAI. Ara que les descripcions MCP estan polides per agents, el dashboard hauria de ser igual de clar per humans.
-- **Depends on:** Cap.
+- **Depends on:** TODO-013 (per core vs addon). TODO-014 deferred — addons read-only + link a plugin manager.
 - **Added:** 2026-03-25
+- **Updated:** 2026-03-27 via /plan-design-review
+- **Completat:** 2026-03-27. Implementat:
+  - Versió centralitzada via `Mirasai::VERSION`, tots els XML manifests a 0.4.0.
+  - Tools dinàmiques via `ToolRegistry::buildDefault()->toToolSummaryList()`.
+  - Core vs addon badges a cada tool.
+  - Fix extensions query: filtra per type+folder+element (core) i folder=mirasai (addons).
+  - i18n complet: `en-GB.com_mirasai.ini` amb 40+ strings via `Text::_()`.
+  - Status banner full-width amb badge, endpoint copy, resum.
+  - Tools agrupades per domini amb indicador destructiu.
+  - Addons read-only amb link a plugin manager.
+  - Onboarding localStorage-driven.
+  - Curl example col·lapsable.
+  - Traduccions amb tooltip per `language = '*'`.
+  - Empty states per traduccions, tools i addons.
 
-### TODO-013: ToolRegistry — exposar origen de cada tool (core vs plugin) (P2)
-- **What:** Afegir metadata d'origen a cada tool registrada (core, plugin name, plugin group).
-- **Why:** El dashboard necessita saber si una tool ve de `lib_mirasai` (core) o d'un plugin (`plg_mirasai_yootheme`, etc.) per mostrar-ho a l'admin. També útil per a `tools/list` — podria incloure `metadata.provider` al MCP.
-- **Implementació proposada:**
-  - `registerLazy()` accepta un tercer paràmetre opcional `string $provider = 'core'`.
-  - `register()` pren l'origen del `ToolProviderInterface::getId()`.
-  - Nou mètode `getProvider(string $name): string` al registry.
-  - `toMcpToolsList()` inclou `metadata.provider` opcionalment.
-- **Pros:** Dashboard pot diferenciar tools, admin sap d'on ve cada tool, debugging més fàcil.
-- **Cons:** Canvi menor a ToolRegistry API.
-- **Depends on:** TODO-012.
+### ~~TODO-013: ToolRegistry — exposar origen i resum de cada tool (P1)~~ ✅ DONE
+- **Completat:** 2026-03-27.
+- **Implementat:**
+  - `registerLazy(name, class, provider='core')` — tercer paràmetre per origen.
+  - Array paral·lel `private array $providers = []` amb `$providers[$name] = $provider`.
+  - `collectProviders()` passa `$provider->getId()` explícitament a `register()`.
+  - `getProvider(string $name): string` al registry.
+  - `toToolSummaryList(): array` — retorna [{name, description, provider, destructive}].
+  - `register(ToolInterface, provider='core')` — segon paràmetre per origen.
+- **Extra:** Versió centralitzada a `Mirasai::VERSION` (0.4.0). `McpHandler`, `SystemInfoTool`, i XML manifests actualitzats.
 - **Added:** 2026-03-25
+- **Updated:** 2026-03-27 — implementat
 
 ### TODO-014: Gestió d'addons des del dashboard (P2)
 - **What:** Permetre publicar/despublicar plugins del grup `mirasai` directament des del dashboard de MirasAI.

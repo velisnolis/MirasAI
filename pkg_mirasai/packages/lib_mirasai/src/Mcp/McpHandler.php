@@ -7,6 +7,7 @@ namespace Mirasai\Library\Mcp;
 use Mirasai\Library\Sandbox\ElevationGrant;
 use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
+use Mirasai\Library\Mirasai;
 use Mirasai\Library\Tool\ToolRegistry;
 
 class McpHandler
@@ -137,7 +138,7 @@ class McpHandler
             ],
             'serverInfo' => [
                 'name' => 'MirasAI',
-                'version' => '0.4.0',
+                'version' => Mirasai::VERSION,
             ],
             'instructions' => $instructions,
         ];

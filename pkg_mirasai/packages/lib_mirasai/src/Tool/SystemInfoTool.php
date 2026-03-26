@@ -6,6 +6,7 @@ namespace Mirasai\Library\Tool;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Version;
+use Mirasai\Library\Mirasai;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
 
 class SystemInfoTool extends AbstractTool
@@ -44,7 +45,7 @@ class SystemInfoTool extends AbstractTool
             'extensions' => $this->getExtensions(),
             'template' => $this->getTemplateSummary(),
             'yootheme' => $this->getYoothemeInfo(),
-            'mirasai_version' => '0.2.0',
+            'mirasai_version' => Mirasai::VERSION,
         ];
     }
 

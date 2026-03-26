@@ -17,6 +17,16 @@ class ToolRegistry
     private array $tools = [];
 
     /**
+     * Parallel array tracking the origin of each tool.
+     *
+     * Key: tool name, Value: provider identifier ('core' for built-in tools,
+     * or the ToolProviderInterface::getId() string for plugin-provided tools).
+     *
+     * @var array<string, string>
+     */
+    private array $providers = [];
+
+    /**
      * Build a registry pre-populated with the 19 core (non-YOOtheme) tools,
      * then collect additional tools from installed plugins via collectProviders().
      *
@@ -71,10 +81,12 @@ class ToolRegistry
      * every request regardless of which tools are actually used.
      *
      * @param class-string<ToolInterface> $class
+     * @param string $provider  Origin identifier ('core' for built-in, or provider ID for plugins)
      */
-    public function registerLazy(string $name, string $class): void
+    public function registerLazy(string $name, string $class, string $provider = 'core'): void
     {
         $this->tools[$name] = $class;
+        $this->providers[$name] = $provider;
     }
 
     /**
@@ -131,7 +143,7 @@ class ToolRegistry
                         continue;
                     }
 
-                    $this->register($provider->createTool($toolName));
+                    $this->register($provider->createTool($toolName), $provider->getId());
                 }
             } catch (\Throwable $e) {
                 trigger_error(
@@ -207,10 +219,13 @@ class ToolRegistry
      *
      * Used by collectProviders() for plugin-provided tools that arrive as
      * already-constructed instances from ToolProviderInterface::createTool().
+     *
+     * @param string $provider  Origin identifier (provider ID for plugins, 'core' for built-in)
      */
-    public function register(ToolInterface $tool): void
+    public function register(ToolInterface $tool, string $provider = 'core'): void
     {
         $this->tools[$tool->getName()] = $tool;
+        $this->providers[$tool->getName()] = $provider;
     }
 
     /**
@@ -244,6 +259,18 @@ class ToolRegistry
     }
 
     /**
+     * Return the provider identifier for a registered tool.
+     *
+     * Returns 'core' for built-in tools, or the ToolProviderInterface::getId()
+     * string for plugin-provided tools. Returns 'unknown' if the tool is not
+     * registered or has no provider recorded.
+     */
+    public function getProvider(string $name): string
+    {
+        return $this->providers[$name] ?? 'unknown';
+    }
+
+    /**
      * Return all tool names registered in this registry.
      *
      * @return list<string>
@@ -251,6 +278,43 @@ class ToolRegistry
     public function names(): array
     {
         return array_keys($this->tools);
+    }
+
+    /**
+     * Return a lightweight summary of all tools without instantiating them.
+     *
+     * For lazy (class-string) entries the description and destructive flag are
+     * obtained by instantiating a temporary instance. For already-resolved
+     * instances, the live object is used directly.
+     *
+     * This is designed for the admin dashboard where we need name, description,
+     * provider, and destructive flag for all tools — but don't need to pay the
+     * full cost of keeping 25+ tool objects in memory simultaneously.
+     *
+     * @return list<array{name: string, description: string, provider: string, destructive: bool}>
+     */
+    public function toToolSummaryList(): array
+    {
+        $list = [];
+
+        foreach ($this->tools as $name => $entry) {
+            $tool = $this->get($name);
+
+            if ($tool === null) {
+                continue;
+            }
+
+            $permissions = $tool->getPermissions();
+
+            $list[] = [
+                'name'        => $name,
+                'description' => $tool->getDescription(),
+                'provider'    => $this->providers[$name] ?? 'unknown',
+                'destructive' => !empty($permissions['destructive']),
+            ];
+        }
+
+        return $list;
     }
 
     /**

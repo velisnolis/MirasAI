@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="component" method="upgrade">
     <name>com_mirasai</name>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
     <creationDate>2026-03-24</creationDate>
     <author>Alex Miras</author>
     <authorEmail>alex@miras.pro</authorEmail>
@@ -27,6 +27,7 @@
             <menu link="option=com_mirasai&amp;view=elevation">Elevation</menu>
         </submenu>
         <files>
+            <folder>language</folder>
             <folder>services</folder>
             <folder>sql</folder>
             <folder>src</folder>
