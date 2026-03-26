@@ -2,7 +2,7 @@
 <extension version="5.0" type="package" method="upgrade">
     <name>MirasAI</name>
     <packagename>mirasai</packagename>
-    <version>0.4.3</version>
+    <version>0.4.4</version>
     <creationDate>2026-03-26</creationDate>
     <author>Alex Miras</author>
     <authorEmail>alex@miras.pro</authorEmail>
