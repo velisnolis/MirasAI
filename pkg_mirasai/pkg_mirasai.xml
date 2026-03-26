@@ -20,6 +20,6 @@
     </files>
 
     <updateservers>
-        <server type="extension" priority="1" name="MirasAI Package">https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml</server>
+        <server type="extension" priority="1" name="MirasAI Package">https://cdn.jsdelivr.net/gh/velisnolis/MirasAI@main/updates/pkg_mirasai.xml</server>
     </updateservers>
 </extension>
