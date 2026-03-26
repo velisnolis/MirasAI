@@ -12,7 +12,7 @@ namespace Mirasai\Library;
  */
 final class Mirasai
 {
-    public const VERSION = '0.4.5';
+    public const VERSION = '0.4.6';
 
     private function __construct() {}
 }

@@ -9,6 +9,8 @@ use Joomla\Database\DatabaseInterface;
 
 class Pkg_mirasaiInstallerScript extends InstallerScript
 {
+    private const UPDATE_FEED_URL = 'https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml';
+
     protected $minimumJoomla = '5.0.0';
     protected $minimumPhp = '8.1.0';
 
@@ -17,6 +19,7 @@ class Pkg_mirasaiInstallerScript extends InstallerScript
         if ($type === 'install' || $type === 'update') {
             $this->enablePlugins();
             $this->cleanupLegacyAddonPluginRows();
+            $this->migrateUpdateSiteUrl();
         }
 
         return true;
@@ -73,5 +76,18 @@ class Pkg_mirasaiInstallerScript extends InstallerScript
 
             $db->setQuery($query)->execute();
         }
+    }
+
+    private function migrateUpdateSiteUrl(): void
+    {
+        $db = Factory::getContainer()->get(DatabaseInterface::class);
+
+        $query = $db->getQuery(true)
+            ->update($db->quoteName('#__update_sites'))
+            ->set($db->quoteName('location') . ' = ' . $db->quote(self::UPDATE_FEED_URL))
+            ->where($db->quoteName('type') . ' = ' . $db->quote('extension'))
+            ->where($db->quoteName('name') . ' = ' . $db->quote('MirasAI Package'));
+
+        $db->setQuery($query)->execute();
     }
 }
