@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="component" method="upgrade">
     <name>com_mirasai</name>
-    <version>0.4.1</version>
-    <creationDate>2026-03-24</creationDate>
+    <version>0.4.2</version>
+    <creationDate>2026-03-26</creationDate>
     <author>Alex Miras</author>
     <authorEmail>alex@miras.pro</authorEmail>
     <description>MirasAI: MCP server for Joomla. AI-powered content translation and management.</description>

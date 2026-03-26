@@ -378,6 +378,11 @@ class HtmlView extends BaseHtmlView
 
             if ($element !== '') {
                 $providersByElement[$element] = $providerInfo;
+                $providersByElement['mirasai_' . $element] = $providerInfo;
+
+                if (str_starts_with($element, 'mirasai_')) {
+                    $providersByElement[substr($element, strlen('mirasai_'))] = $providerInfo;
+                }
             }
         }
 

@@ -178,7 +178,7 @@ Relevant code:
 ### Joomla Admin
 
 1. Build the package zip
-2. In Joomla admin, install the generated `pkg_mirasai-lab.zip`
+2. In Joomla admin, install the generated `pkg_mirasai-<version>.zip` or `pkg_mirasai-lab.zip`
 3. Enable:
    - `plg_system_mirasai`
    - `plg_webservices_mirasai`
@@ -213,13 +213,28 @@ Build the package with:
 
 Output:
 
+- `.docker-build/pkg_mirasai-<version>.zip`
 - `.docker-build/pkg_mirasai-lab.zip`
+- `updates/pkg_mirasai.xml`
 
-The build script assembles the component admin files, API files, library, and plugins into a Joomla package zip.
+The build script assembles the component admin files, API files, library, and plugins into a Joomla package zip. It also regenerates the Joomla update feed with the correct release URL and `sha256`.
 
 Relevant file:
 
 - `docker/build-package.sh`
+
+## Joomla Auto-Updates
+
+Starting with `0.4.2`, the package manifest includes a Joomla update server:
+
+- `https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml`
+
+That feed points Joomla to the matching GitHub Release asset for the current package version.
+
+Practical effect:
+
+- sites that install `0.4.2` or newer can detect future package updates through Joomla's normal update checks
+- sites currently on `0.4.1` need one manual upgrade to `0.4.2` first, because `0.4.1` does not yet contain the update server definition
 
 ## Multilingual Workflows
 
