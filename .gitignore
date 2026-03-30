@@ -5,3 +5,5 @@ pkg_mirasai/packages/*.zip
 .env
 .docker-build/
 yootheme*.zip
+joomla-novamira-consideracions.md
+revisiógemeni.md
