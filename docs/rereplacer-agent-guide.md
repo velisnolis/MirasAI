@@ -46,7 +46,7 @@ In practical terms:
 
 ## What We Observed On A Real Site
 
-On the reference site `acvic`, ReReplacer is installed as `14.5.11PRO` and Conditions as `26.1.17914`.
+On a reference production site, ReReplacer is installed as `14.5.11PRO` and Conditions as `26.1.17914`.
 
 Observed usage pattern:
 

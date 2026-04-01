@@ -4,6 +4,8 @@ pkg_mirasai/packages/*.zip
 .gstack/
 .env
 .docker-build/
+.tmp_yootheme/
 yootheme*.zip
 joomla-novamira-consideracions.md
 revisiógemeni.md
+security_best_practices_report.md
