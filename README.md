@@ -1,65 +1,74 @@
 # MirasAI
 
-MirasAI is a Joomla extension package that exposes a focused MCP server for content operations, multilingual workflows, system inspection, and optional YOOtheme-specific tooling.
+MirasAI is a Joomla extension package that exposes an MCP server for AI agents.
 
-The current package supports Joomla 5/6 and is designed to work in three modes:
+It gives an AI controlled access to Joomla content, multilingual workflows, system inspection, optional YOOtheme tooling, and optional ReReplacer tooling.
 
-- core-only Joomla sites, without YOOtheme
-- Joomla sites with the optional YOOtheme addon enabled
-- staging and production sites with different safety rules
+Use it on staging first. Use backups. Treat production as a gated environment.
 
-## What Changed Recently
+## What It Is
 
-The current workspace includes a substantial hardening and packaging pass:
+MirasAI installs a small Joomla runtime made of:
 
-- MCP access is now restricted to `Super Users` via `core.admin`
-- environment detection is fail-closed and defaults to `production`
-- sandbox writable files are separated from auto-loaded PHP files
-- provider loading is centralized in `ToolRegistry`
-- the API component packaging/layout is fixed
-- the admin dashboard now reflects registry health, configured languages, and addon availability more accurately
-- elevation admin actions now enforce ACL checks and the history view no longer uses an `N+1` query
+- a core library
+- a system plugin
+- a webservices plugin
+- an admin component
+- optional addons for YOOtheme and ReReplacer
 
-These changes were validated on a private staging/reference Joomla site outside the repository.
+Once installed, Joomla exposes an MCP endpoint:
 
-## Package Contents
+- `/api/v1/mirasai/mcp`
 
-The package installs:
+Your AI client connects to that endpoint with a Joomla API token from a `Super User`.
 
-- `lib_mirasai`
-- `plg_system_mirasai`
-- `plg_webservices_mirasai`
-- `com_mirasai`
-- optional addon: `plg_mirasai_yootheme`
-- optional addon: `plg_mirasai_rereplacer`
+## What It Does
 
-The example addon in `pkg_mirasai/packages/plg_mirasai_example` is kept as a development reference and is not included in the installable package.
+Out of the box, MirasAI can:
 
-Related docs:
+- inspect the Joomla environment
+- list and read articles
+- create or update multilingual article translations
+- translate categories
+- audit multilingual gaps
+- inspect the file system
+- run guarded read-only database queries
+- expose optional tooling for YOOtheme layouts and templates
+- expose optional tooling for ReReplacer and Conditions
 
-- `docs/plugin-developer-guide.md`
-- `docs/rereplacer-agent-guide.md`
-- `docs/rereplacer-phase1-spec.md`
+## What It Does Not Do
 
-## MCP Surface
+MirasAI is deliberately narrow.
 
-MirasAI currently implements a narrow MCP subset:
+It does not:
+
+- implement the full MCP protocol
+- auto-translate content by itself
+- replace Joomla permissions with its own role system
+- make production write access safe by magic
+- bundle YOOtheme Pro or Regular Labs extensions
+
+Current MCP surface:
 
 - `initialize`
 - `tools/list`
 - `tools/call`
 - `ping`
 
-It does not currently implement:
+Not implemented:
 
-- MCP resources
-- MCP prompts
-- MCP sampling
-- MCP roots
+- resources
+- prompts
+- sampling
+- roots
 
-## Core Tools
+## Tool Model
 
-These tools are available without YOOtheme:
+The package works in three practical modes:
+
+### 1. Core only
+
+Available on plain Joomla sites:
 
 - `system/info`
 - `content/list`
@@ -81,9 +90,9 @@ These tools are available without YOOtheme:
 - `db/schema`
 - `elevation/status`
 
-## Optional YOOtheme Tools
+### 2. Core + YOOtheme addon
 
-When the YOOtheme addon is installed and available, MirasAI also exposes:
+When `plg_mirasai_yootheme` is enabled and YOOtheme is installed:
 
 - `theme/extract-to-modules`
 - `menu/migrate-theme-to-modules`
@@ -91,8 +100,11 @@ When the YOOtheme addon is installed and available, MirasAI also exposes:
 - `template/read`
 - `template/translate`
 
-When the ReReplacer addon is installed and available, MirasAI also exposes:
+### 3. Core + ReReplacer addon
 
+When `plg_mirasai_rereplacer` is enabled and ReReplacer is installed:
+
+- `rereplacer/capabilities`
 - `rereplacer/list-items`
 - `rereplacer/read-item`
 - `rereplacer/create-item-simple`
@@ -102,28 +114,37 @@ When the ReReplacer addon is installed and available, MirasAI also exposes:
 - `conditions/list`
 - `conditions/read`
 
-When ReReplacer PRO and Conditions are both available, MirasAI also exposes:
+When ReReplacer PRO and Conditions are both available:
 
 - `rereplacer/attach-condition`
 
-If the addon plugin is installed but YOOtheme is not present, the dashboard should show the addon as `Unavailable` while the core tools remain usable.
+## Package Contents
 
-## Security Model
+The installable package includes:
+
+- `lib_mirasai`
+- `plg_system_mirasai`
+- `plg_webservices_mirasai`
+- `com_mirasai`
+- `plg_mirasai_yootheme`
+- `plg_mirasai_rereplacer`
+
+Development reference only, not shipped in the package:
+
+- `pkg_mirasai/packages/plg_mirasai_example`
+
+## Safety Model
 
 ### Authentication
 
-MirasAI accepts Joomla API tokens, but only users authorized for `core.admin` are allowed to authenticate to MCP.
+MirasAI accepts Joomla API tokens, but only users authorized for `core.admin` can authenticate to MCP.
 
 Practical effect:
 
-- a valid token from a normal manager/editor is rejected
-- `Super Users` can access the MCP endpoint
+- editor or manager tokens are rejected
+- `Super User` tokens are accepted
 
-Relevant code:
-
-- `pkg_mirasai/packages/lib_mirasai/src/Mcp/JoomlaApiTokenAuthenticator.php`
-
-### Environment Gating
+### Environment gating
 
 Production is the default.
 
@@ -133,90 +154,119 @@ Staging must be configured explicitly through one of:
 - Joomla config: `mirasai_environment_override = staging`
 - environment variable: `MIRASAI_ENV=staging`
 
-Relevant code:
+### Elevation
 
-- `pkg_mirasai/packages/lib_mirasai/src/Sandbox/EnvironmentGuard.php`
-- `pkg_mirasai/packages/com_mirasai/mirasai.xml`
+Some destructive tools are gated behind elevation in production.
 
-### Sandbox Separation
+That split exists so simple addon writes like safe ReReplacer Phase 1 operations can remain usable, while high-risk file and PHP execution tools still require explicit production unlock.
 
-Writable sandbox files and auto-loaded PHP files are now separated:
+## What Elevation Is
+
+Elevation is the production approval layer for high-risk operations.
+
+In practice, it means:
+
+- the AI can still inspect the site normally
+- low-risk operations can remain available when explicitly designed that way
+- high-risk operations are blocked until a human enables them
+
+This is not a generic “admin mode”.
+It is a deliberate gate for actions that can damage the site, persist code, or change runtime behavior in ways that are hard to roll back.
+
+## When Elevation Matters
+
+Elevation matters mainly on production sites.
+
+Typical examples:
+
+- writing or editing files in the sandbox
+- deleting files
+- executing PHP
+- any future advanced addon flow marked as `requires_elevation`
+
+By contrast, read-heavy operations like `system/info`, `content/read`, `tools/list`, `db/schema`, or safe ReReplacer inspection flows do not exist to force unnecessary approvals.
+
+## Elevation Use Cases
+
+Good reasons to use elevation:
+
+- prototype a one-off PHP helper on staging-like infrastructure
+- inspect or patch a sandboxed file as part of debugging
+- build a temporary migration script
+- test a custom integration against a live Joomla runtime
+- run a controlled destructive operation after human review
+
+Bad reasons to use elevation:
+
+- because the AI “might know what it is doing”
+- to skip proper staging validation
+- to make production the default development environment
+- to run arbitrary PHP when a normal Joomla edit or safe tool already solves the task
+
+## Elevation Workflow
+
+The intended workflow is:
+
+1. inspect first
+2. decide if the task really needs a gated operation
+3. request elevation only for that step
+4. execute the risky action
+5. return to normal operation
+
+The goal is not convenience. The goal is controlled exceptions.
+
+### Sandbox separation
+
+Writable files and auto-loaded PHP are separated:
 
 - writable workspace: `media/mirasai/sandbox/`
-- boot auto-load path: `media/mirasai/autoload/`
+- boot autoload path: `media/mirasai/autoload/`
 
-Relevant code:
+## Quick Start
 
-- `pkg_mirasai/packages/lib_mirasai/src/Sandbox/SandboxLoader.php`
+This is the shortest path from zero to a working MCP connection.
 
-### SQL Guarding
+### 1. Build the package
 
-`db/query` is still observational only, but it is now stricter:
+```bash
+./docker/build-package.sh
+```
 
-- only single `SELECT` and `SHOW`
-- blocks patterns like `INTO OUTFILE`, `LOAD_FILE`, `SLEEP`, `BENCHMARK`, `FOR UPDATE`, `CALL`, `PREPARE`, and similar dangerous constructs
+Build output:
 
-Relevant code:
+- `.docker-build/pkg_mirasai-<version>.zip`
+- `.docker-build/pkg_mirasai-lab.zip`
+- `updates/pkg_mirasai.xml`
 
-- `pkg_mirasai/packages/lib_mirasai/src/Tool/DbQueryTool.php`
+### 2. Install it in Joomla
 
-## Admin Dashboard
+In Joomla admin:
 
-The admin dashboard now aims to describe the real runtime state instead of only extension install state.
-
-It includes:
-
-- global dashboard state: `ACTIVE`, `DEGRADED`, `INACTIVE`
-- registry health and warning count
-- configured languages, even when a published language has zero articles
-- core tools grouped separately from addon tools
-- addon/provider accordions with `Active`, `Unavailable`, or `Disabled`
-- client connection snippets for common MCP clients
-
-Relevant code:
-
-- `pkg_mirasai/packages/com_mirasai/admin/src/View/Dashboard/HtmlView.php`
-- `pkg_mirasai/packages/com_mirasai/admin/tmpl/dashboard/default.php`
-
-## Elevation Admin
-
-The elevation admin UI is meant for production-gated destructive operations.
-
-Recent changes:
-
-- controller actions now enforce ACL checks
-- history aggregation no longer performs a query per row
-- view strings are much more consistently internationalized
-
-Relevant code:
-
-- `pkg_mirasai/packages/com_mirasai/admin/src/Controller/ElevationController.php`
-- `pkg_mirasai/packages/com_mirasai/admin/src/View/Elevation/HtmlView.php`
-- `pkg_mirasai/packages/com_mirasai/admin/tmpl/elevation/default.php`
-- `pkg_mirasai/packages/com_mirasai/admin/tmpl/elevation/confirm.php`
-
-## Installation
-
-### Joomla Admin
-
-1. Build the package zip
-2. In Joomla admin, install the generated `pkg_mirasai-<version>.zip` or `pkg_mirasai-lab.zip`
-3. Enable:
+1. Go to `System > Install > Extensions`
+2. Install `pkg_mirasai-<version>.zip`
+3. Confirm these are enabled:
    - `plg_system_mirasai`
    - `plg_webservices_mirasai`
-4. If you use YOOtheme, also enable:
+4. If needed, enable optional addons:
    - `plg_mirasai_yootheme`
+   - `plg_mirasai_rereplacer`
 5. Open `Components > MirasAI`
 
-### Post-Install Checks
+### 3. Confirm the dashboard works
 
-1. Confirm the dashboard loads
-2. Confirm the MCP endpoint appears as:
-   - `/api/v1/mirasai/mcp`
-3. Create a Joomla API token for a `Super User`
-4. Test `tools/list`
+You should see:
 
-Example:
+- the MCP endpoint
+- Joomla and PHP versions
+- detected languages
+- grouped core tools
+- addon groups with `Active`, `Unavailable`, or `Disabled`
+
+### 4. Create a Joomla API token
+
+Create a Joomla API token for a `Super User`.
+
+### 5. Call the MCP endpoint
 
 ```bash
 curl -X POST https://your-site.example/api/v1/mirasai/mcp \
@@ -225,126 +275,145 @@ curl -X POST https://your-site.example/api/v1/mirasai/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'
 ```
 
-## Building The Installable Package
+If that returns a tool list, the system is live.
 
-Build the package with:
+## Zero-To-Working Checklist
 
-```bash
-./docker/build-package.sh
-```
+If you want the slightly less minimal version:
 
-Output:
-
-- `.docker-build/pkg_mirasai-<version>.zip`
-- `.docker-build/pkg_mirasai-lab.zip`
-- `updates/pkg_mirasai.xml`
-
-The build script assembles the component admin files, API files, library, and plugins into a Joomla package zip. It also regenerates the Joomla update feed with the correct release URL and `sha256`.
-
-Relevant file:
-
-- `docker/build-package.sh`
-
-## Joomla Auto-Updates
-
-Starting with `0.4.2`, the package manifest includes a Joomla update server:
-
-- `https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml`
-
-That feed points Joomla to the matching GitHub Release asset for the current package version.
-
-Practical effect:
-
-- sites that install `0.4.2` or newer can detect future package updates through Joomla's normal update checks
-- sites currently on `0.4.1` need one manual upgrade to `0.4.2` first, because `0.4.1` does not yet contain the update server definition
+1. Build the package zip.
+2. Install it in Joomla.
+3. Enable the core plugins.
+4. Open `Components > MirasAI`.
+5. Verify the endpoint is `/api/v1/mirasai/mcp`.
+6. Create a `Super User` API token.
+7. Run `tools/list`.
+8. If you use YOOtheme, enable the YOOtheme addon.
+9. If you use ReReplacer, enable the ReReplacer addon.
+10. If production writes are needed, use the elevation flow instead of assuming staging behavior.
 
 ## Multilingual Workflows
 
-### Articles And Builder Layouts
+### Articles and Builder layouts
 
-For `com_content` articles built with YOOtheme Pro, MirasAI keeps the Builder structure intact and only replaces translated text. It can also audit or repair internal links after translation.
+For `com_content` articles built with YOOtheme Pro, MirasAI keeps the Builder structure intact and only patches translated text.
 
-`content/translate` also supports a strict SEO mode via `require_translated_meta_if_source_has_meta`. When enabled, the tool refuses to create or overwrite a translation unless translated SEO metadata is provided for any source `metadesc` or `metakey` fields that are already filled.
+`content/translate` also supports strict SEO mode through `require_translated_meta_if_source_has_meta`.
 
-### Theme Areas
+### Theme areas
 
-For Builder-driven theme areas such as `footer`, use `theme/extract-to-modules` to move the area into per-language `mod_yootheme_builder` modules and replace the inline theme layout with a `module_position` wrapper.
+For theme areas such as `footer`, use `theme/extract-to-modules` to move Builder content into per-language Joomla modules.
 
-### Builder Templates
+### Builder templates
 
 YOOtheme Builder templates live in `#__extensions.custom_data.templates`.
 
-MirasAI treats them as multilingual-ready only when:
+If a template contains fixed text, the expected strategy is to duplicate it per language rather than trying to keep one shared static template.
 
-- no template exists for that assignment, or
-- the template is fully dynamic and shared across all languages
+### Header menus
 
-If a template contains fixed text, the current strategy is to duplicate it per language and assign the target language directly on the template.
+`menu/migrate-theme-to-modules` is the intended migration path for YOOtheme-driven single-language menus that need to become multilingual Joomla modules.
 
-### Header Menus
+## ReReplacer Model
 
-For Joomla sites that started as single-language YOOtheme installs, the expected multilingual end state is:
+The ReReplacer addon is intentionally conservative.
 
-- `config.menu.positions.navbar.menu = ""`
-- `config.menu.positions.dialog-mobile.menu = ""`
-- one published `mod_menu` per language at `navbar`
-- one published `mod_menu` per language at `dialog-mobile`
+Phase 1 is meant for:
 
-This workflow is handled by `menu/migrate-theme-to-modules`.
+- inspecting existing items
+- creating simple replacements
+- updating simple replacements
+- publishing or unpublishing items
+- reusing existing Conditions sets
 
-The tool:
+It is not meant to expose the full Regular Labs admin UI one-to-one.
 
-- supports `dry_run`
-- reuses compatible `mod_menu` modules when safe
-- allows `navbar` and `dialog-mobile` to resolve different Joomla `menutype` values when the site uses separate desktop/mobile menu trees
-- accepts `menutype_map` either as `language => menutype` or `position => { language => menutype }`
-- marks managed modules with `note = "mirasai:menu_position=<position>;menutype=<menutype>"`
-- clears the YOOtheme menu assignments only after all required per-language modules are resolved
+Related docs:
 
-## Reference Validation State
+- [docs/rereplacer-agent-guide.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-agent-guide.md)
+- [docs/rereplacer-phase1-spec.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-phase1-spec.md)
 
-The current package has been validated against a private staging/reference Joomla site for multilingual and dashboard behavior.
+## Admin UI
 
-Known good reference state:
+The MirasAI dashboard is the human-facing control surface.
 
-- core extensions enabled
-- MCP endpoint responding
-- dashboard loading with grouped tool accordions
-- `tools/list` returning the full registered tool set
+It shows:
+
+- overall runtime state
+- registry health
+- languages and article counts
+- grouped tools
+- addon status
+- client connection snippets
+
+The elevation admin is the separate control surface for production-gated writes.
+
+## Joomla Auto-Updates
+
+The package includes a Joomla update server:
+
+- `https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml`
+
+On install and update, MirasAI also migrates the stored Joomla update site URL to that feed.
+
+Practical effect:
+
+- future package updates can be discovered through normal Joomla update checks
+- the package, update feed, GitHub release, and release asset are expected to stay aligned
 
 ## Docker Integration Lab
 
-The repository includes a Docker-based integration lab intended to run canonically inside a Proxmox VM.
+The repo includes a Docker-based integration lab for reproducible bring-up and smoke testing.
 
-This lab is primarily for:
-
-- reproducible Joomla 5/6 + MySQL bring-up
-- installing YOOtheme Pro from a local package outside the repo
-- installing the current MirasAI workspace into a fresh Joomla instance
-- running minimal smoke checks against the MCP endpoint
-
-It is not meant to replace staging QA.
-
-### Files
+Main files:
 
 - `docker-compose.yml`
 - `.env.example`
 - `docker/build-package.sh`
 - `docker/bootstrap-lab.sh`
 - `docker/smoke.sh`
+- `docker/test-extract-to-modules.sh`
 
 ### Prerequisites
 
-- Docker with Compose available on the host VM
-- `curl`, `php`, and `zip`
-- a checked-out copy of this repository
-- a local YOOtheme Pro package path available on the VM, outside the repo
+- Docker with Compose
+- `curl`
+- `php`
+- `zip`
+- a checkout of this repo
+- a local YOOtheme Pro package outside the repo
 
-### Initial Setup
+### Initial setup
 
 1. Copy `.env.example` to `.env`
 2. Set secure MySQL and Joomla admin passwords
-3. Set `YOOTHEME_PACKAGE_PATH` to the absolute path of a local YOOtheme Pro zip or extracted folder
+3. Set `YOOTHEME_PACKAGE_PATH`
 4. Run `docker compose up -d`
 5. Run `./docker/bootstrap-lab.sh`
 6. Run `./docker/smoke.sh`
+
+## Developer Notes
+
+If you are extending MirasAI with a new addon, start here:
+
+- [docs/plugin-developer-guide.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/plugin-developer-guide.md)
+
+Canonical addon structure:
+
+- `mirasai_*.xml`
+- `provider.php`
+- `services/provider.php`
+- `src/`
+
+Providers register tools through `ToolProviderInterface`.
+
+## Current Positioning
+
+The mental model should stay simple:
+
+- MirasAI is not “AI inside Joomla”
+- it is a Joomla MCP runtime
+- the core package gives the AI a small, explicit tool surface
+- optional addons expand that surface only when the matching extension exists
+
+That is the product.
