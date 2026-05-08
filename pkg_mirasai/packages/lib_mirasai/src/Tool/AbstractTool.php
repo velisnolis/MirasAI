@@ -53,7 +53,7 @@ abstract class AbstractTool implements ToolInterface
         $tool = [
             'name'        => $this->getName(),
             'description' => $this->getDescription(),
-            'inputSchema' => $this->getInputSchema(),
+            'inputSchema' => $this->normalizeInputSchema($this->getInputSchema()),
         ];
 
         // Expose permission hints as MCP metadata so agents can ask for
@@ -66,6 +66,29 @@ abstract class AbstractTool implements ToolInterface
         }
 
         return $tool;
+    }
+
+    /**
+     * Normalize PHP arrays into JSON Schema shapes that strict MCP clients accept.
+     *
+     * PHP serializes an empty array as [] rather than {}, so a schema like
+     * ['type' => 'object', 'properties' => []] becomes invalid for clients
+     * that require properties to be a JSON object.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private function normalizeInputSchema(array $schema): array
+    {
+        if (($schema['type'] ?? null) === 'object') {
+            if (!array_key_exists('properties', $schema)) {
+                $schema['properties'] = new \stdClass();
+            } elseif (is_array($schema['properties']) && $schema['properties'] === []) {
+                $schema['properties'] = new \stdClass();
+            }
+        }
+
+        return $schema;
     }
 
     /**

@@ -330,8 +330,8 @@ It is not meant to expose the full Regular Labs admin UI one-to-one.
 
 Related docs:
 
-- [docs/rereplacer-agent-guide.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-agent-guide.md)
-- [docs/rereplacer-phase1-spec.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-phase1-spec.md)
+- [docs/rereplacer-agent-guide.md](/Users/alexmiras/Documents/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-agent-guide.md)
+- [docs/rereplacer-phase1-spec.md](/Users/alexmiras/Documents/Claude%20Code%20Default/MovaMiraAI/docs/rereplacer-phase1-spec.md)
 
 ## Admin UI
 
@@ -396,7 +396,7 @@ Main files:
 
 If you are extending MirasAI with a new addon, start here:
 
-- [docs/plugin-developer-guide.md](/Users/alexmiras/Desktop/Claude%20Code%20Default/MovaMiraAI/docs/plugin-developer-guide.md)
+- [docs/plugin-developer-guide.md](/Users/alexmiras/Documents/Claude%20Code%20Default/MovaMiraAI/docs/plugin-developer-guide.md)
 
 Canonical addon structure:
 

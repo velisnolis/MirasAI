@@ -10,6 +10,7 @@ use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
+use Mirasai\Library\Mcp\McpPathNormalizer;
 use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
@@ -129,17 +130,7 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
     private function normalizeApiPath(string $path): string
     {
-        $base = Uri::base(true);
-
-        if ($base && str_starts_with($path, $base)) {
-            $path = substr($path, strlen($base));
-        }
-
-        if (str_starts_with($path, '/index.php/')) {
-            $path = substr($path, strlen('/index.php'));
-        }
-
-        return $path;
+        return McpPathNormalizer::normalize($path, Uri::base(true));
     }
 
     private function authenticateToken(string $token): ?\Joomla\CMS\User\User

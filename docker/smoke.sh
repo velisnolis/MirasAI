@@ -57,6 +57,7 @@ assert_mcp_contains() {
 
 main() {
   require_cmd curl
+  require_cmd php
   load_env
 
   if [[ ! -f "$MCP_TOKEN_FILE" ]]; then
@@ -69,6 +70,9 @@ main() {
 
   assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}' 'system/info'
   assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"system/info","arguments":{}},"id":2}' 'yootheme'
+
+  php "${ROOT_DIR}/docker/test-mcp-schema.php"
+  php "${ROOT_DIR}/docker/test-mcp-path-normalizer.php"
 
   echo "Smoke checks passed."
 

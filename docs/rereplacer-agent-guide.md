@@ -25,7 +25,7 @@ Agents should not use it when the problem is better solved by:
 
 - [Regular Labs ReReplacer docs](https://docs.regularlabs.com/rereplacer)
 - [ReReplacer Conditions docs](https://docs.regularlabs.com/rereplacer/the-basics/conditions)
-- [MirasAI Plugin Developer Guide](/Users/alexmiras/Desktop/Claude Code Default/MovaMiraAI/docs/plugin-developer-guide.md)
+- [MirasAI Plugin Developer Guide](/Users/alexmiras/Documents/Claude Code Default/MovaMiraAI/docs/plugin-developer-guide.md)
 
 ## Mental Model
 

@@ -20,7 +20,7 @@ class RereplacerCapabilitiesTool extends AbstractRereplacerTool
     {
         return [
             'type' => 'object',
-            'properties' => [],
+            'properties' => new \stdClass(),
         ];
     }
 
