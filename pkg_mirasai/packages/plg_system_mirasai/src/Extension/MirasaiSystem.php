@@ -15,7 +15,10 @@ use Mirasai\Library\Tool\ToolRegistry;
 
 final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
 {
-    private const MCP_PATH = '/api/v1/mirasai/mcp';
+    private const API_MCP_PATH = '/v1/mirasai/mcp';
+    private const SITE_MCP_PATH = '/api/v1/mirasai/mcp';
+
+    private string $activeMcpPath = self::SITE_MCP_PATH;
 
     public static function getSubscribedEvents(): array
     {
@@ -34,23 +37,17 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
         // --- Safe mode clear via URL param (requires admin session + CSRF token) ---
         $this->handleSafeModeClear($app);
 
-        // --- MCP handling (API requests only) ---
-        if (!$app instanceof \Joomla\CMS\Application\ApiApplication) {
+        $requestPath = Uri::getInstance()->getPath();
+        $path = $this->normalizeApiPath($requestPath);
+        $expectedPath = $app instanceof \Joomla\CMS\Application\ApiApplication
+            ? self::API_MCP_PATH
+            : self::SITE_MCP_PATH;
+
+        if ($path !== $expectedPath) {
             return;
         }
 
-        $uri = Uri::getInstance();
-        $path = $uri->getPath();
-
-        // Normalize path — remove base path prefix
-        $base = Uri::base(true);
-        if ($base && str_starts_with($path, $base)) {
-            $path = substr($path, strlen($base));
-        }
-
-        if ($path !== self::MCP_PATH) {
-            return;
-        }
+        $this->activeMcpPath = $requestPath;
 
         // Authenticate via Joomla API token
         $token = $app->getInput()->server->get('HTTP_X_JOOMLA_TOKEN', '', 'STRING');
@@ -124,7 +121,7 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
             ob_end_clean();
         }
 
-        echo "event: endpoint\ndata: " . self::MCP_PATH . "\n\n";
+        echo "event: endpoint\ndata: " . $this->activeMcpPath . "\n\n";
         flush();
 
         $timeout = 300;
@@ -141,6 +138,21 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
         }
 
         $this->getApplication()->close();
+    }
+
+    private function normalizeApiPath(string $path): string
+    {
+        $base = Uri::base(true);
+
+        if ($base && str_starts_with($path, $base)) {
+            $path = substr($path, strlen($base));
+        }
+
+        if (str_starts_with($path, '/index.php/')) {
+            $path = substr($path, strlen('/index.php'));
+        }
+
+        return $path;
     }
 
     /**

@@ -16,6 +16,8 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 {
     private const MCP_PATH = '/v1/mirasai/mcp';
 
+    private string $activeMcpPath = self::MCP_PATH;
+
     public static function getSubscribedEvents(): array
     {
         return [
@@ -25,18 +27,14 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
     public function onBeforeApiRoute(BeforeApiRouteEvent $event): void
     {
-        $uri = Uri::getInstance();
-        $path = $uri->getPath();
-
-        $base = Uri::base(true);
-
-        if ($base && str_starts_with($path, $base)) {
-            $path = substr($path, strlen($base));
-        }
+        $requestPath = Uri::getInstance()->getPath();
+        $path = $this->normalizeApiPath($requestPath);
 
         if ($path !== self::MCP_PATH) {
             return;
         }
+
+        $this->activeMcpPath = $requestPath;
 
         // Authenticate via Joomla API token
         $app = $this->getApplication();
@@ -110,7 +108,7 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
             ob_end_clean();
         }
 
-        echo "event: endpoint\ndata: " . self::MCP_PATH . "\n\n";
+        echo "event: endpoint\ndata: " . $this->activeMcpPath . "\n\n";
         flush();
 
         $timeout = 300;
@@ -127,6 +125,21 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
         }
 
         $this->getApplication()->close();
+    }
+
+    private function normalizeApiPath(string $path): string
+    {
+        $base = Uri::base(true);
+
+        if ($base && str_starts_with($path, $base)) {
+            $path = substr($path, strlen($base));
+        }
+
+        if (str_starts_with($path, '/index.php/')) {
+            $path = substr($path, strlen('/index.php'));
+        }
+
+        return $path;
     }
 
     private function authenticateToken(string $token): ?\Joomla\CMS\User\User

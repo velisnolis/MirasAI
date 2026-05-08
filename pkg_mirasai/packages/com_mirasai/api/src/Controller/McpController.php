@@ -63,7 +63,7 @@ class McpController extends ApiController
             ob_end_clean();
         }
 
-        $endpoint = '/api/v1/mirasai/mcp';
+        $endpoint = \Joomla\CMS\Uri\Uri::getInstance()->getPath();
         echo "event: endpoint\ndata: {$endpoint}\n\n";
         flush();
 
