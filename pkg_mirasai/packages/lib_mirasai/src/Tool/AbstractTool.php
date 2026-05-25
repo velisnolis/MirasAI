@@ -70,6 +70,8 @@ abstract class AbstractTool implements ToolInterface
             $tool['metadata'] = $metadata;
         }
 
+        $tool['annotations'] = $this->buildMcpAnnotations();
+
         return $tool;
     }
 
@@ -124,6 +126,27 @@ abstract class AbstractTool implements ToolInterface
         }
 
         return $metadata;
+    }
+
+    /**
+     * Build MCP ToolAnnotations hints for clients that understand the standard
+     * annotations object. These are intentionally duplicated from metadata:
+     * metadata keeps MirasAI's four-level workflow model, annotations improves
+     * compatibility with MCP clients that only read the standard hint fields.
+     *
+     * @return array{title: string, readOnlyHint: bool, destructiveHint: bool, idempotentHint: bool, openWorldHint: bool}
+     */
+    protected function buildMcpAnnotations(): array
+    {
+        $permissions = self::normalizePermissions($this->getPermissions());
+
+        return [
+            'title' => $this->getName(),
+            'readOnlyHint' => $permissions['readonly'],
+            'destructiveHint' => $permissions['destructive'],
+            'idempotentHint' => $permissions['idempotent'],
+            'openWorldHint' => true,
+        ];
     }
 
     /**

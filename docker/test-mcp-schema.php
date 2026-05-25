@@ -90,11 +90,21 @@ expect('guarded write exposes risk level', $guardedDecoded['metadata']['risk_lev
 expect('guarded write exposes workflow hint', $guardedDecoded['metadata']['workflow_hint'] ?? null, 'dry_run_confirm_if_match');
 expect('guarded write omits legacy destructive hint', $guardedDecoded['metadata']['destructive'] ?? null, null);
 expect('guarded write does not require elevation', $guardedDecoded['metadata']['requires_elevation'] ?? null, null);
+expect('guarded write exposes annotations readOnlyHint', $guardedDecoded['annotations']['readOnlyHint'] ?? null, false);
+expect('guarded write exposes annotations destructiveHint', $guardedDecoded['annotations']['destructiveHint'] ?? null, true);
+expect('guarded write exposes annotations idempotentHint', $guardedDecoded['annotations']['idempotentHint'] ?? null, false);
+expect('guarded write exposes annotations openWorldHint', $guardedDecoded['annotations']['openWorldHint'] ?? null, true);
 
 $dangerousDecoded = (new DangerousExecTool())->toMcpTool();
 expect('dangerous exec exposes risk level', $dangerousDecoded['metadata']['risk_level'] ?? null, AbstractTool::RISK_DANGEROUS_EXEC);
 expect('dangerous exec exposes workflow hint', $dangerousDecoded['metadata']['workflow_hint'] ?? null, 'elevation_required');
 expect('dangerous exec requires elevation', $dangerousDecoded['metadata']['requires_elevation'] ?? null, true);
+expect('dangerous exec exposes annotations destructiveHint', $dangerousDecoded['annotations']['destructiveHint'] ?? null, true);
+
+$readOnlyDecoded = (new EmptyPropertiesTool())->toMcpTool();
+expect('read tool exposes annotations readOnlyHint', $readOnlyDecoded['annotations']['readOnlyHint'] ?? null, true);
+expect('read tool exposes annotations destructiveHint', $readOnlyDecoded['annotations']['destructiveHint'] ?? null, false);
+expect('read tool exposes annotations idempotentHint', $readOnlyDecoded['annotations']['idempotentHint'] ?? null, true);
 
 if ($failed > 0) {
     echo "\n{$failed} schema test(s) failed.\n";
