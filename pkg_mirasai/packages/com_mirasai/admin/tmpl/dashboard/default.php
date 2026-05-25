@@ -75,6 +75,22 @@ $smokeText = [
     'complete' => Text::_('COM_MIRASAI_SMOKE_COMPLETE'),
     'rawSummary' => Text::_('COM_MIRASAI_SMOKE_RAW_SUMMARY'),
 ];
+$onboardingText = [
+    'pending' => Text::_('COM_MIRASAI_ONBOARDING_STATE_PENDING'),
+    'running' => Text::_('COM_MIRASAI_ONBOARDING_STATE_RUNNING'),
+    'passed' => Text::_('COM_MIRASAI_ONBOARDING_STATE_PASSED'),
+    'failed' => Text::_('COM_MIRASAI_ONBOARDING_STATE_FAILED'),
+    'endpointOk' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_OK'),
+    'tokenOk' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOKEN_OK'),
+    'toolsOk' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOOLS_OK'),
+    'diagnoseOk' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_OK'),
+    'configOk' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_OK'),
+    'endpointWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING'),
+    'tokenWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING'),
+    'toolsWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING'),
+    'diagnoseWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING'),
+    'configWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING'),
+];
 ?>
 
 <style>
@@ -157,6 +173,38 @@ $smokeText = [
 }
 .mirasai-onboarding ol { margin-bottom: .5rem; padding-left: 1.25rem; }
 .mirasai-onboarding li { margin-bottom: .35rem; font-size: .875rem; }
+.mirasai-onboarding-checklist {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.mirasai-onboarding-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: .5rem;
+    margin-top: .75rem;
+}
+.mirasai-onboarding-step {
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    padding: .65rem .75rem;
+    min-height: 4.25rem;
+}
+.mirasai-onboarding-step-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: .25rem;
+    font-weight: 600;
+}
+.mirasai-onboarding-step-detail {
+    color: var(--mirasai-secondary);
+    font-size: .8rem;
+    overflow-wrap: anywhere;
+}
 .mirasai-client-config {
     background: #f8f9fa;
     border: 1px solid #dee2e6;
@@ -287,6 +335,84 @@ $smokeText = [
         </li>
     </ol>
 </div>
+
+<section class="mirasai-onboarding-checklist" aria-labelledby="mirasai-onboarding-checklist-title">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+        <div>
+            <h3 id="mirasai-onboarding-checklist-title" class="h5 mb-1"><?php echo Text::_('COM_MIRASAI_ONBOARDING_CHECKLIST_TITLE'); ?></h3>
+            <p class="text-muted small mb-0"><?php echo Text::_('COM_MIRASAI_ONBOARDING_CHECKLIST_DESC'); ?></p>
+        </div>
+    </div>
+    <div class="mirasai-onboarding-steps" aria-live="polite">
+        <?php
+        $onboardingSteps = [
+            [
+                'id' => 'core',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CORE',
+                'state' => $this->allCoreEnabled && $registryReady ? 'passed' : 'failed',
+                'detail' => $this->allCoreEnabled && $registryReady
+                    ? 'COM_MIRASAI_ONBOARDING_CHECK_CORE_OK'
+                    : 'COM_MIRASAI_ONBOARDING_CHECK_CORE_FAILED',
+            ],
+            [
+                'id' => 'endpoint',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT',
+                'state' => 'pending',
+                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING',
+            ],
+            [
+                'id' => 'token',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOKEN',
+                'state' => 'pending',
+                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING',
+            ],
+            [
+                'id' => 'tools',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOOLS',
+                'state' => 'pending',
+                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING',
+            ],
+            [
+                'id' => 'diagnose',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE',
+                'state' => 'pending',
+                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING',
+            ],
+            [
+                'id' => 'config',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CONFIG',
+                'state' => 'pending',
+                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING',
+            ],
+        ];
+        $onboardingBadgeClasses = [
+            'pending' => 'bg-secondary',
+            'running' => 'bg-info text-dark',
+            'passed' => 'bg-success',
+            'failed' => 'bg-danger',
+        ];
+        $onboardingStateLabels = [
+            'pending' => 'COM_MIRASAI_ONBOARDING_STATE_PENDING',
+            'running' => 'COM_MIRASAI_ONBOARDING_STATE_RUNNING',
+            'passed' => 'COM_MIRASAI_ONBOARDING_STATE_PASSED',
+            'failed' => 'COM_MIRASAI_ONBOARDING_STATE_FAILED',
+        ];
+        ?>
+        <?php foreach ($onboardingSteps as $step): ?>
+            <div class="mirasai-onboarding-step" data-mirasai-onboarding-step="<?php echo htmlspecialchars($step['id']); ?>">
+                <div class="mirasai-onboarding-step-title">
+                    <span><?php echo Text::_($step['label']); ?></span>
+                    <span class="badge <?php echo htmlspecialchars($onboardingBadgeClasses[$step['state']]); ?>" data-mirasai-onboarding-state>
+                        <?php echo Text::_($onboardingStateLabels[$step['state']]); ?>
+                    </span>
+                </div>
+                <div class="mirasai-onboarding-step-detail" data-mirasai-onboarding-detail>
+                    <?php echo Text::_($step['detail']); ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>
 
 <details class="mb-4">
     <summary class="fw-bold small text-muted" style="cursor: pointer;">
@@ -676,6 +802,7 @@ $clientConfigs = [
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var smokeText = <?php echo json_encode($smokeText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    var onboardingText = <?php echo json_encode($onboardingText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
     // ── Copy endpoint button ──
     var copyBtn = document.getElementById('mirasai-copy-btn');
@@ -715,6 +842,41 @@ document.addEventListener('DOMContentLoaded', function() {
             try { localStorage.setItem(storageKey, '1'); } catch(e) {}
             if (onboarding) { onboarding.style.display = 'none'; }
         });
+    }
+
+    function setOnboardingStep(name, state, detail) {
+        var step = document.querySelector('[data-mirasai-onboarding-step="' + name + '"]');
+        if (!step) {
+            return;
+        }
+
+        var badge = step.querySelector('[data-mirasai-onboarding-state]');
+        var detailEl = step.querySelector('[data-mirasai-onboarding-detail]');
+        var badgeClass = 'bg-secondary';
+
+        if (state === 'running') {
+            badgeClass = 'bg-info text-dark';
+        } else if (state === 'passed') {
+            badgeClass = 'bg-success';
+        } else if (state === 'failed') {
+            badgeClass = 'bg-danger';
+        }
+
+        if (badge) {
+            badge.className = 'badge ' + badgeClass;
+            badge.textContent = onboardingText[state] || state;
+        }
+
+        if (detailEl) {
+            detailEl.textContent = detail || '';
+        }
+    }
+
+    function resetOnboardingSmokeSteps() {
+        setOnboardingStep('endpoint', 'pending', onboardingText.endpointWaiting);
+        setOnboardingStep('token', 'pending', onboardingText.tokenWaiting);
+        setOnboardingStep('tools', 'pending', onboardingText.toolsWaiting);
+        setOnboardingStep('diagnose', 'pending', onboardingText.diagnoseWaiting);
     }
 
     var clientTabs = document.querySelectorAll('[data-mirasai-client-tab]');
@@ -762,6 +924,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             navigator.clipboard.writeText(panel.textContent || '').then(function() {
+                var activeTab = document.querySelector('[data-mirasai-client-tab="' + target + '"]');
+                var label = activeTab ? (activeTab.textContent || target).trim() : target;
+                setOnboardingStep('config', 'passed', onboardingText.configOk.replace('%s', label));
                 button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPIED')); ?>';
                 setTimeout(function() {
                     button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPY')); ?>';
@@ -831,6 +996,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ['endpoint', 'auth', 'tools', 'diagnose', 'annotations', 'structured'].forEach(function(name) {
             setSmokeCheck(name, 'pending', '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_WAITING')); ?>');
         });
+        resetOnboardingSmokeSteps();
 
         if (smokeResult) {
             smokeResult.classList.remove('active');
@@ -929,6 +1095,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!token) {
             setSmokeCheck('auth', 'failed', smokeText.tokenRequired);
+            setOnboardingStep('token', 'failed', smokeText.tokenRequired);
             smokeToken.focus();
             return;
         }
@@ -949,6 +1116,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             setSmokeCheck('endpoint', 'running', smokeText.running);
             setSmokeCheck('auth', 'running', smokeText.running);
+            setOnboardingStep('endpoint', 'running', smokeText.running);
+            setOnboardingStep('token', 'running', smokeText.running);
 
             var initialize = assertMcpResponse(await callMcp(endpoint, token, 'initialize', {
                 protocolVersion: '2024-11-05',
@@ -962,9 +1131,12 @@ document.addEventListener('DOMContentLoaded', function() {
             summary.initialized = !!initialize.serverInfo;
             setSmokeCheck('endpoint', 'passed', smokeText.endpointOk);
             setSmokeCheck('auth', 'passed', smokeText.authOk);
+            setOnboardingStep('endpoint', 'passed', onboardingText.endpointOk);
+            setOnboardingStep('token', 'passed', onboardingText.tokenOk);
 
             setSmokeCheck('tools', 'running', smokeText.running);
             setSmokeCheck('annotations', 'running', smokeText.running);
+            setOnboardingStep('tools', 'running', smokeText.running);
             var toolsList = assertMcpResponse(await callMcp(endpoint, token, 'tools/list', {surface: 'essential'}, 2));
             var tools = Array.isArray(toolsList.tools) ? toolsList.tools : [];
             summary.essential_tool_count = tools.length;
@@ -974,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             setSmokeCheck('tools', 'passed', smokeText.toolsOk.replace('%d', String(tools.length)));
+            setOnboardingStep('tools', 'passed', onboardingText.toolsOk.replace('%d', String(tools.length)));
 
             var annotatedTool = tools.find(function(tool) {
                 return tool && tool.annotations && typeof tool.annotations.readOnlyHint === 'boolean';
@@ -988,6 +1161,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             setSmokeCheck('diagnose', 'running', smokeText.running);
             setSmokeCheck('structured', 'running', smokeText.running);
+            setOnboardingStep('diagnose', 'running', smokeText.running);
             var diagnoseCall = assertMcpResponse(await callMcp(endpoint, token, 'tools/call', {
                 name: 'system/diagnose',
                 arguments: {}
@@ -1012,6 +1186,7 @@ document.addEventListener('DOMContentLoaded', function() {
             summary.mirasai_version = diagnosePayload ? diagnosePayload.mirasai_version : null;
 
             setSmokeCheck('diagnose', 'passed', smokeText.diagnoseOk.replace('%s', summary.diagnose_status || 'ok'));
+            setOnboardingStep('diagnose', 'passed', onboardingText.diagnoseOk.replace('%s', summary.diagnose_status || 'ok'));
 
             if (summary.structuredContent) {
                 setSmokeCheck('structured', 'passed', smokeText.structuredOk);
@@ -1027,6 +1202,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 var check = document.querySelector('[data-mirasai-smoke-check="' + name + '"] [data-mirasai-smoke-state]');
                 if (check && check.textContent === smokeText.running) {
                     setSmokeCheck(name, 'failed', message);
+                }
+            });
+
+            ['endpoint', 'token', 'tools', 'diagnose'].forEach(function(name) {
+                var step = document.querySelector('[data-mirasai-onboarding-step="' + name + '"] [data-mirasai-onboarding-state]');
+                if (step && step.textContent === onboardingText.running) {
+                    setOnboardingStep(name, 'failed', message);
                 }
             });
 
@@ -1051,6 +1233,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             updateTokenizedSnippets();
             resetSmokeChecks();
+            setOnboardingStep('config', 'pending', onboardingText.configWaiting);
         });
     }
 });
