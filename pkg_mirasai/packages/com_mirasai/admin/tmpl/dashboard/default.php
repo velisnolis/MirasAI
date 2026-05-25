@@ -525,45 +525,6 @@ $clientConfigs = [
 ];
 ?>
 
-<details id="mirasai-client-config" class="mirasai-client-config mirasai-config-toggle mb-4" open>
-    <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?></summary>
-    <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_DESC'); ?></p>
-    <div class="form-check form-switch mb-2">
-        <input class="form-check-input" type="checkbox" role="switch" id="mirasai-client-use-token">
-        <label class="form-check-label small" for="mirasai-client-use-token">
-            <?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN'); ?>
-        </label>
-        <div class="text-muted small"><?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN_HELP'); ?></div>
-    </div>
-    <div class="mirasai-client-tabs" role="tablist" aria-label="<?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?>">
-        <?php $clientIndex = 0; ?>
-        <?php foreach ($clientConfigs as $clientId => $clientConfig): ?>
-            <button
-                type="button"
-                class="btn btn-sm btn-outline-dark <?php echo $clientIndex === 0 ? 'active' : ''; ?>"
-                data-mirasai-client-tab="<?php echo htmlspecialchars($clientId); ?>"
-            >
-                <?php echo htmlspecialchars($clientConfig['label']); ?>
-            </button>
-            <?php $clientIndex++; ?>
-        <?php endforeach; ?>
-    </div>
-    <?php $clientIndex = 0; ?>
-    <?php foreach ($clientConfigs as $clientId => $clientConfig): ?>
-        <div class="mirasai-config-panel <?php echo $clientIndex === 0 ? 'active' : ''; ?>" data-mirasai-client-panel="<?php echo htmlspecialchars($clientId); ?>">
-            <div class="mirasai-config-toolbar">
-                <span class="text-muted small"><?php echo htmlspecialchars($clientConfig['helper']); ?></span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-mirasai-copy-config="<?php echo htmlspecialchars($clientId); ?>">
-                    <?php echo Text::_('COM_MIRASAI_COPY'); ?>
-                </button>
-            </div>
-            <pre class="bg-dark text-light p-3 rounded"><code data-mirasai-token-template><?php echo htmlspecialchars($clientConfig['code']); ?></code></pre>
-        </div>
-        <?php $clientIndex++; ?>
-    <?php endforeach; ?>
-    <p class="text-muted small mt-2 mb-0"><?php echo Text::_('COM_MIRASAI_CLIENT_NOTE'); ?></p>
-</details>
-
 <details id="mirasai-smoke-test" class="mirasai-smoke mirasai-config-toggle mb-4" open data-mirasai-smoke-endpoint="<?php echo htmlspecialchars($endpoint); ?>">
     <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_SMOKE_TITLE'); ?></summary>
     <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_SMOKE_DESC'); ?></p>
@@ -612,6 +573,45 @@ $clientConfigs = [
         <strong class="small"><?php echo Text::_('COM_MIRASAI_SMOKE_RAW_SUMMARY'); ?></strong>
         <pre class="bg-light p-3 rounded"><code></code></pre>
     </div>
+</details>
+
+<details id="mirasai-client-config" class="mirasai-client-config mirasai-config-toggle mb-4" open>
+    <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?></summary>
+    <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_DESC'); ?></p>
+    <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" role="switch" id="mirasai-client-use-token">
+        <label class="form-check-label small" for="mirasai-client-use-token">
+            <?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN'); ?>
+        </label>
+        <div class="text-muted small"><?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN_HELP'); ?></div>
+    </div>
+    <div class="mirasai-client-tabs" role="tablist" aria-label="<?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?>">
+        <?php $clientIndex = 0; ?>
+        <?php foreach ($clientConfigs as $clientId => $clientConfig): ?>
+            <button
+                type="button"
+                class="btn btn-sm btn-outline-dark <?php echo $clientIndex === 0 ? 'active' : ''; ?>"
+                data-mirasai-client-tab="<?php echo htmlspecialchars($clientId); ?>"
+            >
+                <?php echo htmlspecialchars($clientConfig['label']); ?>
+            </button>
+            <?php $clientIndex++; ?>
+        <?php endforeach; ?>
+    </div>
+    <?php $clientIndex = 0; ?>
+    <?php foreach ($clientConfigs as $clientId => $clientConfig): ?>
+        <div class="mirasai-config-panel <?php echo $clientIndex === 0 ? 'active' : ''; ?>" data-mirasai-client-panel="<?php echo htmlspecialchars($clientId); ?>">
+            <div class="mirasai-config-toolbar">
+                <span class="text-muted small"><?php echo htmlspecialchars($clientConfig['helper']); ?></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-mirasai-copy-config="<?php echo htmlspecialchars($clientId); ?>">
+                    <?php echo Text::_('COM_MIRASAI_COPY'); ?>
+                </button>
+            </div>
+            <pre class="bg-dark text-light p-3 rounded"><code data-mirasai-token-template><?php echo htmlspecialchars($clientConfig['code']); ?></code></pre>
+        </div>
+        <?php $clientIndex++; ?>
+    <?php endforeach; ?>
+    <p class="text-muted small mt-2 mb-0"><?php echo Text::_('COM_MIRASAI_CLIENT_NOTE'); ?></p>
 </details>
 
 <details class="mirasai-config-toggle mb-4">
