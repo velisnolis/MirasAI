@@ -226,9 +226,19 @@ $coreOnboardingDetail = empty($coreMissingItems)
 }
 .mirasai-onboarding-steps {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: .5rem;
     margin-top: .75rem;
+}
+@media (max-width: 991.98px) {
+    .mirasai-onboarding-steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 575.98px) {
+    .mirasai-onboarding-steps {
+        grid-template-columns: 1fr;
+    }
 }
 .mirasai-onboarding-step {
     border: 1px solid #dee2e6;
