@@ -10,6 +10,8 @@ use Mirasai\Library\Tool\YooThemeHelper;
 
 class TemplateElementSourceReadTool extends AbstractTool
 {
+    use TemplateElementSourceSupportTrait;
+
     private YooThemeHelper $yooHelper;
 
     public function __construct()
@@ -35,7 +37,15 @@ class TemplateElementSourceReadTool extends AbstractTool
             'properties' => [
                 'key' => [
                     'type' => 'string',
-                    'description' => 'Template storage key as returned by template/list.',
+                    'description' => 'Template storage key as returned by template/list. Use one of key, article_id, or module_id.',
+                ],
+                'article_id' => [
+                    'type' => 'integer',
+                    'description' => 'Optional Joomla article ID with a YOOtheme Builder layout in fulltext. Use one of key, article_id, or module_id.',
+                ],
+                'module_id' => [
+                    'type' => 'integer',
+                    'description' => 'Optional YOOtheme Builder module ID with a layout in #__modules.content. Use one of key, article_id, or module_id.',
                 ],
                 'path' => [
                     'type' => 'string',
@@ -46,7 +56,7 @@ class TemplateElementSourceReadTool extends AbstractTool
                     'description' => 'Include the raw source binding payload. Defaults to false.',
                 ],
             ],
-            'required' => ['key', 'path'],
+            'required' => ['path'],
         ];
     }
 
@@ -61,11 +71,26 @@ class TemplateElementSourceReadTool extends AbstractTool
     public function handle(array $arguments): array
     {
         $key = trim((string) ($arguments['key'] ?? ''));
+        $articleId = (int) ($arguments['article_id'] ?? 0);
+        $moduleId = (int) ($arguments['module_id'] ?? 0);
         $path = trim((string) ($arguments['path'] ?? ''));
         $includeRaw = !empty($arguments['include_raw']);
+        $selectorCount = ($key !== '' ? 1 : 0) + ($articleId > 0 ? 1 : 0) + ($moduleId > 0 ? 1 : 0);
 
-        if ($key === '' || $path === '') {
-            return ['error' => 'key and path are required.'];
+        if ($selectorCount === 0 || $path === '') {
+            return ['error' => 'key, article_id, or module_id, and path are required.'];
+        }
+
+        if ($selectorCount > 1) {
+            return ['error' => 'Provide only one of key, article_id, or module_id.', 'code' => 'ambiguous_storage'];
+        }
+
+        if ($articleId > 0) {
+            return $this->handleArticle($articleId, $path, $includeRaw);
+        }
+
+        if ($moduleId > 0) {
+            return $this->handleModule($moduleId, $path, $includeRaw);
         }
 
         $templates = $this->yooHelper->loadTemplates();
@@ -94,6 +119,7 @@ class TemplateElementSourceReadTool extends AbstractTool
         }
 
         return [
+            'storage' => 'template',
             'key' => $key,
             'name' => $this->yooHelper->getTemplateName($template),
             'etag' => $this->yooHelper->buildTemplateEtag($template),
@@ -103,122 +129,92 @@ class TemplateElementSourceReadTool extends AbstractTool
     }
 
     /**
-     * @param array<string, mixed> $node
      * @return array<string, mixed>
      */
-    private function summarizeBinding(array $node): array
+    private function handleArticle(int $articleId, string $path, bool $includeRaw): array
     {
-        $carrier = $this->resolveBindingCarrier($node);
+        $article = $this->yooHelper->loadArticle($articleId);
 
-        if ($carrier === null) {
-            return [
-                'has_binding' => false,
-                'canonical_location' => null,
-                'source_name' => null,
-                'query_field' => null,
-                'field_mappings' => [],
-                'mapping_count' => 0,
-                'raw_source' => null,
-            ];
+        if ($article === null) {
+            return ['error' => "Article {$articleId} not found.", 'code' => 'article_not_found'];
         }
 
-        [$location, $source] = $carrier;
-        $query = is_array($source['query'] ?? null) ? $source['query'] : [];
-        $queryField = is_array($query['field'] ?? null) ? $query['field'] : [];
-        $props = is_array($source['props'] ?? null) ? $source['props'] : [];
-        $mappings = [];
+        $layout = $this->yooHelper->getArticleLayout($article);
 
-        foreach ($props as $propName => $mapping) {
-            if (!is_array($mapping)) {
-                continue;
-            }
+        if ($layout === null) {
+            return ['error' => "Article {$articleId} has no YOOtheme layout in fulltext.", 'code' => 'article_layout_missing'];
+        }
 
-            $fieldName = is_string($mapping['name'] ?? null) ? trim((string) $mapping['name']) : '';
+        $result = (new YooThemeElementNavigator())->findElement($layout, $path);
 
-            if ($fieldName === '') {
-                continue;
-            }
+        if ($result === null) {
+            return ['error' => "Element path {$path} not found in article {$articleId}.", 'code' => 'element_not_found'];
+        }
 
-            $mappings[] = [
-                'prop' => (string) $propName,
-                'field' => $fieldName,
-                'arguments' => $this->sanitizeValue($mapping['arguments'] ?? []),
-                'directives' => $this->sanitizeValue($mapping['directives'] ?? []),
-            ];
+        $binding = $this->summarizeBinding($result['element']);
+
+        if (!$includeRaw) {
+            unset($binding['raw_source']);
         }
 
         return [
-            'has_binding' => true,
-            'canonical_location' => $location,
-            'source_name' => is_string($query['name'] ?? null) ? (string) $query['name'] : null,
-            'query_field' => is_string($queryField['name'] ?? null) ? (string) $queryField['name'] : null,
-            'query_arguments' => $this->sanitizeValue($queryField['arguments'] ?? []),
-            'query_directives' => $this->sanitizeValue($queryField['directives'] ?? []),
-            'field_mappings' => $mappings,
-            'mapping_count' => count($mappings),
-            'raw_source' => $this->sanitizeValue($source),
+            'storage' => 'article',
+            'article_id' => $articleId,
+            'article_title' => (string) ($article['title'] ?? ''),
+            'article_state' => (int) ($article['state'] ?? 0),
+            'etag' => $this->yooHelper->buildArticleLayoutEtag($article),
+            'metadata' => $result['metadata'],
+            'binding' => $binding,
         ];
     }
 
     /**
-     * @param array<string, mixed> $node
-     * @return array{0: string, 1: array<string, mixed>}|null
+     * @return array<string, mixed>
      */
-    private function resolveBindingCarrier(array $node): ?array
+    private function handleModule(int $moduleId, string $path, bool $includeRaw): array
     {
-        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+        $module = $this->yooHelper->loadModule($moduleId);
 
-        if (is_array($props['source'] ?? null)) {
-            return ['props.source', $props['source']];
+        if ($module === null) {
+            return ['error' => "Module {$moduleId} not found.", 'code' => 'module_not_found'];
         }
 
-        if (is_string($props['source'] ?? null) && trim((string) $props['source']) !== '') {
-            return ['props.source', ['query' => ['name' => trim((string) $props['source'])]]];
+        if ((string) ($module['module'] ?? '') !== 'mod_yootheme_builder') {
+            return [
+                'error' => "Module {$moduleId} is not a YOOtheme Builder module.",
+                'code' => 'module_not_yootheme_builder',
+                'module_type' => (string) ($module['module'] ?? ''),
+            ];
         }
 
-        if (is_array($node['source'] ?? null)) {
-            return ['source', $node['source']];
+        $layout = $this->yooHelper->getModuleLayout($module);
+
+        if ($layout === null) {
+            return ['error' => "Module {$moduleId} has no YOOtheme layout in content.", 'code' => 'module_layout_missing'];
         }
 
-        if (is_string($node['source'] ?? null) && trim((string) $node['source']) !== '') {
-            return ['source', ['query' => ['name' => trim((string) $node['source'])]]];
+        $result = (new YooThemeElementNavigator())->findElement($layout, $path);
+
+        if ($result === null) {
+            return ['error' => "Element path {$path} not found in module {$moduleId}.", 'code' => 'element_not_found'];
         }
 
-        if (is_array($node['source_extended'] ?? null)) {
-            return ['source_extended', $node['source_extended']];
+        $binding = $this->summarizeBinding($result['element']);
+
+        if (!$includeRaw) {
+            unset($binding['raw_source']);
         }
 
-        return null;
+        return [
+            'storage' => 'module',
+            'module_id' => $moduleId,
+            'module_title' => (string) ($module['title'] ?? ''),
+            'module_type' => (string) ($module['module'] ?? ''),
+            'module_published' => (int) ($module['published'] ?? 0),
+            'etag' => $this->yooHelper->buildModuleLayoutEtag($module),
+            'metadata' => $result['metadata'],
+            'binding' => $binding,
+        ];
     }
 
-    private function sanitizeValue(mixed $value, int $depth = 0): mixed
-    {
-        if ($depth > 6) {
-            return '[max_depth]';
-        }
-
-        if (is_scalar($value) || $value === null) {
-            return $value;
-        }
-
-        if ($value instanceof \Closure) {
-            return '[closure]';
-        }
-
-        if (is_object($value)) {
-            return '[object ' . $value::class . ']';
-        }
-
-        if (!is_array($value)) {
-            return '[' . gettype($value) . ']';
-        }
-
-        $sanitized = [];
-
-        foreach ($value as $key => $item) {
-            $sanitized[$key] = $this->sanitizeValue($item, $depth + 1);
-        }
-
-        return $sanitized;
-    }
 }

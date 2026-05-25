@@ -147,6 +147,121 @@ final class YooThemeElementNavigator
     }
 
     /**
+     * Set the canonical Dynamic Source binding for one element at props.source.
+     *
+     * Compatibility carriers source/source_extended are removed so future reads
+     * have one clear source of truth.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $source
+     * @return array{layout: array<string, mixed>, metadata: array<string, mixed>, element: array<string, mixed>}|array{error: string, code: string}
+     */
+    public function setElementSource(array $layout, string $path, array $source): array
+    {
+        $path = trim($path);
+
+        if ($path === '') {
+            return ['error' => 'path is required.', 'code' => 'invalid_path'];
+        }
+
+        $updated = $layout;
+        $ok = $this->mutateElementInPlace(
+            $updated,
+            $path,
+            static function (array &$node) use ($source): void {
+                if (!isset($node['props']) || !is_array($node['props'])) {
+                    $node['props'] = [];
+                }
+
+                unset($node['source'], $node['source_extended']);
+                $node['props']['source'] = $source;
+            },
+        );
+
+        if (!$ok) {
+            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+        }
+
+        $found = $this->findElement($updated, $path);
+
+        if ($found === null) {
+            return ['error' => 'Source was set but the element could not be resolved.', 'code' => 'element_resolution_failed'];
+        }
+
+        return [
+            'layout' => $updated,
+            'metadata' => $found['metadata'],
+            'element' => $found['element'],
+        ];
+    }
+
+    /**
+     * Delete Dynamic Source binding carriers from one element.
+     *
+     * @param array<string, mixed> $layout
+     * @param list<string> $locations
+     * @return array{layout: array<string, mixed>, metadata: array<string, mixed>, element: array<string, mixed>, removed_locations: list<string>}|array{error: string, code: string}
+     */
+    public function deleteElementSource(array $layout, string $path, array $locations = ['props.source', 'source', 'source_extended']): array
+    {
+        $path = trim($path);
+
+        if ($path === '') {
+            return ['error' => 'path is required.', 'code' => 'invalid_path'];
+        }
+
+        $allowed = ['props.source', 'source', 'source_extended'];
+        $locations = array_values(array_intersect($locations, $allowed));
+
+        if ($locations === []) {
+            return ['error' => 'locations must include at least one known binding location.', 'code' => 'invalid_locations'];
+        }
+
+        $removed = [];
+        $updated = $layout;
+        $ok = $this->mutateElementInPlace(
+            $updated,
+            $path,
+            static function (array &$node) use ($locations, &$removed): void {
+                if (in_array('props.source', $locations, true)
+                    && is_array($node['props'] ?? null)
+                    && array_key_exists('source', $node['props'])
+                ) {
+                    unset($node['props']['source']);
+                    $removed[] = 'props.source';
+                }
+
+                if (in_array('source', $locations, true) && array_key_exists('source', $node)) {
+                    unset($node['source']);
+                    $removed[] = 'source';
+                }
+
+                if (in_array('source_extended', $locations, true) && array_key_exists('source_extended', $node)) {
+                    unset($node['source_extended']);
+                    $removed[] = 'source_extended';
+                }
+            },
+        );
+
+        if (!$ok) {
+            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+        }
+
+        $found = $this->findElement($updated, $path);
+
+        if ($found === null) {
+            return ['error' => 'Source was deleted but the element could not be resolved.', 'code' => 'element_resolution_failed'];
+        }
+
+        return [
+            'layout' => $updated,
+            'metadata' => $found['metadata'],
+            'element' => $found['element'],
+            'removed_locations' => array_values(array_unique($removed)),
+        ];
+    }
+
+    /**
      * Add a new child element under a parent element.
      *
      * @param array<string, mixed> $layout
@@ -602,6 +717,62 @@ final class YooThemeElementNavigator
         }
 
         return $this->removeBySegments($node['children'][$index], $segments);
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @param callable(array<string, mixed>): void $mutator
+     */
+    private function mutateElementInPlace(array &$layout, string $path, callable $mutator): bool
+    {
+        if ($path === 'root') {
+            $mutator($layout);
+
+            return true;
+        }
+
+        $segments = explode('>', $path);
+        array_shift($segments);
+
+        return $this->mutateBySegments($layout, $segments, $mutator);
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param list<string> $segments
+     * @param callable(array<string, mixed>): void $mutator
+     */
+    private function mutateBySegments(array &$node, array $segments, callable $mutator): bool
+    {
+        if ($segments === []) {
+            $mutator($node);
+
+            return true;
+        }
+
+        $segment = array_shift($segments);
+
+        if (!is_string($segment)) {
+            return false;
+        }
+
+        $parsed = $this->parseSegment($segment);
+
+        if ($parsed === null) {
+            return false;
+        }
+
+        [$expectedType, $index] = $parsed;
+
+        if (!isset($node['children']) || !is_array($node['children']) || !is_array($node['children'][$index] ?? null)) {
+            return false;
+        }
+
+        if ($this->nodeType($node['children'][$index]) !== $expectedType) {
+            return false;
+        }
+
+        return $this->mutateBySegments($node['children'][$index], $segments, $mutator);
     }
 
     /**

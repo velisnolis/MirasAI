@@ -215,6 +215,9 @@ main() {
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-list")' 'template/element-list is registered'
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-read")' 'template/element-read is registered'
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-source-read")' 'template/element-source-read is registered'
+  assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-source-preview")' 'template/element-source-preview is registered'
+  assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-source-set")' 'template/element-source-set is registered'
+  assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-source-delete")' 'template/element-source-delete is registered'
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-add")' 'template/element-add is registered'
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-update-props")' 'template/element-update-props is registered'
   assert_jq "$tools_response" '.result.tools[]? | select(.name == "template/element-move")' 'template/element-move is registered'
@@ -255,14 +258,21 @@ main() {
   assert_jq "$element_types_result" '.types[]? | select(.type == "text" and (.sample_paths | length >= 1))' 'template/element-types returns text sample paths'
 
   local element_schema_response element_schema_result
-  element_schema_response="$(mcp_call 'template/element-schema' '{"type":"headline","fields":["name","type","source","ref","options"]}')"
+  element_schema_response="$(mcp_call 'template/element-schema' '{"type":"headline","fields":["name","type","source","ref","resolved","options","value_schema"]}')"
   element_schema_result="$(extract_result "$element_schema_response")"
-  assert_jq "$element_schema_result" '.type == "headline" and .field_count > 0 and (.source_fields[]? | select(.name == "content" and .source == true))' 'template/element-schema returns runtime source-capable fields'
+  assert_jq "$element_schema_result" '.type == "headline" and .field_count > 0 and .refs_resolved == true and (.source_fields[]? | select(.name == "content" and .source == true))' 'template/element-schema returns runtime source-capable fields'
+  assert_jq "$element_schema_result" '.props_schema.properties.content.type and .element_schema.properties.props.properties.content.type' 'template/element-schema returns derived props schema'
+  assert_jq "$element_schema_result" '.fields[]? | select(.name == "link" and .ref == "builder.link" and .resolved == true and .source == true and .value_schema.type)' 'template/element-schema resolves builder field references'
 
   local source_types_response source_types_result
   source_types_response="$(mcp_call 'template/source-types' '{"type":"Article","include_fields":true}')"
   source_types_result="$(extract_result "$source_types_response")"
   assert_jq "$source_types_result" '((.mode == "live_introspection") and (.types[]? | select(.name == "Article" and .field_count > 0))) or ((.mode == "static_package_scan") and (.packages[]? | select(.name == "builder-joomla-source")))' 'template/source-types discovers YOOtheme source providers'
+
+  local source_schema_response source_schema_result
+  source_schema_response="$(mcp_call 'template/source-types' '{"source_name":"article","include_fields":true}')"
+  source_schema_result="$(extract_result "$source_schema_response")"
+  assert_jq "$source_schema_result" '((.mode == "live_introspection") and .binding_hints.query.name == "article" and .binding_hints.mappable_type == "Article" and (.binding_hints.mappable_fields[]? | select(.name == "title"))) or (.mode == "static_package_scan")' 'template/source-types resolves source_name binding schema'
 
   local element_list_response element_list_result headline_path text_source_path element_read_response element_read_result element_source_response element_source_result
   element_list_response="$(mcp_call 'template/element-list' "$(jq -cn --arg key "$TEMPLATE_KEY" '{key:$key,fields:["path","type","label","has_source_binding"]}')")"
@@ -285,6 +295,110 @@ main() {
   element_source_response="$(mcp_call 'template/element-source-read' "$(jq -cn --arg key "$TEMPLATE_KEY" --arg path "$text_source_path" '{key:$key,path:$path}')")"
   element_source_result="$(extract_result "$element_source_response")"
   assert_jq "$element_source_result" '.binding.has_binding == true and .binding.canonical_location == "props.source" and .binding.source_name == "Article" and (.binding.field_mappings[]? | select(.prop == "content" and .field == "title")) and (.binding.raw_source | not)' 'template/element-source-read summarizes props.source bindings'
+
+  local source_preview_args source_preview_response source_preview_result unconfirmed_source_set_args unconfirmed_source_set_response unconfirmed_source_set_result dry_run_source_set_args dry_run_source_set_response dry_run_source_set_result source_set_args source_set_response source_set_result source_set_etag source_set_read_response source_set_read_result dry_run_source_delete_args dry_run_source_delete_response dry_run_source_delete_result source_delete_args source_delete_response source_delete_result source_deleted_etag
+  source_preview_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      source_name:"Article",
+      query_field:"article",
+      query_arguments:{id:"1"},
+      field_mappings:{content:"introtext"}
+    }')"
+  source_preview_response="$(mcp_call 'template/element-source-preview' "$source_preview_args")"
+  source_preview_result="$(extract_result "$source_preview_response")"
+  assert_jq "$source_preview_result" '.dry_run == true and .action == "preview" and .etag_matches == true and (.after.field_mappings[]? | select(.prop == "content" and .field == "introtext"))' 'template/element-source-preview previews shorthand source binding'
+
+  unconfirmed_source_set_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      source_name:"Article",
+      field_mappings:{content:"introtext"}
+    }')"
+  unconfirmed_source_set_response="$(mcp_call 'template/element-source-set' "$unconfirmed_source_set_args")"
+  unconfirmed_source_set_result="$(extract_result "$unconfirmed_source_set_response")"
+  assert_jq "$unconfirmed_source_set_result" '.code == "guarded_write_confirmation_required"' 'template/element-source-set requires explicit confirmation'
+
+  dry_run_source_set_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      source_name:"Article",
+      query_field:"article",
+      query_arguments:{id:"1"},
+      field_mappings:{content:"introtext"},
+      dry_run:true
+    }')"
+  dry_run_source_set_response="$(mcp_call 'template/element-source-set' "$dry_run_source_set_args")"
+  dry_run_source_set_result="$(extract_result "$dry_run_source_set_response")"
+  assert_jq "$dry_run_source_set_result" --arg etag "$etag" '.dry_run == true and .old_etag == $etag and .cache.reason == "dry_run" and (.after.field_mappings[]? | select(.prop == "content" and .field == "introtext"))' 'template/element-source-set dry_run previews without writing'
+
+  source_set_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      source_name:"Article",
+      query_field:"article",
+      query_arguments:{id:"1"},
+      field_mappings:{content:"introtext"},
+      confirm_guarded_write:true
+    }')"
+  source_set_response="$(mcp_call 'template/element-source-set' "$source_set_args")"
+  source_set_result="$(extract_result "$source_set_response")"
+  assert_jq "$source_set_result" --arg etag "$etag" '.old_etag == $etag and (.new_etag | type == "string") and .new_etag != $etag and (.cache.groups | index("com_templates")) and (.after.field_mappings[]? | select(.prop == "content" and .field == "introtext"))' 'template/element-source-set writes source binding with matching if_match'
+  source_set_etag="$(printf '%s' "$source_set_result" | jq -r '.new_etag')"
+
+  source_set_read_response="$(mcp_call 'template/element-source-read' "$(jq -cn --arg key "$TEMPLATE_KEY" --arg path "$text_source_path" '{key:$key,path:$path}')")"
+  source_set_read_result="$(extract_result "$source_set_read_response")"
+  assert_jq "$source_set_read_result" '.binding.has_binding == true and (.binding.field_mappings[]? | select(.prop == "content" and .field == "introtext"))' 'template/element-source-read sees updated source binding'
+
+  dry_run_source_delete_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$source_set_etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      dry_run:true
+    }')"
+  dry_run_source_delete_response="$(mcp_call 'template/element-source-delete' "$dry_run_source_delete_args")"
+  dry_run_source_delete_result="$(extract_result "$dry_run_source_delete_response")"
+  assert_jq "$dry_run_source_delete_result" --arg etag "$source_set_etag" '.dry_run == true and .old_etag == $etag and .cache.reason == "dry_run" and (.removed_locations | index("props.source")) and .after.has_binding == false' 'template/element-source-delete dry_run previews source removal'
+
+  source_delete_args="$(jq -cn \
+    --arg key "$TEMPLATE_KEY" \
+    --arg path "$text_source_path" \
+    --arg etag "$source_set_etag" \
+    '{
+      key:$key,
+      path:$path,
+      if_match:$etag,
+      confirm_guarded_write:true
+    }')"
+  source_delete_response="$(mcp_call 'template/element-source-delete' "$source_delete_args")"
+  source_delete_result="$(extract_result "$source_delete_response")"
+  assert_jq "$source_delete_result" --arg etag "$source_set_etag" '.old_etag == $etag and (.new_etag | type == "string") and (.cache.groups | index("com_templates")) and (.removed_locations | index("props.source")) and .after.has_binding == false' 'template/element-source-delete removes source binding with matching if_match'
+  source_deleted_etag="$(printf '%s' "$source_delete_result" | jq -r '.new_etag')"
+  etag="$source_deleted_etag"
 
   local unconfirmed_update_args unconfirmed_update_response unconfirmed_update_result dry_run_update_args dry_run_update_response dry_run_update_result update_args update_response update_result updated_etag updated_read_response updated_read_result stale_update_args stale_update_response stale_update_result
   unconfirmed_update_args="$(jq -cn \

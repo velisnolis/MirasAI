@@ -206,7 +206,7 @@ Canvi preventiu al paquet:
 
 ### TODO-017: Dynamic Source writes
 
-Estat: pendent.
+Estat: resolt el 2026-05-25.
 
 Context:
 
@@ -219,10 +219,23 @@ Context:
   - source `article`
   - mappings `image`, `hover_video`, `link`, `content`
 
-Pendent:
+Implementat:
 
-- Implementar `template/element-source-preview`.
-- Implementar `template/element-source-set`.
-- Implementar `template/element-source-delete`.
-- Usar `if_match`, `dry_run`, `confirm_guarded_write` i invalidacio cache.
-- Provar primer en un element secundari o en una copia.
+- `template/element-source-preview`
+- `template/element-source-set`
+- `template/element-source-delete`
+- `if_match`, `dry_run`, `confirm_guarded_write` i invalidacio cache post-write.
+- Suport per storage de template, article YOOtheme i `mod_yootheme_builder`.
+- Validat amb escriptura/restauracio a l'article despublicat `Videos` (`id=1`) a `comunitat.congresbit.cat`.
+- Validat al Docker lab CT `103` amb `docker/test-template-etag.sh`.
+
+### TODO-018: Schema runtime YOOtheme ampliat
+
+Estat: resolt el 2026-05-25.
+
+Implementat:
+
+- `template/element-schema` resol refs `${builder.*}` contra el config runtime instal.lat de YOOtheme.
+- Retorna `props_schema`, `element_schema` i `source_binding_schema`.
+- Manté la definicio PHP de YOOtheme com a font de veritat i marca que `enable/show` no s'avaluen.
+- Validat a `comunitat.congresbit.cat`: `headline` resol `builder.link`, exposa `props_schema.properties.content` i `source_field_count`.

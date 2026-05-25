@@ -92,6 +92,29 @@ $replaced = $navigator->updateElementProps(
 expectElement('updateElementProps replace removes old keys', array_keys($replaced['element']['props'] ?? []), ['content']);
 expectElement('updateElementProps missing path returns null', $navigator->updateElementProps($layout, 'root>section[9]', []), null);
 
+$newSource = [
+    'query' => [
+        'name' => 'Article',
+        'field' => [
+            'name' => 'article',
+            'arguments' => ['id' => '1'],
+        ],
+    ],
+    'props' => [
+        'content' => ['name' => 'introtext'],
+    ],
+];
+$sourceSet = $navigator->setElementSource($layout, 'root>section[0]>row[0]>column[0]>headline[0]', $newSource);
+expectElement('setElementSource returns path', $sourceSet['metadata']['path'] ?? null, 'root>section[0]>row[0]>column[0]>headline[0]');
+expectElement('setElementSource writes props.source query', $sourceSet['element']['props']['source']['query']['name'] ?? null, 'Article');
+expectElement('setElementSource detects binding', $sourceSet['metadata']['has_source_binding'] ?? null, true);
+expectElement('setElementSource does not mutate original layout', isset($layout['children'][0]['children'][0]['children'][0]['children'][0]['props']['source']), false);
+
+$sourceDeleted = $navigator->deleteElementSource($sourceSet['layout'], 'root>section[0]>row[0]>column[0]>headline[0]');
+expectElement('deleteElementSource removes props.source', isset($sourceDeleted['element']['props']['source']), false);
+expectElement('deleteElementSource reports location', $sourceDeleted['removed_locations'], ['props.source']);
+expectElement('deleteElementSource no binding remains', $sourceDeleted['metadata']['has_source_binding'], false);
+
 $added = $navigator->addElement(
     $layout,
     'root>section[0]>row[0]>column[0]',

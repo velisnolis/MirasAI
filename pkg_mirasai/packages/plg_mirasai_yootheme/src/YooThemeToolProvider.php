@@ -16,7 +16,10 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementMoveTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementReadTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSchemaTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceDeleteTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourcePreviewTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceReadTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceSetTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementTypesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementUpdatePropsTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateListTool;
@@ -81,6 +84,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-list',
             'template/element-read',
             'template/element-source-read',
+            'template/element-source-preview',
+            'template/element-source-set',
+            'template/element-source-delete',
             'template/element-add',
             'template/element-update-props',
             'template/element-move',
@@ -104,6 +110,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-list'         => new TemplateElementListTool(),
             'template/element-read'         => new TemplateElementReadTool(),
             'template/element-source-read'  => new TemplateElementSourceReadTool(),
+            'template/element-source-preview' => new TemplateElementSourcePreviewTool(),
+            'template/element-source-set'   => new TemplateElementSourceSetTool(),
+            'template/element-source-delete' => new TemplateElementSourceDeleteTool(),
             'template/element-add'          => new TemplateElementAddTool(),
             'template/element-update-props' => new TemplateElementUpdatePropsTool(),
             'template/element-move'         => new TemplateElementMoveTool(),

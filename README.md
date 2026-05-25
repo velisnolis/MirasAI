@@ -106,6 +106,9 @@ When `plg_mirasai_yootheme` is enabled and YOOtheme is installed:
 - `template/element-list`
 - `template/element-read`
 - `template/element-source-read`
+- `template/element-source-preview`
+- `template/element-source-set`
+- `template/element-source-delete`
 - `template/element-add`
 - `template/element-update-props`
 - `template/element-move`
@@ -375,6 +378,25 @@ YOOtheme Builder templates live in `#__extensions.custom_data.templates`.
 
 If a template contains fixed text, the expected strategy is to duplicate it per language rather than trying to keep one shared static template.
 
+### Builder element operations
+
+The YOOtheme addon can inspect and edit Builder elements at three storage levels:
+
+- page templates via `key`
+- article layouts via `article_id`
+- YOOtheme Builder modules via `module_id`
+
+Use `template/element-list` first to find a stable element path, then `template/element-read` or `template/element-source-read` to inspect the target. Mutating element tools require a fresh `if_match` ETag and either `dry_run=true` or `confirm_guarded_write=true`.
+
+`template/element-schema` reads the installed YOOtheme runtime element definition. It resolves `${builder.*}` references when possible and returns derived `props_schema`, `element_schema`, and `source_binding_schema` data for agents that need to validate proposed writes before applying them.
+
+Dynamic Source bindings use `props.source` as the canonical storage location. The source workflow is:
+
+1. `template/source-types` to discover provider/query fields.
+2. `template/element-source-preview` to preview a binding.
+3. `template/element-source-set` to write it with ETag confirmation.
+4. `template/element-source-delete` to remove it with ETag confirmation.
+
 ### Header menus
 
 `menu/migrate-theme-to-modules` is the intended migration path for YOOtheme-driven single-language menus that need to become multilingual Joomla modules.
@@ -438,6 +460,7 @@ Main files:
 - `docker/bootstrap-lab.sh`
 - `docker/smoke.sh`
 - `docker/test-extract-to-modules.sh`
+- `docker/test-template-etag.sh`
 
 ### Prerequisites
 

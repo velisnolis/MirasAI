@@ -32,16 +32,43 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
     protected function mutateTemplateElement(array $arguments, callable $mutator): array
     {
         $key = trim((string) ($arguments['key'] ?? ''));
+        $articleId = (int) ($arguments['article_id'] ?? 0);
+        $moduleId = (int) ($arguments['module_id'] ?? 0);
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
         $dryRun = !empty($arguments['dry_run']);
+        $selectorCount = ($key !== '' ? 1 : 0) + ($articleId > 0 ? 1 : 0) + ($moduleId > 0 ? 1 : 0);
 
-        if ($key === '' || $ifMatch === '') {
+        if ($selectorCount === 0 || $ifMatch === '') {
             return [
-                'error' => 'key and if_match are required.',
+                'error' => 'key, article_id, or module_id, and if_match are required.',
                 'code' => 'missing_if_match',
             ];
         }
 
+        if ($selectorCount > 1) {
+            return [
+                'error' => 'Provide only one of key, article_id, or module_id.',
+                'code' => 'ambiguous_storage',
+            ];
+        }
+
+        if ($moduleId > 0) {
+            return $this->mutateModuleElement($moduleId, $ifMatch, $dryRun, $arguments, $mutator);
+        }
+
+        if ($articleId > 0) {
+            return $this->mutateArticleElement($articleId, $ifMatch, $dryRun, $arguments, $mutator);
+        }
+
+        return $this->mutateStoredTemplateElement($key, $ifMatch, $dryRun, $arguments, $mutator);
+    }
+
+    /**
+     * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
+     * @return array<string, mixed>
+     */
+    private function mutateStoredTemplateElement(string $key, string $ifMatch, bool $dryRun, array $arguments, callable $mutator): array
+    {
         $templates = $this->yooHelper->loadTemplates();
         $template = $templates[$key] ?? null;
 
@@ -96,6 +123,161 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
             'old_etag' => $currentEtag,
             'new_etag' => $newEtag,
             'collection_etag' => $this->yooHelper->buildTemplatesEtag($templates),
+            'cache' => $cache,
+        ], $mutation);
+
+        if ($dryRun) {
+            $response['action'] = 'preview';
+            $response['note'] = 'No changes were written. Retry with confirm_guarded_write=true and the same if_match if the preview is still current.';
+        } else {
+            $response['action'] = 'updated';
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
+     * @return array<string, mixed>
+     */
+    private function mutateArticleElement(int $articleId, string $ifMatch, bool $dryRun, array $arguments, callable $mutator): array
+    {
+        $article = $this->yooHelper->loadArticle($articleId);
+
+        if ($article === null) {
+            return ['error' => "Article {$articleId} not found.", 'code' => 'article_not_found'];
+        }
+
+        $currentEtag = $this->yooHelper->buildArticleLayoutEtag($article);
+
+        if (!hash_equals($currentEtag, $ifMatch)) {
+            return [
+                'error' => 'Article layout etag mismatch. Re-read the article layout and retry with the fresh etag.',
+                'code' => 'stale_etag',
+                'expected_etag' => $currentEtag,
+                'provided_etag' => $ifMatch,
+            ];
+        }
+
+        $layout = $this->yooHelper->getArticleLayout($article);
+
+        if ($layout === null) {
+            return ['error' => "Article {$articleId} has no YOOtheme layout in fulltext.", 'code' => 'article_layout_missing'];
+        }
+
+        $mutation = $mutator($layout, $arguments);
+
+        if (isset($mutation['error'])) {
+            return $mutation;
+        }
+
+        if (!isset($mutation['layout']) || !is_array($mutation['layout'])) {
+            return [
+                'error' => 'Internal error: mutation did not return a layout.',
+                'code' => 'missing_mutation_layout',
+            ];
+        }
+
+        $this->yooHelper->setArticleLayout($article, $mutation['layout']);
+        $newEtag = $this->yooHelper->buildArticleLayoutEtag($article);
+
+        $cache = $dryRun
+            ? ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run']
+            : $this->yooHelper->writeArticleLayout($article);
+
+        unset($mutation['layout']);
+
+        $response = array_merge([
+            'storage' => 'article',
+            'article_id' => $articleId,
+            'article_title' => (string) ($article['title'] ?? ''),
+            'article_state' => (int) ($article['state'] ?? 0),
+            'dry_run' => $dryRun,
+            'would_change' => !hash_equals($currentEtag, $newEtag),
+            'old_etag' => $currentEtag,
+            'new_etag' => $newEtag,
+            'cache' => $cache,
+        ], $mutation);
+
+        if ($dryRun) {
+            $response['action'] = 'preview';
+            $response['note'] = 'No changes were written. Retry with confirm_guarded_write=true and the same if_match if the preview is still current.';
+        } else {
+            $response['action'] = 'updated';
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
+     * @return array<string, mixed>
+     */
+    private function mutateModuleElement(int $moduleId, string $ifMatch, bool $dryRun, array $arguments, callable $mutator): array
+    {
+        $module = $this->yooHelper->loadModule($moduleId);
+
+        if ($module === null) {
+            return ['error' => "Module {$moduleId} not found.", 'code' => 'module_not_found'];
+        }
+
+        if ((string) ($module['module'] ?? '') !== 'mod_yootheme_builder') {
+            return [
+                'error' => "Module {$moduleId} is not a YOOtheme Builder module.",
+                'code' => 'module_not_yootheme_builder',
+                'module_type' => (string) ($module['module'] ?? ''),
+            ];
+        }
+
+        $currentEtag = $this->yooHelper->buildModuleLayoutEtag($module);
+
+        if (!hash_equals($currentEtag, $ifMatch)) {
+            return [
+                'error' => 'Module layout etag mismatch. Re-read the module layout and retry with the fresh etag.',
+                'code' => 'stale_etag',
+                'expected_etag' => $currentEtag,
+                'provided_etag' => $ifMatch,
+            ];
+        }
+
+        $layout = $this->yooHelper->getModuleLayout($module);
+
+        if ($layout === null) {
+            return ['error' => "Module {$moduleId} has no YOOtheme layout in content.", 'code' => 'module_layout_missing'];
+        }
+
+        $mutation = $mutator($layout, $arguments);
+
+        if (isset($mutation['error'])) {
+            return $mutation;
+        }
+
+        if (!isset($mutation['layout']) || !is_array($mutation['layout'])) {
+            return [
+                'error' => 'Internal error: mutation did not return a layout.',
+                'code' => 'missing_mutation_layout',
+            ];
+        }
+
+        $this->yooHelper->setModuleLayout($module, $mutation['layout']);
+        $newEtag = $this->yooHelper->buildModuleLayoutEtag($module);
+
+        $cache = $dryRun
+            ? ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run']
+            : $this->yooHelper->writeModuleLayout($module);
+
+        unset($mutation['layout']);
+
+        $response = array_merge([
+            'storage' => 'module',
+            'module_id' => $moduleId,
+            'module_title' => (string) ($module['title'] ?? ''),
+            'module_type' => (string) ($module['module'] ?? ''),
+            'module_published' => (int) ($module['published'] ?? 0),
+            'dry_run' => $dryRun,
+            'would_change' => !hash_equals($currentEtag, $newEtag),
+            'old_etag' => $currentEtag,
+            'new_etag' => $newEtag,
             'cache' => $cache,
         ], $mutation);
 

@@ -195,6 +195,140 @@ class YooThemeHelper
         return $this->invalidateBuilderCache();
     }
 
+    // -------------------------------------------------------------------------
+    // Article layout helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function loadArticle(int $articleId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select($this->db->quoteName(['id', 'title', 'alias', 'state', 'language', 'introtext', 'fulltext']))
+            ->from($this->db->quoteName('#__content'))
+            ->where('id = :id')
+            ->bind(':id', $articleId, ParameterType::INTEGER);
+
+        $article = $this->db->setQuery($query)->loadAssoc();
+
+        return is_array($article) ? $article : null;
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     * @return array<string, mixed>|null
+     */
+    public function getArticleLayout(array $article): ?array
+    {
+        $fulltext = is_string($article['fulltext'] ?? null) ? (string) $article['fulltext'] : '';
+        $json = (new YooThemeLayoutProcessor())->extractJson($fulltext);
+
+        if ($json === null) {
+            return null;
+        }
+
+        $layout = json_decode($json, true);
+
+        return is_array($layout) ? $layout : null;
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     * @param array<string, mixed> $layout
+     */
+    public function setArticleLayout(array &$article, array $layout): void
+    {
+        $article['fulltext'] = '<!-- ' . json_encode($layout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' -->';
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     * @return array{cleared: bool, groups: list<string>, failures: list<array{group: string, error: string}>}
+     */
+    public function writeArticleLayout(array $article): array
+    {
+        $articleId = (int) ($article['id'] ?? 0);
+        $fulltext = is_string($article['fulltext'] ?? null) ? (string) $article['fulltext'] : '';
+
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__content'))
+            ->set($this->db->quoteName('fulltext') . ' = ' . $this->db->quote($fulltext))
+            ->where('id = :id')
+            ->bind(':id', $articleId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+
+        return $this->invalidateBuilderCache();
+    }
+
+    // -------------------------------------------------------------------------
+    // YOOtheme Builder module helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function loadModule(int $moduleId): ?array
+    {
+        $query = $this->db->getQuery(true)
+            ->select($this->db->quoteName(['id', 'title', 'module', 'published', 'position', 'language', 'content', 'params']))
+            ->from($this->db->quoteName('#__modules'))
+            ->where('id = :id')
+            ->bind(':id', $moduleId, ParameterType::INTEGER);
+
+        $module = $this->db->setQuery($query)->loadAssoc();
+
+        return is_array($module) ? $module : null;
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<string, mixed>|null
+     */
+    public function getModuleLayout(array $module): ?array
+    {
+        $content = is_string($module['content'] ?? null) ? trim((string) $module['content']) : '';
+
+        if ($content === '') {
+            return null;
+        }
+
+        $json = (new YooThemeLayoutProcessor())->extractJson($content) ?? $content;
+        $layout = json_decode($json, true);
+
+        return is_array($layout) ? $layout : null;
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @param array<string, mixed> $layout
+     */
+    public function setModuleLayout(array &$module, array $layout): void
+    {
+        $module['content'] = json_encode($layout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array{cleared: bool, groups: list<string>, failures: list<array{group: string, error: string}>}
+     */
+    public function writeModuleLayout(array $module): array
+    {
+        $moduleId = (int) ($module['id'] ?? 0);
+        $content = is_string($module['content'] ?? null) ? (string) $module['content'] : '';
+
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__modules'))
+            ->set($this->db->quoteName('content') . ' = ' . $this->db->quote($content))
+            ->where('id = :id')
+            ->bind(':id', $moduleId, ParameterType::INTEGER);
+
+        $this->db->setQuery($query)->execute();
+
+        return $this->invalidateBuilderCache();
+    }
+
     /**
      * Best-effort cache cleanup after YOOtheme custom_data writes.
      *
@@ -355,6 +489,22 @@ class YooThemeHelper
             'sha256',
             json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
         );
+    }
+
+    /**
+     * @param array<string, mixed> $article
+     */
+    public function buildArticleLayoutEtag(array $article): string
+    {
+        return hash('sha256', (string) ($article['fulltext'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     */
+    public function buildModuleLayoutEtag(array $module): string
+    {
+        return hash('sha256', (string) ($module['content'] ?? ''));
     }
 
     /**

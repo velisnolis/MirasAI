@@ -27,9 +27,21 @@ class TemplateSourceTypesTool extends AbstractTool
                     'type' => 'string',
                     'description' => 'Optional GraphQL source type to inspect, for example Article, Category, Site, File, or Query.',
                 ],
+                'source_name' => [
+                    'type' => 'string',
+                    'description' => 'Optional YOOtheme source query path to resolve exactly, for example article, customArticles, or youtubeChannel1C7D1A.videos.',
+                ],
                 'include_fields' => [
                     'type' => 'boolean',
                     'description' => 'Return field metadata. Defaults to true when type is provided, false for the full list.',
+                ],
+                'include_raw' => [
+                    'type' => 'boolean',
+                    'description' => 'Include raw introspection entries for matched types. Defaults to false.',
+                ],
+                'include_binding_hints' => [
+                    'type' => 'boolean',
+                    'description' => 'Include source binding hints with query arguments and mappable result fields. Defaults to true when source_name is provided.',
                 ],
                 'kind' => [
                     'type' => 'string',
@@ -51,20 +63,29 @@ class TemplateSourceTypesTool extends AbstractTool
     public function handle(array $arguments): array
     {
         $type = trim((string) ($arguments['type'] ?? ''));
+        $sourceName = trim((string) ($arguments['source_name'] ?? ''));
         $kind = trim((string) ($arguments['kind'] ?? 'all'));
         $includeFields = array_key_exists('include_fields', $arguments)
             ? (bool) $arguments['include_fields']
-            : $type !== '';
+            : $type !== '' || $sourceName !== '';
+        $includeRaw = !empty($arguments['include_raw']);
+        $includeBindingHints = array_key_exists('include_binding_hints', $arguments)
+            ? (bool) $arguments['include_binding_hints']
+            : $sourceName !== '';
 
         if ($type !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $type)) {
             return ['error' => 'type must be a GraphQL type name, for example Article or Query.'];
+        }
+
+        if ($sourceName !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$/', $sourceName)) {
+            return ['error' => 'source_name must be a dotted GraphQL field path, for example article or youtubeChannel1C7D1A.videos.'];
         }
 
         if (!in_array($kind, ['all', 'query', 'object'], true)) {
             return ['error' => 'kind must be one of: all, query, object.'];
         }
 
-        $live = $this->loadLiveSourceSchema($type, $kind, $includeFields);
+        $live = $this->loadLiveSourceSchema($type, $sourceName, $kind, $includeFields, $includeRaw, $includeBindingHints);
 
         if (!isset($live['error'])) {
             return $live;
@@ -79,8 +100,14 @@ class TemplateSourceTypesTool extends AbstractTool
     /**
      * @return array<string, mixed>|array{error: string, code: string}
      */
-    private function loadLiveSourceSchema(string $typeFilter, string $kindFilter, bool $includeFields): array
-    {
+    private function loadLiveSourceSchema(
+        string $typeFilter,
+        string $sourceName,
+        string $kindFilter,
+        bool $includeFields,
+        bool $includeRaw,
+        bool $includeBindingHints
+    ): array {
         $bootstrap = $this->ensureYooThemeSourceRuntime();
 
         if (isset($bootstrap['error'])) {
@@ -113,9 +140,11 @@ class TemplateSourceTypesTool extends AbstractTool
         $queryTypeName = is_array($schema['queryType'] ?? null)
             ? (string) ($schema['queryType']['name'] ?? 'Query')
             : 'Query';
+        $schemaTypes = is_array($schema['types'] ?? null) ? $schema['types'] : [];
+        $typeMap = $this->indexTypes($schemaTypes);
         $types = [];
 
-        foreach (($schema['types'] ?? []) as $type) {
+        foreach ($schemaTypes as $type) {
             if (!is_array($type)) {
                 continue;
             }
@@ -158,6 +187,10 @@ class TemplateSourceTypesTool extends AbstractTool
                 $item['fields'] = $this->summarizeFields($type['fields']);
             }
 
+            if ($includeRaw) {
+                $item['raw'] = $this->sanitizeValue($type);
+            }
+
             $types[] = $item;
         }
 
@@ -166,9 +199,10 @@ class TemplateSourceTypesTool extends AbstractTool
             static fn (array $a, array $b): int => [$a['bucket'], $a['name']] <=> [$b['bucket'], $b['name']],
         );
 
-        return [
+        $response = [
             'mode' => 'live_introspection',
             'type' => $typeFilter !== '' ? $typeFilter : null,
+            'source_name' => $sourceName !== '' ? $sourceName : null,
             'kind' => $kindFilter,
             'query_type' => $queryTypeName,
             'type_count' => count($types),
@@ -177,6 +211,14 @@ class TemplateSourceTypesTool extends AbstractTool
             'runtime_bootstrap' => $bootstrap,
             'note' => 'This is YOOtheme Builder Source GraphQL introspection as exposed by the installed runtime.',
         ];
+
+        if ($includeBindingHints) {
+            $response['binding_hints'] = $sourceName !== ''
+                ? $this->resolveSourceBindingHints($sourceName, $queryTypeName, $typeMap)
+                : $this->summarizeQueryBindingHints($queryTypeName, $typeMap);
+        }
+
+        return $response;
     }
 
     /**
@@ -205,6 +247,8 @@ class TemplateSourceTypesTool extends AbstractTool
                     );
                 }
             }
+
+            $yooEssentials = $this->loadYooEssentialsRuntime();
         } catch (\Throwable $exception) {
             return ['error' => 'Unable to bootstrap YOOtheme Builder Source runtime: ' . $exception->getMessage()];
         }
@@ -216,7 +260,89 @@ class TemplateSourceTypesTool extends AbstractTool
         return [
             'attempted' => true,
             'root' => $root !== null ? $this->relativeToSite($root) : null,
+            'yooessentials' => $yooEssentials ?? ['available' => false, 'loaded' => false],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadYooEssentialsRuntime(): array
+    {
+        if (!defined('JPATH_PLUGINS') || !function_exists('YOOtheme\\app')) {
+            return ['available' => false, 'loaded' => false];
+        }
+
+        $pluginRoot = rtrim((string) JPATH_PLUGINS, '/') . '/system/yooessentials';
+
+        if (!is_dir($pluginRoot)) {
+            return ['available' => false, 'loaded' => false];
+        }
+
+        $autoload = $pluginRoot . '/modules/autoload.php';
+
+        if (!is_file($autoload)) {
+            return ['available' => true, 'loaded' => false, 'error' => 'modules/autoload.php not found'];
+        }
+
+        try {
+            require_once $autoload;
+
+            if (class_exists(\YOOtheme\Path::class)) {
+                \YOOtheme\Path::setAlias('~yooessentials', $pluginRoot);
+                \YOOtheme\Path::setAlias('~yooessentials_url', '~/plugins/system/yooessentials');
+            }
+
+            $app = \YOOtheme\app();
+
+            if (!is_object($app) || !method_exists($app, 'load')) {
+                return ['available' => true, 'loaded' => false, 'error' => 'YOOtheme app loader unavailable'];
+            }
+
+            $app->load(
+                $pluginRoot
+                . '/modules/{platform,platform-joomla,core{,-{encryption,migration,api,auth{,-drivers},condition{,-rules},config,sources,debug,storage{,-adapters}}},source{,-providers,-sources},source-joomla,integrations}{,-joomla}/bootstrap.php'
+            );
+
+            return [
+                'available' => true,
+                'loaded' => true,
+                'root' => $this->relativeToSite($pluginRoot),
+                'config_loaded' => $this->loadYooEssentialsConfig(),
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'available' => true,
+                'loaded' => false,
+                'root' => $this->relativeToSite($pluginRoot),
+                'error' => $exception->getMessage(),
+            ];
+        }
+    }
+
+    private function loadYooEssentialsConfig(): bool
+    {
+        if (!interface_exists('ZOOlanders\\YOOessentials\\Config\\ConfigRepositoryInterface')
+            || !class_exists('ZOOlanders\\YOOessentials\\Config\\Config')
+        ) {
+            return false;
+        }
+
+        try {
+            $app = \YOOtheme\app();
+            $repository = $app(\ZOOlanders\YOOessentials\Config\ConfigRepositoryInterface::class);
+            $config = $app(\ZOOlanders\YOOessentials\Config\Config::class);
+
+            if (is_object($repository) && method_exists($repository, 'load')) {
+                $repository->load($config);
+
+                return true;
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     /**
@@ -279,6 +405,247 @@ class TemplateSourceTypesTool extends AbstractTool
             'LIST' => '[' . $ofType . ']',
             default => $ofType,
         };
+    }
+
+    /**
+     * @param list<array<string, mixed>> $types
+     * @return array<string, array<string, mixed>>
+     */
+    private function indexTypes(array $types): array
+    {
+        $map = [];
+
+        foreach ($types as $type) {
+            if (is_array($type) && is_string($type['name'] ?? null) && $type['name'] !== '') {
+                $map[$type['name']] = $type;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $typeMap
+     * @return array<string, mixed>
+     */
+    private function resolveSourceBindingHints(string $sourceName, string $queryTypeName, array $typeMap): array
+    {
+        $segments = explode('.', $sourceName);
+        $currentTypeName = $queryTypeName;
+        $path = [];
+        $resolvedSegments = [];
+        $resolvedAliases = [];
+        $field = null;
+
+        foreach ($segments as $index => $segment) {
+            $currentType = $typeMap[$currentTypeName] ?? null;
+
+            if (!is_array($currentType)) {
+                return [
+                    'error' => "Type {$currentTypeName} not found while resolving {$sourceName}.",
+                    'code' => 'source_type_not_found',
+                    'resolved_path' => $path,
+                ];
+            }
+
+            $field = $this->findField($currentType, $segment);
+            $resolvedSegment = $segment;
+
+            if ($field === null && $index === 0) {
+                $alias = $this->resolveSourceSegmentAlias($currentType, $segment);
+
+                if ($alias !== null) {
+                    $field = $this->findField($currentType, $alias);
+                    $resolvedSegment = $alias;
+                    $resolvedAliases[] = [
+                        'requested' => $segment,
+                        'resolved' => $alias,
+                    ];
+                }
+            }
+
+            if ($field === null) {
+                return [
+                    'error' => "Source segment {$segment} not found on type {$currentTypeName}.",
+                    'code' => 'source_field_not_found',
+                    'resolved_path' => $path,
+                    'available_fields' => $this->summarizeAvailableFields($currentType),
+                ];
+            }
+
+            $fieldType = $this->unwrapTypeRef($field['type'] ?? null);
+            $resolvedSegments[] = $resolvedSegment;
+            $path[] = [
+                'field' => $resolvedSegment,
+                'requested_field' => $segment,
+                'parent_type' => $currentTypeName,
+                'result_type' => $fieldType['name'],
+                'result_kind' => $fieldType['kind'],
+                'is_list' => $fieldType['is_list'],
+            ];
+            $currentTypeName = $fieldType['name'] !== '' ? $fieldType['name'] : $currentTypeName;
+        }
+
+        if ($field === null) {
+            return [
+                'error' => 'source_name did not contain any segments.',
+                'code' => 'invalid_source_name',
+            ];
+        }
+
+        $resultType = $this->unwrapTypeRef($field['type'] ?? null);
+        $targetType = $typeMap[$resultType['name']] ?? null;
+        $canonicalSourceName = implode('.', $resolvedSegments);
+
+        return [
+            'query' => [
+                'name' => $canonicalSourceName,
+                'requested_name' => $sourceName,
+                'segments' => $segments,
+                'resolved_segments' => $resolvedSegments,
+                'resolved_aliases' => $resolvedAliases,
+                'path' => $path,
+                'result_type' => $resultType['name'],
+                'result_kind' => $resultType['kind'],
+                'is_multiple' => $resultType['is_list'],
+                'args' => $this->summarizeFields([$field])[0]['args'] ?? [],
+                'metadata' => $this->sanitizeValue($field['metadata'] ?? null),
+            ],
+            'mappable_type' => $resultType['name'],
+            'mappable_fields' => is_array($targetType['fields'] ?? null) ? $this->summarizeFields($targetType['fields']) : [],
+            'example_source' => [
+                'query' => [
+                    'name' => $canonicalSourceName,
+                    'arguments' => new \stdClass(),
+                ],
+                'props' => new \stdClass(),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $typeMap
+     * @return list<array<string, mixed>>
+     */
+    private function summarizeQueryBindingHints(string $queryTypeName, array $typeMap): array
+    {
+        $queryType = $typeMap[$queryTypeName] ?? null;
+
+        if (!is_array($queryType['fields'] ?? null)) {
+            return [];
+        }
+
+        $hints = [];
+
+        foreach ($queryType['fields'] as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+
+            $type = $this->unwrapTypeRef($field['type'] ?? null);
+            $metadata = is_array($field['metadata'] ?? null) ? $field['metadata'] : [];
+            $hints[] = [
+                'source_name' => (string) ($field['name'] ?? ''),
+                'label' => (string) ($metadata['label'] ?? ''),
+                'group' => (string) ($metadata['group'] ?? ''),
+                'result_type' => $type['name'],
+                'is_multiple' => $type['is_list'],
+                'arg_count' => is_array($field['args'] ?? null) ? count($field['args']) : 0,
+            ];
+        }
+
+        return $hints;
+    }
+
+    /**
+     * @param array<string, mixed> $type
+     * @return array<string, mixed>|null
+     */
+    private function findField(array $type, string $name): ?array
+    {
+        foreach (($type['fields'] ?? []) as $field) {
+            if (is_array($field) && ($field['name'] ?? '') === $name) {
+                return $field;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $type
+     */
+    private function resolveSourceSegmentAlias(array $type, string $segment): ?string
+    {
+        $candidates = [];
+
+        if (str_starts_with($segment, 'youtubeChannel')) {
+            $candidates[] = str_replace('youtubeChannel', 'youtubeMyChannel', $segment);
+        }
+
+        if (str_starts_with($segment, 'youtubePlaylist')) {
+            $candidates[] = str_replace('youtubePlaylist', 'youtubeMyPlaylist', $segment);
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate !== $segment && $this->findField($type, $candidate) !== null) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $type
+     * @return list<string>
+     */
+    private function summarizeAvailableFields(array $type): array
+    {
+        $fields = [];
+
+        foreach (($type['fields'] ?? []) as $field) {
+            if (is_array($field) && is_string($field['name'] ?? null)) {
+                $fields[] = $field['name'];
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @return array{name: string, kind: string, is_list: bool, non_null: bool}
+     */
+    private function unwrapTypeRef(mixed $type): array
+    {
+        $result = [
+            'name' => '',
+            'kind' => '',
+            'is_list' => false,
+            'non_null' => false,
+        ];
+
+        while (is_array($type)) {
+            $kind = (string) ($type['kind'] ?? '');
+
+            if ($kind === 'LIST') {
+                $result['is_list'] = true;
+                $type = $type['ofType'] ?? null;
+                continue;
+            }
+
+            if ($kind === 'NON_NULL') {
+                $result['non_null'] = true;
+                $type = $type['ofType'] ?? null;
+                continue;
+            }
+
+            $result['kind'] = $kind;
+            $result['name'] = (string) ($type['name'] ?? '');
+            break;
+        }
+
+        return $result;
     }
 
     /**
