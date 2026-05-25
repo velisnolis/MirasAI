@@ -110,6 +110,11 @@ namespace {
         file_put_contents($root . '/language/en-GB/en-GB.ini', 'COM_EXAMPLE="Example"');
         file_put_contents($root . '/templates/yootheme/config.php', '<?php return [];');
         file_put_contents($root . '/configuration.php', '<?php public $password = "secret";');
+        file_put_contents($root . '/configuration.php.bak', '<?php public $password = "secret";');
+        file_put_contents($root . '/configuration.old.php', '<?php public $password = "secret";');
+        file_put_contents($root . '/configuration.origin-before-ub-2026-05-04.php', '<?php public $password = "secret";');
+        file_put_contents($root . '/db-backup.sql', 'CREATE TABLE secrets;');
+        file_put_contents($root . '/db-backup.sql.gz', 'compressed dump');
         file_put_contents($root . '/.env.local', 'DB_PASSWORD=secret');
         file_put_contents($root . '/certs/private.pem', 'private key');
         file_put_contents($root . '/.ssh/id_ed25519', 'private key');
@@ -124,6 +129,21 @@ namespace {
 
         $blockedConfiguration = $tool->handle(['path' => 'configuration.php']);
         expectFileRead('configuration.php is blocked', str_starts_with($blockedConfiguration['error'] ?? '', 'Read access denied'), true);
+
+        $blockedConfigurationBak = $tool->handle(['path' => 'configuration.php.bak']);
+        expectFileRead('configuration.php.bak is blocked', str_starts_with($blockedConfigurationBak['error'] ?? '', 'Read access denied'), true);
+
+        $blockedConfigurationOld = $tool->handle(['path' => 'configuration.old.php']);
+        expectFileRead('configuration.old.php is blocked', str_starts_with($blockedConfigurationOld['error'] ?? '', 'Read access denied'), true);
+
+        $blockedConfigurationMigration = $tool->handle(['path' => 'configuration.origin-before-ub-2026-05-04.php']);
+        expectFileRead('migration configuration copy is blocked', str_starts_with($blockedConfigurationMigration['error'] ?? '', 'Read access denied'), true);
+
+        $blockedSql = $tool->handle(['path' => 'db-backup.sql']);
+        expectFileRead('SQL dumps are blocked', str_starts_with($blockedSql['error'] ?? '', 'Read access denied'), true);
+
+        $blockedCompressedSql = $tool->handle(['path' => 'db-backup.sql.gz']);
+        expectFileRead('compressed SQL dumps are blocked', str_starts_with($blockedCompressedSql['error'] ?? '', 'Read access denied'), true);
 
         $blockedEnv = $tool->handle(['path' => '.env.local']);
         expectFileRead('.env variants are blocked', str_starts_with($blockedEnv['error'] ?? '', 'Read access denied'), true);

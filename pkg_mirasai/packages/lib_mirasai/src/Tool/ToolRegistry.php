@@ -565,7 +565,6 @@ class ToolRegistry
     private function warn(string $message): void
     {
         $this->warnings[] = $message;
-        trigger_error($message, E_USER_WARNING);
     }
 
     private function inferPluginElement(string $providerId): string

@@ -26,10 +26,23 @@ class FileReadTool extends AbstractTool
     ];
 
     private const SENSITIVE_EXTENSIONS = [
+        '.db',
         '.key',
         '.pem',
         '.p12',
         '.pfx',
+        '.sqlite',
+        '.sqlite3',
+    ];
+
+    private const SENSITIVE_ARCHIVE_SUFFIXES = [
+        '.gz',
+        '.bz2',
+        '.xz',
+        '.zip',
+        '.7z',
+        '.tar',
+        '.tgz',
     ];
 
     private PathValidator $pathValidator;
@@ -147,6 +160,14 @@ class FileReadTool extends AbstractTool
             return true;
         }
 
+        if ($this->isConfigurationBackup($basename)) {
+            return true;
+        }
+
+        if ($this->isDatabaseDump($basename)) {
+            return true;
+        }
+
         foreach (self::SENSITIVE_EXTENSIONS as $extension) {
             if (str_ends_with($basename, $extension)) {
                 return true;
@@ -154,5 +175,25 @@ class FileReadTool extends AbstractTool
         }
 
         return in_array('.ssh', $segments, true);
+    }
+
+    private function isConfigurationBackup(string $basename): bool
+    {
+        return str_starts_with($basename, 'configuration') && str_contains($basename, '.php');
+    }
+
+    private function isDatabaseDump(string $basename): bool
+    {
+        if (str_ends_with($basename, '.sql')) {
+            return true;
+        }
+
+        foreach (self::SENSITIVE_ARCHIVE_SUFFIXES as $suffix) {
+            if (str_ends_with($basename, '.sql' . $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

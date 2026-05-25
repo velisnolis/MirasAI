@@ -87,7 +87,11 @@ final class BrokenRegistryTool implements ToolInterface
     }
 }
 
-set_error_handler(static function (): bool {
+$phpWarnings = 0;
+
+set_error_handler(static function () use (&$phpWarnings): bool {
+    $phpWarnings++;
+
     return true;
 });
 
@@ -102,6 +106,7 @@ try {
     expectRegistry('healthy tools remain in tools/list', array_column($tools, 'name'), ['system/info', 'test/advanced']);
     expectRegistry('broken tool warning is recorded', count($registry->getWarnings()), 1);
     expectRegistry('warning names the broken tool', str_contains($registry->getWarnings()[0] ?? '', 'test/broken'), true);
+    expectRegistry('broken tool does not emit PHP warning', $phpWarnings, 0);
     expectRegistry('essential surface filters tools/list', array_column($registry->toMcpToolsList('essential'), 'name'), ['system/info']);
     expectRegistry('advanced surface filters tools/list', array_column($registry->toMcpToolsList('advanced'), 'name'), ['test/advanced']);
     expectRegistry('surface metadata is attached', $tools[0]['metadata']['surface'] ?? null, 'essential');

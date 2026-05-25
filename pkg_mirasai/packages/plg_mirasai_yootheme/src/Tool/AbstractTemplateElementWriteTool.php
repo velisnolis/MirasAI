@@ -108,11 +108,37 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
 
         $this->yooHelper->setTemplateLayout($template, $mutation['layout']);
         $newEtag = $this->yooHelper->buildTemplateEtag($template);
-        $templates[$key] = $template;
+        $responseTemplates = $templates;
+        $responseTemplates[$key] = $template;
 
-        $cache = $dryRun
-            ? ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run']
-            : $this->yooHelper->writeTemplates($templates);
+        if ($dryRun) {
+            $cache = ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run'];
+        } else {
+            $freshTemplates = $this->yooHelper->loadTemplates();
+            $freshTemplate = $freshTemplates[$key] ?? null;
+
+            if (!is_array($freshTemplate)) {
+                return [
+                    'error' => "Template {$key} no longer exists. Re-read templates and retry.",
+                    'code' => 'template_missing_before_write',
+                ];
+            }
+
+            $freshEtag = $this->yooHelper->buildTemplateEtag($freshTemplate);
+
+            if (!hash_equals($freshEtag, $ifMatch)) {
+                return [
+                    'error' => 'Template changed before write. Re-read the template and retry with the fresh etag.',
+                    'code' => 'stale_etag',
+                    'expected_etag' => $freshEtag,
+                    'provided_etag' => $ifMatch,
+                ];
+            }
+
+            $freshTemplates[$key] = $template;
+            $responseTemplates = $freshTemplates;
+            $cache = $this->yooHelper->writeTemplates($freshTemplates);
+        }
 
         unset($mutation['layout']);
 
@@ -122,7 +148,7 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
             'would_change' => !hash_equals($currentEtag, $newEtag),
             'old_etag' => $currentEtag,
             'new_etag' => $newEtag,
-            'collection_etag' => $this->yooHelper->buildTemplatesEtag($templates),
+            'collection_etag' => $this->yooHelper->buildTemplatesEtag($responseTemplates),
             'cache' => $cache,
         ], $mutation);
 
