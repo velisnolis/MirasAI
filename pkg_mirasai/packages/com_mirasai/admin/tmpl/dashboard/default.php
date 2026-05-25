@@ -5,6 +5,7 @@ declare(strict_types=1);
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Router\Route;
 
 /** @var \Mirasai\Component\Mirasai\Administrator\View\Dashboard\HtmlView $this */
 
@@ -39,6 +40,8 @@ $statusLabel = match ($dashboardStatus) {
 };
 $serverHost = (string) parse_url($endpoint, PHP_URL_HOST);
 $serverName = preg_replace('/[^a-z0-9]+/i', '-', $serverHost ?: 'mirasai') ?: 'mirasai';
+$pluginsUrl = Route::_('index.php?option=com_plugins&view=plugins&filter[search]=mirasai', false);
+$usersUrl = Route::_('index.php?option=com_users&view=users', false);
 $riskBadgeClasses = [
     'read' => 'bg-light text-dark border',
     'safe_write' => 'bg-info text-dark',
@@ -207,7 +210,7 @@ $coreOnboardingDetail = empty($coreMissingItems)
     border: 1px solid #dee2e6;
     border-radius: .375rem;
     padding: .65rem .75rem;
-    min-height: 4.25rem;
+    min-height: 6.25rem;
 }
 .mirasai-onboarding-step-title {
     display: flex;
@@ -217,10 +220,23 @@ $coreOnboardingDetail = empty($coreMissingItems)
     margin-bottom: .25rem;
     font-weight: 600;
 }
+.mirasai-onboarding-step-kicker {
+    color: var(--mirasai-secondary);
+    font-size: .75rem;
+    font-weight: 600;
+    margin-bottom: .15rem;
+    text-transform: uppercase;
+}
 .mirasai-onboarding-step-detail {
     color: var(--mirasai-secondary);
     font-size: .8rem;
     overflow-wrap: anywhere;
+}
+.mirasai-onboarding-step-action {
+    display: inline-block;
+    font-size: .8rem;
+    font-weight: 600;
+    margin-top: .45rem;
 }
 .mirasai-client-config {
     background: #f8f9fa;
@@ -378,36 +394,48 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CORE',
                 'state' => $this->allCoreEnabled && $registryReady ? 'passed' : 'failed',
                 'detail' => $coreOnboardingDetail,
-            ],
-            [
-                'id' => 'endpoint',
-                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT',
-                'state' => 'pending',
-                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_CORE',
+                'action_href' => $pluginsUrl,
             ],
             [
                 'id' => 'token',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOKEN',
                 'state' => 'pending',
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_TOKEN',
+                'action_href' => $usersUrl,
+            ],
+            [
+                'id' => 'endpoint',
+                'label' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT',
+                'state' => 'pending',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
+                'action_href' => '#mirasai-smoke-test',
             ],
             [
                 'id' => 'tools',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOOLS',
                 'state' => 'pending',
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
+                'action_href' => '#mirasai-smoke-test',
             ],
             [
                 'id' => 'diagnose',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE',
                 'state' => 'pending',
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
+                'action_href' => '#mirasai-smoke-test',
             ],
             [
                 'id' => 'config',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CONFIG',
                 'state' => 'pending',
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING'),
+                'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_CONFIG',
+                'action_href' => '#mirasai-client-config',
             ],
         ];
         $onboardingBadgeClasses = [
@@ -423,8 +451,11 @@ $coreOnboardingDetail = empty($coreMissingItems)
             'failed' => 'COM_MIRASAI_ONBOARDING_STATE_FAILED',
         ];
         ?>
-        <?php foreach ($onboardingSteps as $step): ?>
+        <?php foreach ($onboardingSteps as $stepIndex => $step): ?>
             <div class="mirasai-onboarding-step" data-mirasai-onboarding-step="<?php echo htmlspecialchars($step['id']); ?>">
+                <div class="mirasai-onboarding-step-kicker">
+                    <?php echo sprintf(Text::_('COM_MIRASAI_ONBOARDING_STEP_LABEL'), $stepIndex + 1); ?>
+                </div>
                 <div class="mirasai-onboarding-step-title">
                     <span><?php echo Text::_($step['label']); ?></span>
                     <span class="badge <?php echo htmlspecialchars($onboardingBadgeClasses[$step['state']]); ?>" data-mirasai-onboarding-state>
@@ -434,6 +465,11 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 <div class="mirasai-onboarding-step-detail" data-mirasai-onboarding-detail>
                     <?php echo htmlspecialchars((string) $step['detail']); ?>
                 </div>
+                <?php if (!empty($step['action_label']) && !empty($step['action_href'])): ?>
+                    <a class="mirasai-onboarding-step-action" href="<?php echo htmlspecialchars((string) $step['action_href']); ?>">
+                        <?php echo Text::_((string) $step['action_label']); ?>
+                    </a>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
@@ -489,7 +525,7 @@ $clientConfigs = [
 ];
 ?>
 
-<details class="mirasai-client-config mirasai-config-toggle mb-4" open>
+<details id="mirasai-client-config" class="mirasai-client-config mirasai-config-toggle mb-4" open>
     <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?></summary>
     <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_DESC'); ?></p>
     <div class="form-check form-switch mb-2">
