@@ -264,12 +264,18 @@ $coreOnboardingDetail = empty($coreMissingItems)
 .mirasai-onboarding-step-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: .75rem;
+    justify-content: space-between;
     margin-top: .45rem;
 }
 .mirasai-onboarding-step-info {
+    align-items: center;
+    display: inline-flex;
+    gap: .25rem;
     font-size: .8rem;
     font-weight: 600;
+    margin-left: auto;
 }
 .mirasai-client-config {
     background: #f8f9fa;
@@ -520,7 +526,8 @@ $coreOnboardingDetail = empty($coreMissingItems)
                         data-mirasai-onboarding-info-title="<?php echo htmlspecialchars(Text::_($step['label']), ENT_QUOTES); ?>"
                         data-mirasai-onboarding-info-body="<?php echo htmlspecialchars((string) $step['info'], ENT_QUOTES); ?>"
                     >
-                        <?php echo Text::_('COM_MIRASAI_ONBOARDING_MORE_INFO'); ?>
+                        <span class="icon-question-circle" aria-hidden="true"></span>
+                        <span><?php echo Text::_('COM_MIRASAI_ONBOARDING_HELP'); ?></span>
                     </button>
                 </div>
             </div>
