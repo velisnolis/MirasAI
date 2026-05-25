@@ -188,43 +188,27 @@ class McpHandler
             && empty($arguments['dry_run'])
             && empty($arguments['confirm_guarded_write'])
         ) {
-            return [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => json_encode([
-                            'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',
-                            'code' => 'guarded_write_confirmation_required',
-                            'tool' => $toolName,
-                            'risk_level' => $permissions['risk_level'],
-                            'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
-                            'action_required' => 'Run a dry_run or preview first, then retry the exact write with confirm_guarded_write=true and a fresh if_match when the tool supports ETags.',
-                        ], JSON_UNESCAPED_UNICODE),
-                    ],
-                ],
-                'isError' => true,
-            ];
+            return $this->wrapToolResult([
+                'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',
+                'code' => 'guarded_write_confirmation_required',
+                'tool' => $toolName,
+                'risk_level' => $permissions['risk_level'],
+                'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
+                'action_required' => 'Run a dry_run or preview first, then retry the exact write with confirm_guarded_write=true and a fresh if_match when the tool supports ETags.',
+            ], true);
         }
 
         if ($requiresElevation && EnvironmentGuard::isProduction()) {
             $elevation = new ElevationService();
 
             if (!$elevation->isElevated($toolName)) {
-                return [
-                    'content' => [
-                        [
-                            'type' => 'text',
-                            'text' => json_encode([
-                                'error' => 'This tool requires elevation on production environments.',
-                                'tool' => $toolName,
-                                'environment' => 'production',
-                                'action_required' => 'Ask the site administrator to activate elevation in the Joomla admin panel (Components → MirasAI → Elevation).',
-                                'docs' => 'The administrator must select which tools to enable, set a duration, and acknowledge the risks.',
-                            ], JSON_UNESCAPED_UNICODE),
-                        ],
-                    ],
-                    'isError' => true,
-                ];
+                return $this->wrapToolResult([
+                    'error' => 'This tool requires elevation on production environments.',
+                    'tool' => $toolName,
+                    'environment' => 'production',
+                    'action_required' => 'Ask the site administrator to activate elevation in the Joomla admin panel (Components → MirasAI → Elevation).',
+                    'docs' => 'The administrator must select which tools to enable, set a duration, and acknowledge the risks.',
+                ], true);
             }
 
             // Elevation active — log before execution (result_summary = 'pending')
@@ -248,39 +232,45 @@ class McpHandler
 
             // Check if the tool returned an error
             if (isset($result['error'])) {
-                return [
-                    'content' => [
-                        [
-                            'type' => 'text',
-                            'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-                        ],
-                    ],
-                    'isError' => true,
-                ];
+                return $this->wrapToolResult($result, true);
             }
 
-            return [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-                    ],
-                ],
-            ];
+            return $this->wrapToolResult($result);
         } catch (\Throwable $e) {
-            return [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => json_encode([
-                            'error' => $e->getMessage(),
-                            'type' => get_class($e),
-                        ], JSON_UNESCAPED_UNICODE),
-                    ],
-                ],
-                'isError' => true,
-            ];
+            return $this->wrapToolResult([
+                'error' => $e->getMessage(),
+                'type' => get_class($e),
+            ], true);
         }
+    }
+
+    /**
+     * Wrap a tool payload as an MCP CallToolResult.
+     *
+     * Tool-originated errors are still returned as CallToolResult with
+     * isError=true, per MCP. structuredContent mirrors the JSON text payload so
+     * clients do not need to parse the text block to inspect fields like code.
+     *
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function wrapToolResult(array $result, bool $isError = false): array
+    {
+        $response = [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                ],
+            ],
+            'structuredContent' => $result,
+        ];
+
+        if ($isError) {
+            $response['isError'] = true;
+        }
+
+        return $response;
     }
 
     /**
@@ -297,17 +287,7 @@ class McpHandler
             'scopes' => $grant->scopes,
         ];
 
-        $isError = isset($result['error']);
-
-        return [
-            'content' => [
-                [
-                    'type' => 'text',
-                    'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-                ],
-            ],
-            'isError' => $isError,
-        ];
+        return $this->wrapToolResult($result, isset($result['error']));
     }
 
     /**
