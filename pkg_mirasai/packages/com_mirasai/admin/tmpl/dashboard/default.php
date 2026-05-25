@@ -277,6 +277,52 @@ $coreOnboardingDetail = empty($coreMissingItems)
     font-weight: 600;
     margin-left: auto;
 }
+.mirasai-onboarding-info-modal .modal-dialog {
+    max-width: 640px;
+}
+.mirasai-onboarding-info-modal .modal-header {
+    padding: 1.1rem 1.5rem;
+}
+.mirasai-onboarding-info-modal .modal-body {
+    color: #495057;
+    font-size: .95rem;
+    line-height: 1.55;
+    padding: 1.25rem 1.5rem;
+}
+.mirasai-onboarding-info-modal .modal-footer {
+    padding: 1rem 1.5rem;
+}
+.mirasai-onboarding-info-kicker,
+.mirasai-onboarding-info-section-title {
+    color: var(--mirasai-secondary);
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+.mirasai-onboarding-info-kicker {
+    margin-bottom: .35rem;
+}
+.mirasai-onboarding-info-summary {
+    color: #212529;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+.mirasai-onboarding-info-section {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    padding: .85rem 1rem;
+}
+.mirasai-onboarding-info-section + .mirasai-onboarding-info-section {
+    margin-top: .75rem;
+}
+.mirasai-onboarding-info-section-title {
+    margin-bottom: .35rem;
+}
+.mirasai-onboarding-info-section p {
+    margin-bottom: 0;
+}
 .mirasai-client-config {
     background: #f8f9fa;
     border: 1px solid #dee2e6;
@@ -438,7 +484,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => $coreOnboardingDetail,
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_CORE',
                 'action_href' => $pluginsUrl,
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CORE'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CORE_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CORE_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CORE_DONE'),
             ],
             [
                 'id' => 'token',
@@ -447,7 +495,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING'),
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_TOKEN',
                 'action_href' => $usersUrl,
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOKEN'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOKEN_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOKEN_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOKEN_DONE'),
             ],
             [
                 'id' => 'endpoint',
@@ -456,7 +506,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING'),
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
                 'action_href' => '#mirasai-smoke-test',
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_ENDPOINT'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_ENDPOINT_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_ENDPOINT_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_ENDPOINT_DONE'),
             ],
             [
                 'id' => 'tools',
@@ -465,7 +517,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING'),
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
                 'action_href' => '#mirasai-smoke-test',
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOOLS'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOOLS_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOOLS_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_TOOLS_DONE'),
             ],
             [
                 'id' => 'diagnose',
@@ -474,7 +528,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING'),
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_VALIDATE',
                 'action_href' => '#mirasai-smoke-test',
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_DIAGNOSE'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_DIAGNOSE_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_DIAGNOSE_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_DIAGNOSE_DONE'),
             ],
             [
                 'id' => 'config',
@@ -483,7 +539,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING'),
                 'action_label' => 'COM_MIRASAI_ONBOARDING_ACTION_CONFIG',
                 'action_href' => '#mirasai-client-config',
-                'info' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CONFIG'),
+                'summary' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CONFIG_SUMMARY'),
+                'action' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CONFIG_ACTION'),
+                'done' => Text::_('COM_MIRASAI_ONBOARDING_INFO_CONFIG_DONE'),
             ],
         ];
         $onboardingBadgeClasses = [
@@ -524,7 +582,9 @@ $coreOnboardingDetail = empty($coreMissingItems)
                         class="btn btn-sm btn-link p-0 mirasai-onboarding-step-info"
                         data-mirasai-onboarding-info
                         data-mirasai-onboarding-info-title="<?php echo htmlspecialchars(Text::_($step['label']), ENT_QUOTES); ?>"
-                        data-mirasai-onboarding-info-body="<?php echo htmlspecialchars((string) $step['info'], ENT_QUOTES); ?>"
+                        data-mirasai-onboarding-info-summary="<?php echo htmlspecialchars((string) $step['summary'], ENT_QUOTES); ?>"
+                        data-mirasai-onboarding-info-action="<?php echo htmlspecialchars((string) $step['action'], ENT_QUOTES); ?>"
+                        data-mirasai-onboarding-info-done="<?php echo htmlspecialchars((string) $step['done'], ENT_QUOTES); ?>"
                     >
                         <span class="icon-question-circle" aria-hidden="true"></span>
                         <span><?php echo Text::_('COM_MIRASAI_ONBOARDING_HELP'); ?></span>
@@ -535,7 +595,7 @@ $coreOnboardingDetail = empty($coreMissingItems)
     </div>
 </section>
 
-<div class="modal fade" id="mirasai-onboarding-info-modal" tabindex="-1" aria-labelledby="mirasai-onboarding-info-title" aria-hidden="true">
+<div class="modal fade mirasai-onboarding-info-modal" id="mirasai-onboarding-info-modal" tabindex="-1" aria-labelledby="mirasai-onboarding-info-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -543,7 +603,16 @@ $coreOnboardingDetail = empty($coreMissingItems)
                 <button type="button" class="btn-close" data-bs-dismiss="modal" data-mirasai-onboarding-info-close aria-label="<?php echo Text::_('JCLOSE'); ?>"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-0" id="mirasai-onboarding-info-body"></p>
+                <div class="mirasai-onboarding-info-kicker"><?php echo Text::_('COM_MIRASAI_ONBOARDING_INFO_KICKER'); ?></div>
+                <p class="mirasai-onboarding-info-summary" id="mirasai-onboarding-info-summary"></p>
+                <div class="mirasai-onboarding-info-section">
+                    <div class="mirasai-onboarding-info-section-title"><?php echo Text::_('COM_MIRASAI_ONBOARDING_INFO_ACTION_TITLE'); ?></div>
+                    <p id="mirasai-onboarding-info-action"></p>
+                </div>
+                <div class="mirasai-onboarding-info-section">
+                    <div class="mirasai-onboarding-info-section-title"><?php echo Text::_('COM_MIRASAI_ONBOARDING_INFO_DONE_TITLE'); ?></div>
+                    <p id="mirasai-onboarding-info-done"></p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal" data-mirasai-onboarding-info-close>
@@ -964,7 +1033,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var onboardingRestartButton = document.querySelector('[data-mirasai-onboarding-restart]');
     var onboardingInfoModal = document.getElementById('mirasai-onboarding-info-modal');
     var onboardingInfoTitle = document.getElementById('mirasai-onboarding-info-title');
-    var onboardingInfoBody = document.getElementById('mirasai-onboarding-info-body');
+    var onboardingInfoSummary = document.getElementById('mirasai-onboarding-info-summary');
+    var onboardingInfoAction = document.getElementById('mirasai-onboarding-info-action');
+    var onboardingInfoDone = document.getElementById('mirasai-onboarding-info-done');
 
     function setDashboardView(view) {
         dashboardTabs.forEach(function(tab) {
@@ -1025,13 +1096,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setDashboardView(isOnboardingComplete() && !hashTargetsOnboarding() ? 'status' : 'onboarding');
 
-    function showOnboardingInfo(title, body) {
-        if (!onboardingInfoModal || !onboardingInfoTitle || !onboardingInfoBody) {
+    function showOnboardingInfo(title, summary, action, done) {
+        if (!onboardingInfoModal || !onboardingInfoTitle || !onboardingInfoSummary || !onboardingInfoAction || !onboardingInfoDone) {
             return;
         }
 
         onboardingInfoTitle.textContent = title || '';
-        onboardingInfoBody.textContent = body || '';
+        onboardingInfoSummary.textContent = summary || '';
+        onboardingInfoAction.textContent = action || '';
+        onboardingInfoDone.textContent = done || '';
 
         if (window.bootstrap && window.bootstrap.Modal) {
             window.bootstrap.Modal.getOrCreateInstance(onboardingInfoModal).show();
@@ -1062,7 +1135,9 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', function() {
             showOnboardingInfo(
                 button.getAttribute('data-mirasai-onboarding-info-title') || '',
-                button.getAttribute('data-mirasai-onboarding-info-body') || ''
+                button.getAttribute('data-mirasai-onboarding-info-summary') || '',
+                button.getAttribute('data-mirasai-onboarding-info-action') || '',
+                button.getAttribute('data-mirasai-onboarding-info-done') || ''
             );
         });
     });
