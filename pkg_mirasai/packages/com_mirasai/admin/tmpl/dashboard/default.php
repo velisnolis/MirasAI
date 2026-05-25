@@ -193,6 +193,30 @@ $coreOnboardingDetail = empty($coreMissingItems)
     min-width: 2.5rem;
     text-align: center;
 }
+.mirasai-dashboard-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 1rem;
+}
+.mirasai-dashboard-tabs .btn.active {
+    background: #212529;
+    border-color: #212529;
+    color: #fff;
+}
+.mirasai-dashboard-panel {
+    display: none;
+}
+.mirasai-dashboard-panel.active {
+    display: block;
+}
+.mirasai-onboarding-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
 .mirasai-onboarding-checklist {
     background: #fff;
     border: 1px solid #dee2e6;
@@ -347,35 +371,39 @@ $coreOnboardingDetail = empty($coreMissingItems)
 }
 </style>
 
-<?php // ── Status banner (full-width) ── ?>
-<div class="mirasai-banner <?php echo $bannerClass; ?>" role="banner">
-    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-        <span class="fw-bold fs-5">MirasAI v<?php echo htmlspecialchars($version); ?></span>
-        <span class="badge bg-<?php echo $statusBadgeClass; ?> fs-6">
-            <?php echo Text::_($statusLabel); ?>
-        </span>
+<div class="mirasai-dashboard" data-mirasai-dashboard>
+    <div class="mirasai-dashboard-tabs" role="tablist" aria-label="<?php echo Text::_('COM_MIRASAI_DASHBOARD_TABS_LABEL'); ?>">
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-dark active"
+            role="tab"
+            data-mirasai-dashboard-tab="onboarding"
+            aria-controls="mirasai-panel-onboarding"
+            aria-selected="true"
+        >
+            <?php echo Text::_('COM_MIRASAI_DASHBOARD_TAB_ONBOARDING'); ?>
+        </button>
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-dark"
+            role="tab"
+            data-mirasai-dashboard-tab="status"
+            aria-controls="mirasai-panel-status"
+            aria-selected="false"
+        >
+            <?php echo Text::_('COM_MIRASAI_DASHBOARD_TAB_STATUS'); ?>
+        </button>
     </div>
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <label class="fw-bold small mb-0"><?php echo Text::_('COM_MIRASAI_ENDPOINT'); ?></label>
-        <div class="input-group input-group-sm" style="max-width: 500px;">
-            <input type="text" class="form-control form-control-sm" value="<?php echo htmlspecialchars($endpoint); ?>" readonly id="mcp-endpoint">
-            <button class="btn btn-outline-secondary btn-sm" type="button" id="mirasai-copy-btn" aria-label="<?php echo Text::_('COM_MIRASAI_COPY'); ?>">
-                <span class="icon-copy" aria-hidden="true"></span>
-            </button>
+
+<div id="mirasai-panel-onboarding" class="mirasai-dashboard-panel active" data-mirasai-dashboard-panel="onboarding" role="tabpanel">
+    <div class="mirasai-onboarding-toolbar">
+        <div>
+            <h2 class="h4 mb-1"><?php echo Text::_('COM_MIRASAI_ONBOARDING_PAGE_TITLE'); ?></h2>
+            <p class="text-muted small mb-0"><?php echo Text::_('COM_MIRASAI_ONBOARDING_PAGE_DESC'); ?></p>
         </div>
-    </div>
-    <div class="text-muted small">
-        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_TOOLS'), $toolCount); ?>
-        &middot;
-        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_LANGUAGES'), $langCount); ?>
-        &middot;
-        <?php echo Text::_($elevated ? 'COM_MIRASAI_SUMMARY_ELEVATION_ON' : 'COM_MIRASAI_SUMMARY_ELEVATION_OFF'); ?>
-        &middot;
-        <?php echo Text::_($registryReady ? 'COM_MIRASAI_SUMMARY_REGISTRY_OK' : 'COM_MIRASAI_SUMMARY_REGISTRY_FAILED'); ?>
-        <?php if ($registryWarningCount > 0): ?>
-            &middot;
-            <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_REGISTRY_WARNINGS'), $registryWarningCount); ?>
-        <?php endif; ?>
+        <button type="button" class="btn btn-sm btn-success" data-mirasai-onboarding-complete>
+            <?php echo Text::_('COM_MIRASAI_ONBOARDING_COMPLETE'); ?>
+        </button>
     </div>
 </div>
 
@@ -629,6 +657,50 @@ $clientConfigs = [
   -H "X-Joomla-Token: YOUR_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'</code></pre>
 </details>
+</div>
+
+<div id="mirasai-panel-status" class="mirasai-dashboard-panel" data-mirasai-dashboard-panel="status" role="tabpanel">
+    <div class="mirasai-onboarding-toolbar">
+        <div>
+            <h2 class="h4 mb-1"><?php echo Text::_('COM_MIRASAI_STATUS_PAGE_TITLE'); ?></h2>
+            <p class="text-muted small mb-0"><?php echo Text::_('COM_MIRASAI_STATUS_PAGE_DESC'); ?></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-mirasai-onboarding-restart>
+            <?php echo Text::_('COM_MIRASAI_ONBOARDING_RESTART'); ?>
+        </button>
+    </div>
+
+    <?php // ── Status banner (full-width) ── ?>
+    <div class="mirasai-banner <?php echo $bannerClass; ?>" role="banner">
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+            <span class="fw-bold fs-5">MirasAI v<?php echo htmlspecialchars($version); ?></span>
+            <span class="badge bg-<?php echo $statusBadgeClass; ?> fs-6">
+                <?php echo Text::_($statusLabel); ?>
+            </span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <label class="fw-bold small mb-0"><?php echo Text::_('COM_MIRASAI_ENDPOINT'); ?></label>
+            <div class="input-group input-group-sm" style="max-width: 500px;">
+                <input type="text" class="form-control form-control-sm" value="<?php echo htmlspecialchars($endpoint); ?>" readonly id="mcp-endpoint">
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="mirasai-copy-btn" aria-label="<?php echo Text::_('COM_MIRASAI_COPY'); ?>">
+                    <span class="icon-copy" aria-hidden="true"></span>
+                </button>
+            </div>
+        </div>
+        <div class="text-muted small">
+            <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_TOOLS'), $toolCount); ?>
+            &middot;
+            <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_LANGUAGES'), $langCount); ?>
+            &middot;
+            <?php echo Text::_($elevated ? 'COM_MIRASAI_SUMMARY_ELEVATION_ON' : 'COM_MIRASAI_SUMMARY_ELEVATION_OFF'); ?>
+            &middot;
+            <?php echo Text::_($registryReady ? 'COM_MIRASAI_SUMMARY_REGISTRY_OK' : 'COM_MIRASAI_SUMMARY_REGISTRY_FAILED'); ?>
+            <?php if ($registryWarningCount > 0): ?>
+                &middot;
+                <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_REGISTRY_WARNINGS'), $registryWarningCount); ?>
+            <?php endif; ?>
+        </div>
+    </div>
 
 <?php // ── System + Translations (2 columns) ── ?>
 <div class="row" role="main">
@@ -827,11 +899,77 @@ $clientConfigs = [
         <?php endif; ?>
     </div>
 </div>
+</div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var smokeText = <?php echo json_encode($smokeText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     var onboardingText = <?php echo json_encode($onboardingText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    var onboardingCompleteKey = 'mirasai_onboarding_complete';
+    var dashboardTabs = document.querySelectorAll('[data-mirasai-dashboard-tab]');
+    var dashboardPanels = document.querySelectorAll('[data-mirasai-dashboard-panel]');
+    var onboardingCompleteButton = document.querySelector('[data-mirasai-onboarding-complete]');
+    var onboardingRestartButton = document.querySelector('[data-mirasai-onboarding-restart]');
+
+    function setDashboardView(view) {
+        dashboardTabs.forEach(function(tab) {
+            var active = tab.getAttribute('data-mirasai-dashboard-tab') === view;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+
+        dashboardPanels.forEach(function(panel) {
+            panel.classList.toggle('active', panel.getAttribute('data-mirasai-dashboard-panel') === view);
+        });
+    }
+
+    function hashTargetsOnboarding() {
+        if (!window.location.hash) {
+            return false;
+        }
+
+        try {
+            var target = document.querySelector(window.location.hash);
+            return !!(target && target.closest('[data-mirasai-dashboard-panel="onboarding"]'));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function isOnboardingComplete() {
+        try {
+            return localStorage.getItem(onboardingCompleteKey) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    dashboardTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            setDashboardView(tab.getAttribute('data-mirasai-dashboard-tab') || 'onboarding');
+        });
+    });
+
+    if (onboardingCompleteButton) {
+        onboardingCompleteButton.addEventListener('click', function() {
+            try {
+                localStorage.setItem(onboardingCompleteKey, '1');
+            } catch (error) {}
+            setDashboardView('status');
+        });
+    }
+
+    if (onboardingRestartButton) {
+        onboardingRestartButton.addEventListener('click', function() {
+            try {
+                localStorage.removeItem(onboardingCompleteKey);
+            } catch (error) {}
+            setDashboardView('onboarding');
+        });
+    }
+
+    setDashboardView(isOnboardingComplete() && !hashTargetsOnboarding() ? 'status' : 'onboarding');
 
     // ── Copy endpoint button ──
     var copyBtn = document.getElementById('mirasai-copy-btn');
