@@ -184,12 +184,52 @@ class YooThemeHelper
 
     /**
      * @param array<string, array<string, mixed>> $templates
+     * @return array{cleared: bool, groups: list<string>, failures: list<array{group: string, error: string}>}
      */
-    public function writeTemplates(array $templates): void
+    public function writeTemplates(array $templates): array
     {
         $data = $this->loadSystemCustomData() ?? [];
         $data['templates'] = $templates;
         $this->writeSystemCustomData($data);
+
+        return $this->invalidateBuilderCache();
+    }
+
+    /**
+     * Best-effort cache cleanup after YOOtheme custom_data writes.
+     *
+     * @return array{cleared: bool, groups: list<string>, failures: list<array{group: string, error: string}>}
+     */
+    public function invalidateBuilderCache(): array
+    {
+        $groups = [
+            'com_templates',
+            'plg_system_yootheme',
+            'yootheme',
+            'page',
+            '_system',
+        ];
+        $cleaned = [];
+        $failures = [];
+
+        foreach ($groups as $group) {
+            try {
+                $cache = \Joomla\CMS\Factory::getCache($group);
+                $cache->clean();
+                $cleaned[] = $group;
+            } catch (\Throwable $exception) {
+                $failures[] = [
+                    'group' => $group,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'cleared' => $cleaned !== [] && $failures === [],
+            'groups' => $cleaned,
+            'failures' => $failures,
+        ];
     }
 
     // -------------------------------------------------------------------------
@@ -295,6 +335,36 @@ class YooThemeHelper
         }
 
         $copy = $this->sortRecursive($copy);
+
+        return hash(
+            'sha256',
+            json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
+        );
+    }
+
+    /**
+     * Build a stable content ETag for a single template payload.
+     *
+     * @param array<string, mixed> $template
+     */
+    public function buildTemplateEtag(array $template): string
+    {
+        $copy = $this->sortRecursive($template);
+
+        return hash(
+            'sha256',
+            json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '',
+        );
+    }
+
+    /**
+     * Build a stable ETag for the full YOOtheme templates collection.
+     *
+     * @param array<string, array<string, mixed>> $templates
+     */
+    public function buildTemplatesEtag(array $templates): string
+    {
+        $copy = $this->sortRecursive($templates);
 
         return hash(
             'sha256',

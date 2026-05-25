@@ -27,6 +27,7 @@ Your AI client connects to that endpoint with a Joomla API token from a `Super U
 Out of the box, MirasAI can:
 
 - inspect the Joomla environment
+- diagnose MirasAI connectivity, addon registration, and YOOtheme readiness
 - list and read articles
 - create or update multilingual article translations
 - translate categories
@@ -71,6 +72,7 @@ The package works in three practical modes:
 Available on plain Joomla sites:
 
 - `system/info`
+- `system/diagnose`
 - `content/list`
 - `content/read`
 - `content/translate`
@@ -97,6 +99,18 @@ When `plg_mirasai_yootheme` is enabled and YOOtheme is installed:
 - `theme/extract-to-modules`
 - `menu/migrate-theme-to-modules`
 - `template/list`
+- `template/summary`
+- `template/element-types`
+- `template/element-schema`
+- `template/source-types`
+- `template/element-list`
+- `template/element-read`
+- `template/element-source-read`
+- `template/element-add`
+- `template/element-update-props`
+- `template/element-move`
+- `template/element-clone`
+- `template/element-delete`
 - `template/read`
 - `template/translate`
 
@@ -154,24 +168,51 @@ Staging must be configured explicitly through one of:
 - Joomla config: `mirasai_environment_override = staging`
 - environment variable: `MIRASAI_ENV=staging`
 
+### Risk levels
+
+Every tool exposes a canonical `risk_level` in MCP metadata:
+
+- `read`: inspection only; no persistent change.
+- `safe_write`: constrained Joomla write through a domain-specific tool.
+- `guarded_write`: persistent layout/replacement/migration write that needs preview, ETag, or explicit human review in the client workflow.
+- `dangerous_exec`: file mutation, deletion, PHP execution, or runtime/code persistence. These are Smart Sudo gated on production.
+
+Each tool also exposes `workflow_hint`:
+
+- `direct` for `read`
+- `validate_then_apply` for `safe_write`
+- `dry_run_confirm_if_match` for `guarded_write`
+- `elevation_required` for `dangerous_exec`
+
+`guarded_write` calls are blocked unless either `dry_run=true` or `confirm_guarded_write=true` is present. Tools that expose ETags, such as YOOtheme template writes, also require a fresh `if_match`.
+
+Every tool also exposes `metadata.surface`:
+
+- `essential`: first-call discovery and orientation tools.
+- `advanced`: deeper write or specialized tools.
+
+By default, `tools/list` returns all tools for compatibility. Clients that support filtered discovery can call `tools/list` with `{"surface":"essential"}` or `{"surface":"advanced"}`.
+
+`file/read` is a read tool, but it intentionally blocks common secret-bearing files such as Joomla `configuration.php`, `.env` variants, private keys, and certificate bundles.
+
 ### Elevation
 
-Some destructive tools are gated behind elevation in production.
+Only `dangerous_exec` tools are gated behind elevation in production.
 
-That split exists so simple addon writes like safe ReReplacer Phase 1 operations can remain usable, while high-risk file and PHP execution tools still require explicit production unlock.
+That split exists so normal content operations and guarded domain-specific writes can remain available, while high-risk file and PHP execution tools still require explicit production unlock.
 
 ## What Elevation Is
 
-Elevation is the production approval layer for high-risk operations.
+Elevation is the production approval layer for `dangerous_exec` operations.
 
 In practice, it means:
 
 - the AI can still inspect the site normally
 - low-risk operations can remain available when explicitly designed that way
-- high-risk operations are blocked until a human enables them
+- dangerous execution operations are blocked until a human enables them
 
 This is not a generic “admin mode”.
-It is a deliberate gate for actions that can damage the site, persist code, or change runtime behavior in ways that are hard to roll back.
+It is a deliberate gate for actions that can persist code, delete files, execute PHP, or change runtime behavior in ways that are hard to roll back.
 
 ## When Elevation Matters
 
@@ -182,9 +223,9 @@ Typical examples:
 - writing or editing files in the sandbox
 - deleting files
 - executing PHP
-- any future advanced addon flow marked as `requires_elevation`
+- any future advanced addon flow classified as `dangerous_exec`
 
-By contrast, read-heavy operations like `system/info`, `content/read`, `tools/list`, `db/schema`, or safe ReReplacer inspection flows do not exist to force unnecessary approvals.
+By contrast, `read`, `safe_write`, and `guarded_write` tools do not force Smart Sudo by default. `guarded_write` is still a higher-risk class and should be paired with preview/ETag/human confirmation in the client workflow.
 
 ## Elevation Use Cases
 
@@ -194,7 +235,7 @@ Good reasons to use elevation:
 - inspect or patch a sandboxed file as part of debugging
 - build a temporary migration script
 - test a custom integration against a live Joomla runtime
-- run a controlled destructive operation after human review
+- run a controlled dangerous execution operation after human review
 
 Bad reasons to use elevation:
 
@@ -202,6 +243,30 @@ Bad reasons to use elevation:
 - to skip proper staging validation
 - to make production the default development environment
 - to run arbitrary PHP when a normal Joomla edit or safe tool already solves the task
+
+## PHP Execution Limits
+
+`sandbox/execute-php` is transaction-wrapped PHP execution, not an isolated security sandbox.
+
+It runs PHP in the Joomla worker via `eval()`. The code has access to the Joomla runtime and the same process resources as the request handling it.
+
+What it does provide:
+
+- DB transaction wrapping around the call when the database driver supports it
+- rollback on caught PHP exceptions and errors handled by the tool
+- warning/notice capture
+- a best-effort `set_time_limit(30)`
+- production elevation and audit logging when the site is treated as production
+
+What it does not guarantee:
+
+- isolation from the Joomla PHP process
+- rollback for MySQL DDL such as `CREATE TABLE` or `ALTER TABLE`
+- rollback for non-transactional tables
+- protection from code that overrides the time limit or exhausts process resources
+- safety for arbitrary PHP on production
+
+Every call must pass `confirm_execute_php=true` to acknowledge those limits.
 
 ## Elevation Workflow
 

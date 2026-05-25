@@ -8,9 +8,21 @@ use Mirasai\Library\Tool\ContentLayoutProcessorInterface;
 use Mirasai\Library\Tool\ToolInterface;
 use Mirasai\Library\Tool\ToolProviderInterface;
 use Mirasai\Library\Tool\YooThemeLayoutProcessor;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementAddTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementCloneTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementDeleteTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\MenuMigrateThemeToModulesTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementListTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementMoveTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementReadTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSchemaTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceReadTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementTypesTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementUpdatePropsTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateReadTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSourceTypesTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateTranslateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\ThemeExtractToModulesTool;
 
@@ -62,6 +74,18 @@ class YooThemeToolProvider implements ToolProviderInterface
             'theme/extract-to-modules',
             'menu/migrate-theme-to-modules',
             'template/list',
+            'template/summary',
+            'template/element-types',
+            'template/element-schema',
+            'template/source-types',
+            'template/element-list',
+            'template/element-read',
+            'template/element-source-read',
+            'template/element-add',
+            'template/element-update-props',
+            'template/element-move',
+            'template/element-clone',
+            'template/element-delete',
             'template/read',
             'template/translate',
         ];
@@ -73,6 +97,18 @@ class YooThemeToolProvider implements ToolProviderInterface
             'theme/extract-to-modules'      => new ThemeExtractToModulesTool(),
             'menu/migrate-theme-to-modules' => new MenuMigrateThemeToModulesTool(),
             'template/list'                 => new TemplateListTool(),
+            'template/summary'              => new TemplateSummaryTool(),
+            'template/element-types'        => new TemplateElementTypesTool(),
+            'template/element-schema'       => new TemplateElementSchemaTool(),
+            'template/source-types'         => new TemplateSourceTypesTool(),
+            'template/element-list'         => new TemplateElementListTool(),
+            'template/element-read'         => new TemplateElementReadTool(),
+            'template/element-source-read'  => new TemplateElementSourceReadTool(),
+            'template/element-add'          => new TemplateElementAddTool(),
+            'template/element-update-props' => new TemplateElementUpdatePropsTool(),
+            'template/element-move'         => new TemplateElementMoveTool(),
+            'template/element-clone'        => new TemplateElementCloneTool(),
+            'template/element-delete'       => new TemplateElementDeleteTool(),
             'template/read'                 => new TemplateReadTool(),
             'template/translate'            => new TemplateTranslateTool(),
             default                         => throw new \InvalidArgumentException("Unknown tool: {$name}"),

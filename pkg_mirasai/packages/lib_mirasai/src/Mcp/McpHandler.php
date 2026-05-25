@@ -8,6 +8,7 @@ use Mirasai\Library\Sandbox\ElevationGrant;
 use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
 use Mirasai\Library\Mirasai;
+use Mirasai\Library\Tool\AbstractTool;
 use Mirasai\Library\Tool\ToolRegistry;
 
 class McpHandler
@@ -34,7 +35,7 @@ class McpHandler
         $result = match ($method) {
             'initialize' => $this->handleInitialize($params),
             'notifications/initialized' => null,
-            'tools/list' => $this->handleToolsList(),
+            'tools/list' => $this->handleToolsList($params),
             'tools/call' => $this->handleToolsCall($params),
             'ping' => ['status' => 'ok'],
             default => $this->errorResponse(-32601, "Method not found: {$method}"),
@@ -68,11 +69,12 @@ class McpHandler
 
         $instructions = 'MirasAI is an MCP server for Joomla 5. It provides tools for content management, '
             . 'multilingual translation (including YOOtheme Builder layouts), site inspection, '
-            . 'file operations, database queries, and PHP code execution in a sandboxed environment.'
+            . 'file operations, database queries, and transaction-wrapped in-process PHP execution.'
             . "\n\n"
             . 'Getting started: Use system/info to discover the Joomla environment (version, extensions, '
             . 'languages, template). Use content/list to find articles and their translation status. '
             . 'Use db/schema to inspect table structures before writing queries with db/query.'
+            . ' In crowded MCP clients, call tools/list with surface="essential" first; advanced tools remain available with surface="advanced" or the default unfiltered list.'
             . "\n\n"
             . 'Translation workflow:'
             . "\n"
@@ -97,14 +99,16 @@ class McpHandler
             . "\n"
             . '5. content/audit-multilingual — verify completeness across all languages.'
             . "\n\n"
-            . 'File operations: file/read and file/list work anywhere under the Joomla root. '
+            . 'File operations: file/read and file/list work under the Joomla root. '
+            . 'file/read blocks common secret-bearing files such as Joomla configuration, .env files, '
+            . 'private keys, and certificate bundles. '
             . 'file/write, file/edit, and file/delete are restricted to the sandbox directory '
             . '(media/mirasai/sandbox/).'
             . "\n\n"
-            . 'Sandbox: sandbox/execute-php runs PHP code with automatic DB transaction wrapping. '
-            . 'On error, the transaction is rolled back. DDL statements (CREATE TABLE, ALTER TABLE) '
-            . 'auto-commit and cannot be rolled back — do not mix DDL and DML in a single call. '
-            . 'Use sandbox/status to check the sandbox state.'
+            . 'PHP execution: sandbox/execute-php runs PHP in-process via eval() with DB transaction wrapping. '
+            . 'It is not an isolated security sandbox. Caught errors roll back the transaction, but DDL statements '
+            . '(CREATE TABLE, ALTER TABLE) auto-commit and cannot be rolled back. The 30-second time limit is best effort. '
+            . 'Calls must pass confirm_execute_php=true. Use sandbox/status to check the sandbox state.'
             . "\n\n"
             . 'Current environment: ' . $environment . '. ';
 
@@ -119,7 +123,7 @@ class McpHandler
                     . "Allowed tools: [{$scopes}]. All calls are being audited. "
                     . 'Use elevation/status to check elevation details.';
             } else {
-                $instructions .= 'Destructive tools (file/write, file/edit, file/delete, sandbox/execute-php) '
+                $instructions .= 'dangerous_exec tools (file/write, file/edit, file/delete, sandbox/execute-php) '
                     . 'are BLOCKED on production. Ask the site administrator to activate elevation '
                     . 'in the Joomla admin panel (Components → MirasAI → Elevation). '
                     . 'Use elevation/status to check elevation state.';
@@ -147,10 +151,14 @@ class McpHandler
     /**
      * @return array<string, mixed>
      */
-    private function handleToolsList(): array
+    private function handleToolsList(array $params = []): array
     {
+        $surface = isset($params['surface']) && is_string($params['surface'])
+            ? $params['surface']
+            : null;
+
         return [
-            'tools' => $this->registry->toMcpToolsList(),
+            'tools' => $this->registry->toMcpToolsList($surface),
         ];
     }
 
@@ -162,16 +170,41 @@ class McpHandler
         $toolName = $params['name'] ?? '';
         $arguments = $params['arguments'] ?? [];
 
+        if (!is_array($arguments)) {
+            return $this->errorResponse(-32602, 'Tool arguments must be an object.');
+        }
+
         $tool = $this->registry->get($toolName);
 
         if (!$tool) {
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
-        // Environment guard: block tools that explicitly require elevation on
-        // production unless elevated.
-        $permissions = $tool->getPermissions();
-        $requiresElevation = !empty($permissions['requires_elevation']);
+        // Environment guard: block dangerous_exec tools on production unless elevated.
+        $permissions = AbstractTool::normalizePermissions($tool->getPermissions());
+        $requiresElevation = $permissions['risk_level'] === AbstractTool::RISK_DANGEROUS_EXEC;
+
+        if ($permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE
+            && empty($arguments['dry_run'])
+            && empty($arguments['confirm_guarded_write'])
+        ) {
+            return [
+                'content' => [
+                    [
+                        'type' => 'text',
+                        'text' => json_encode([
+                            'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',
+                            'code' => 'guarded_write_confirmation_required',
+                            'tool' => $toolName,
+                            'risk_level' => $permissions['risk_level'],
+                            'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
+                            'action_required' => 'Run a dry_run or preview first, then retry the exact write with confirm_guarded_write=true and a fresh if_match when the tool supports ETags.',
+                        ], JSON_UNESCAPED_UNICODE),
+                    ],
+                ],
+                'isError' => true,
+            ];
+        }
 
         if ($requiresElevation && EnvironmentGuard::isProduction()) {
             $elevation = new ElevationService();

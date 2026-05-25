@@ -20,6 +20,7 @@ class Pkg_mirasaiInstallerScript extends InstallerScript
             $this->enablePlugins();
             $this->cleanupLegacyAddonPluginRows();
             $this->migrateUpdateSiteUrl();
+            $this->clearPostInstallCaches();
         }
 
         return true;
@@ -89,5 +90,25 @@ class Pkg_mirasaiInstallerScript extends InstallerScript
             ->where($db->quoteName('name') . ' = ' . $db->quote('MirasAI Package'));
 
         $db->setQuery($query)->execute();
+    }
+
+    private function clearPostInstallCaches(): void
+    {
+        $groups = [
+            '_system',
+            'com_installer',
+            'com_menus',
+            'com_modules',
+            'com_plugins',
+            'mod_menu',
+        ];
+
+        foreach ($groups as $group) {
+            try {
+                Factory::getCache($group)->clean();
+            } catch (\Throwable) {
+                // Best effort: cache cleanup must not fail an otherwise valid install.
+            }
+        }
     }
 }

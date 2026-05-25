@@ -8,6 +8,7 @@ use Joomla\CMS\Event\Application\BeforeApiRouteEvent;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
+use Joomla\Router\Route;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
 use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Mcp\McpPathNormalizer;
@@ -28,6 +29,11 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
     public function onBeforeApiRoute(BeforeApiRouteEvent $event): void
     {
+        $event->getRouter()->addRoutes([
+            new Route(['GET'], 'v1/mirasai/mcp', 'mcp.displayList', [], ['component' => 'com_mirasai', 'public' => false]),
+            new Route(['POST'], 'v1/mirasai/mcp', 'mcp.add', [], ['component' => 'com_mirasai']),
+        ]);
+
         $requestPath = Uri::getInstance()->getPath();
         $path = $this->normalizeApiPath($requestPath);
 

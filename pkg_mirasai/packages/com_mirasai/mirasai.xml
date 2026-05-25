@@ -42,7 +42,7 @@
                     name="environment_override"
                     type="list"
                     label="Environment"
-                    description="Controls whether destructive tools are treated as production-gated or staging-allowed."
+                    description="Controls whether dangerous_exec tools are production-gated or staging-allowed."
                     default="production"
                 >
                     <option value="production">Production</option>

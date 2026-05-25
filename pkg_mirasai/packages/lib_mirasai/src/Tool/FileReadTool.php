@@ -7,10 +7,31 @@ namespace Mirasai\Library\Tool;
 use Mirasai\Library\Sandbox\PathValidator;
 
 /**
- * file/read — Read file content from anywhere under ABSPATH.
+ * file/read — Read non-sensitive file content from anywhere under ABSPATH.
  */
 class FileReadTool extends AbstractTool
 {
+    private const SENSITIVE_BASENAMES = [
+        '.env',
+        '.htpasswd',
+        '.my.cnf',
+        'auth.json',
+        'authorized_keys',
+        'configuration.php',
+        'id_dsa',
+        'id_ecdsa',
+        'id_ed25519',
+        'id_rsa',
+        'known_hosts',
+    ];
+
+    private const SENSITIVE_EXTENSIONS = [
+        '.key',
+        '.pem',
+        '.p12',
+        '.pfx',
+    ];
+
     private PathValidator $pathValidator;
 
     public function __construct(?PathValidator $pathValidator = null)
@@ -26,8 +47,9 @@ class FileReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads the content of a file anywhere under the Joomla root directory. Returns the raw file content as text. '
-            . 'Useful for inspecting configuration.php, template overrides, language .ini files, or plugin code. '
+        return 'Reads non-sensitive file content anywhere under the Joomla root directory. Returns the raw file content as text. '
+            . 'Blocks common secret-bearing files such as Joomla configuration, .env files, private keys, and certificate bundles. '
+            . 'Useful for inspecting template overrides, language .ini files, or plugin code. '
             . 'Path is relative to Joomla root (e.g. "language/en-GB/en-GB.ini", "templates/yootheme/config.php").';
     }
 
@@ -57,6 +79,10 @@ class FileReadTool extends AbstractTool
             $resolved = $this->pathValidator->validateRead($path);
         } catch (\InvalidArgumentException $e) {
             return ['error' => $e->getMessage()];
+        }
+
+        if ($this->isSensitivePath($resolved)) {
+            return ['error' => 'Read access denied for sensitive file: ' . $path];
         }
 
         if (!is_file($resolved)) {
@@ -102,5 +128,31 @@ class FileReadTool extends AbstractTool
             'destructive' => false,
             'idempotent' => true,
         ];
+    }
+
+    private function isSensitivePath(string $resolved): bool
+    {
+        $normalized = str_replace('\\', '/', $resolved);
+        $segments = array_map(
+            'strtolower',
+            array_values(array_filter(explode('/', $normalized), static fn (string $segment): bool => $segment !== ''))
+        );
+        $basename = strtolower(basename($normalized));
+
+        if (in_array($basename, self::SENSITIVE_BASENAMES, true)) {
+            return true;
+        }
+
+        if (str_starts_with($basename, '.env.')) {
+            return true;
+        }
+
+        foreach (self::SENSITIVE_EXTENSIONS as $extension) {
+            if (str_ends_with($basename, $extension)) {
+                return true;
+            }
+        }
+
+        return in_array('.ssh', $segments, true);
     }
 }

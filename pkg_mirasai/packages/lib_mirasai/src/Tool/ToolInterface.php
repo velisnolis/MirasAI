@@ -26,17 +26,20 @@ interface ToolInterface
     public function handle(array $arguments): array;
 
     /**
-     * Permission flags: readonly, destructive, idempotent.
+     * Permission model.
      *
-     * @return array<string, bool>
+     * risk_level is canonical: read, safe_write, guarded_write, dangerous_exec.
+     * readonly/destructive/requires_elevation may be derived internally while
+     * the four-level model rolls through the UI.
+     *
+     * @return array<string, mixed>
      */
     public function getPermissions(): array;
 
     /**
      * Serialize this tool to MCP tools/list format.
      *
-     * Includes name, description, inputSchema, and optionally a metadata
-     * object with permission hints (destructive, requires_elevation).
+     * Includes name, description, inputSchema, and metadata with risk hints.
      *
      * @return array<string, mixed>
      */

@@ -42,6 +42,18 @@ $serverHost = (string) parse_url($endpoint, PHP_URL_HOST);
 $serverName = preg_replace('/[^a-z0-9]+/i', '-', $serverHost ?: 'mirasai') ?: 'mirasai';
 $pluginsUrl = Route::_('index.php?option=com_plugins&view=plugins&filter[search]=mirasai');
 $usersUrl = Route::_('index.php?option=com_users&view=users');
+$riskBadgeClasses = [
+    'read' => 'bg-light text-dark border',
+    'safe_write' => 'bg-info text-dark',
+    'guarded_write' => 'bg-warning text-dark',
+    'dangerous_exec' => 'bg-danger',
+];
+$riskLabels = [
+    'read' => 'COM_MIRASAI_RISK_READ',
+    'safe_write' => 'COM_MIRASAI_RISK_SAFE_WRITE',
+    'guarded_write' => 'COM_MIRASAI_RISK_GUARDED_WRITE',
+    'dangerous_exec' => 'COM_MIRASAI_RISK_DANGEROUS_EXEC',
+];
 ?>
 
 <style>
@@ -496,9 +508,14 @@ $clientConfigs = [
                                                     <?php else: ?>
                                                         <span class="badge bg-secondary"><?php echo Text::_('COM_MIRASAI_TOOLS_ADDON'); ?></span>
                                                     <?php endif; ?>
-                                                    <?php if ($tool['destructive']): ?>
-                                                        <span title="<?php echo htmlspecialchars(Text::_('COM_MIRASAI_TOOLS_DESTRUCTIVE_HINT')); ?>">&#x1F534;</span>
-                                                    <?php endif; ?>
+                                                    <?php
+                                                        $riskLevel = (string) ($tool['risk_level'] ?? 'read');
+                                                        $riskClass = $riskBadgeClasses[$riskLevel] ?? 'bg-secondary';
+                                                        $riskLabel = $riskLabels[$riskLevel] ?? 'COM_MIRASAI_RISK_UNKNOWN';
+                                                    ?>
+                                                    <span class="badge <?php echo htmlspecialchars($riskClass); ?>">
+                                                        <?php echo Text::_($riskLabel); ?>
+                                                    </span>
                                                 </span>
                                             </div>
                                         <?php endforeach; ?>

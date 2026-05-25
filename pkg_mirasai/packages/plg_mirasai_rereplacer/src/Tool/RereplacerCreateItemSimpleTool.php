@@ -92,9 +92,7 @@ class RereplacerCreateItemSimpleTool extends AbstractRereplacerTool
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => true,
-            'requires_elevation' => false,
+            'risk_level' => self::RISK_GUARDED_WRITE,
             'idempotent' => false,
         ];
     }

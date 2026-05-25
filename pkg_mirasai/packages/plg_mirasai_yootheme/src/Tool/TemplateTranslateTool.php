@@ -81,16 +81,27 @@ class TemplateTranslateTool extends AbstractTool
                     'type' => 'boolean',
                     'description' => 'If true, overwrite an existing target-language template with the same assignment fingerprint.',
                 ],
+                'if_match' => [
+                    'type' => 'string',
+                    'description' => 'Required source template etag from template/list, template/summary, or template/read. Stale values are rejected before changing YOOtheme custom_data.',
+                ],
+                'dry_run' => [
+                    'type' => 'boolean',
+                    'description' => 'If true, validate and preview the translated template without writing YOOtheme custom_data.',
+                ],
+                'confirm_guarded_write' => [
+                    'type' => 'boolean',
+                    'description' => 'Required for the real write after review. Not required when dry_run=true.',
+                ],
             ],
-            'required' => ['key', 'target_language'],
+            'required' => ['key', 'target_language', 'if_match'],
         ];
     }
 
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => false,
+            'risk_level' => self::RISK_GUARDED_WRITE,
             'idempotent' => false,
         ];
     }
@@ -100,9 +111,14 @@ class TemplateTranslateTool extends AbstractTool
         $key = trim((string) ($arguments['key'] ?? ''));
         $targetLanguage = trim((string) ($arguments['target_language'] ?? ''));
         $overwrite = !empty($arguments['overwrite']);
+        $dryRun = !empty($arguments['dry_run']);
+        $ifMatch = isset($arguments['if_match']) ? trim((string) $arguments['if_match']) : '';
 
-        if ($key === '' || $targetLanguage === '') {
-            return ['error' => 'key and target_language are required.'];
+        if ($key === '' || $targetLanguage === '' || $ifMatch === '') {
+            return [
+                'error' => 'key, target_language, and if_match are required.',
+                'code' => 'missing_if_match',
+            ];
         }
 
         if (!$this->languageExists($targetLanguage)) {
@@ -114,6 +130,17 @@ class TemplateTranslateTool extends AbstractTool
 
         if (!is_array($sourceTemplate)) {
             return ['error' => "Template {$key} not found."];
+        }
+
+        $currentSourceEtag = $this->yooHelper->buildTemplateEtag($sourceTemplate);
+
+        if (!hash_equals($currentSourceEtag, $ifMatch)) {
+            return [
+                'error' => 'Source template etag mismatch. Re-read the template and retry with the fresh etag.',
+                'code' => 'stale_etag',
+                'expected_etag' => $currentSourceEtag,
+                'provided_etag' => $ifMatch,
+            ];
         }
 
         $sourceLanguage = $this->detectLikelySourceLanguage();
@@ -166,18 +193,31 @@ class TemplateTranslateTool extends AbstractTool
             $sourceLanguageWasScoped = true;
         }
 
-        $this->yooHelper->writeTemplates($templates);
+        $cache = $dryRun
+            ? ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run']
+            : $this->yooHelper->writeTemplates($templates);
 
-        return [
+        $response = [
             'source_key' => $key,
             'target_key' => $targetKey,
             'target_language' => $targetLanguage,
+            'dry_run' => $dryRun,
             'action' => $existingTargetKey !== null ? 'updated' : 'created',
             'name' => $targetTemplate['name'],
+            'source_etag' => $currentSourceEtag,
+            'target_etag' => $this->yooHelper->buildTemplateEtag($targetTemplate),
+            'collection_etag' => $this->yooHelper->buildTemplatesEtag($templates),
             'has_static_text' => $hasStaticText,
             'source_language_scoped' => $sourceLanguageWasScoped,
             'source_template_language' => $sourceTemplateLanguage === '' ? '*' : $sourceTemplateLanguage,
+            'cache' => $cache,
         ];
+
+        if ($dryRun) {
+            $response['note'] = 'No changes were written. Retry with confirm_guarded_write=true and the same if_match if the preview is still current.';
+        }
+
+        return $response;
     }
 
     /**

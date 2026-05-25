@@ -46,7 +46,7 @@ class HtmlView extends BaseHtmlView
     /** @var string Current tab: 'elevation' or 'history' */
     public string $activeTab = 'elevation';
 
-    /** Destructive tools available for elevation */
+    /** dangerous_exec tools available for elevation */
     public const TOOL_SCOPES = [
         'file/write' => [
             'label' => 'COM_MIRASAI_ELEVATION_SCOPE_WRITE_LABEL',

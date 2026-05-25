@@ -57,8 +57,7 @@ class CategoryTranslateTool extends AbstractTool
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => false,
+            'risk_level' => self::RISK_SAFE_WRITE,
             'idempotent' => false,
         ];
     }

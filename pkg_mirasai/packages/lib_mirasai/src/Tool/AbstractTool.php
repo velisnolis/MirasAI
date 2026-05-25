@@ -12,6 +12,11 @@ use Joomla\Database\ParameterType;
 
 abstract class AbstractTool implements ToolInterface
 {
+    public const RISK_READ = 'read';
+    public const RISK_SAFE_WRITE = 'safe_write';
+    public const RISK_GUARDED_WRITE = 'guarded_write';
+    public const RISK_DANGEROUS_EXEC = 'dangerous_exec';
+
     protected DatabaseInterface $db;
 
     public function __construct()
@@ -22,6 +27,7 @@ abstract class AbstractTool implements ToolInterface
     public function getPermissions(): array
     {
         return [
+            'risk_level' => self::RISK_READ,
             'readonly' => true,
             'destructive' => false,
             'requires_elevation' => false,
@@ -32,7 +38,7 @@ abstract class AbstractTool implements ToolInterface
     /**
      * Return a sanitized summary of the tool arguments for audit logging.
      *
-     * Default: JSON of argument keys only (no values). Destructive tools
+     * Default: JSON of argument keys only (no values). Elevated tools
      * override this with tool-specific sanitization per the Arguments
      * Sanitization Policy.
      *
@@ -56,9 +62,8 @@ abstract class AbstractTool implements ToolInterface
             'inputSchema' => $this->normalizeInputSchema($this->getInputSchema()),
         ];
 
-        // Expose permission hints as MCP metadata so agents can ask for
-        // user confirmation before calling destructive tools, rather than
-        // discovering the restriction only after the call fails.
+        // Expose risk hints as MCP metadata so agents can choose the right
+        // preview/confirmation path before they call a tool.
         $metadata = $this->buildMcpMetadata();
 
         if (!empty($metadata)) {
@@ -99,25 +104,98 @@ abstract class AbstractTool implements ToolInterface
      * hints. Return [] (default) to omit the metadata key entirely.
      *
      * Standard keys (MCP extension — not part of the core spec):
-     *   destructive        bool  Tool can modify or delete data.
-     *   requires_elevation bool  Tool is gated behind Smart Sudo elevation.
+     *   risk_level         string  One of read, safe_write, guarded_write, dangerous_exec.
+     *   requires_elevation bool    Present only for dangerous_exec tools.
      *
      * @return array<string, mixed>
      */
     protected function buildMcpMetadata(): array
     {
-        $permissions = $this->getPermissions();
-        $metadata    = [];
-
-        if (!empty($permissions['destructive'])) {
-            $metadata['destructive'] = true;
-        }
+        $permissions = self::normalizePermissions($this->getPermissions());
+        $metadata    = [
+            'risk_level' => $permissions['risk_level'],
+            'workflow_hint' => self::workflowHintForRiskLevel($permissions['risk_level']),
+            'readonly' => $permissions['readonly'],
+            'idempotent' => $permissions['idempotent'],
+        ];
 
         if (!empty($permissions['requires_elevation'])) {
             $metadata['requires_elevation'] = true;
         }
 
         return $metadata;
+    }
+
+    /**
+     * Normalize old-style permission arrays into the current four-level model.
+     *
+     * @param array<string, mixed> $permissions
+     * @return array{risk_level: string, readonly: bool, destructive: bool, requires_elevation: bool, idempotent: bool}
+     */
+    public static function normalizePermissions(array $permissions): array
+    {
+        $riskLevel = is_string($permissions['risk_level'] ?? null)
+            ? (string) $permissions['risk_level']
+            : '';
+
+        if (!in_array($riskLevel, self::riskLevels(), true)) {
+            $riskLevel = self::inferRiskLevel($permissions);
+        }
+
+        $readonly = $riskLevel === self::RISK_READ;
+        $destructive = in_array($riskLevel, [self::RISK_GUARDED_WRITE, self::RISK_DANGEROUS_EXEC], true);
+        $requiresElevation = $riskLevel === self::RISK_DANGEROUS_EXEC;
+
+        return [
+            'risk_level' => $riskLevel,
+            'readonly' => $readonly,
+            'destructive' => $destructive,
+            'requires_elevation' => $requiresElevation,
+            'idempotent' => array_key_exists('idempotent', $permissions) ? (bool) $permissions['idempotent'] : true,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function riskLevels(): array
+    {
+        return [
+            self::RISK_READ,
+            self::RISK_SAFE_WRITE,
+            self::RISK_GUARDED_WRITE,
+            self::RISK_DANGEROUS_EXEC,
+        ];
+    }
+
+    public static function workflowHintForRiskLevel(string $riskLevel): string
+    {
+        return match ($riskLevel) {
+            self::RISK_SAFE_WRITE => 'validate_then_apply',
+            self::RISK_GUARDED_WRITE => 'dry_run_confirm_if_match',
+            self::RISK_DANGEROUS_EXEC => 'elevation_required',
+            default => 'direct',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $permissions
+     */
+    private static function inferRiskLevel(array $permissions): string
+    {
+        if (!empty($permissions['requires_elevation'])) {
+            return self::RISK_DANGEROUS_EXEC;
+        }
+
+        if (!empty($permissions['destructive'])) {
+            return self::RISK_GUARDED_WRITE;
+        }
+
+        if (array_key_exists('readonly', $permissions) && !$permissions['readonly']) {
+            return self::RISK_SAFE_WRITE;
+        }
+
+        return self::RISK_READ;
     }
 
     // ── Shared helpers ────────────────────────────────────────────

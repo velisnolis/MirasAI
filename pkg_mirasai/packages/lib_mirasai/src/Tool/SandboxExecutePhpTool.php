@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace Mirasai\Library\Tool;
 
 /**
- * sandbox/execute-php — Execute PHP code within a transaction-wrapped sandbox.
+ * sandbox/execute-php — Execute PHP code in-process with transaction wrapping.
  *
  * Features:
  * - DB transaction wrapping (auto-rollback on error)
- * - 30s time limit via set_time_limit
+ * - 30s time limit via set_time_limit (best effort)
  * - Output buffering and capture
  * - Error/warning capture via custom error handler
  * - Shutdown handler for fatal errors
  *
- * Limitations (documented in CEO plan):
+ * Limitations:
  * - DDL statements auto-commit in MySQL (cannot be rolled back)
  * - eval() runs in-process (no true isolation)
  * - set_time_limit can be overridden by eval'd code
@@ -29,11 +29,12 @@ class SandboxExecutePhpTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Execute PHP code in a sandboxed environment with transaction wrapping. '
-            . 'The code runs inside a DB transaction that is committed on success or rolled back on error. '
-            . 'A 30-second time limit is enforced. Warnings and notices are captured. '
+        return 'Execute PHP code in-process with DB transaction wrapping. This is not a security sandbox. '
+            . 'The code runs in the Joomla PHP worker via eval(), with access to the Joomla runtime. '
+            . 'The DB transaction is committed on success or rolled back on caught errors. '
+            . 'A 30-second time limit is attempted but can be bypassed by executed code. Warnings and notices are captured. '
             . 'IMPORTANT: DDL statements (CREATE TABLE, ALTER TABLE) auto-commit and cannot be rolled back. '
-            . 'Do not mix DDL and DML in a single call. This tool is only available on staging environments.';
+            . 'Do not mix DDL and DML in a single call. Requires confirm_execute_php=true.';
     }
 
     public function getInputSchema(): array
@@ -47,14 +48,26 @@ class SandboxExecutePhpTool extends AbstractTool
                         . 'The code has access to the Joomla application context, '
                         . 'including Factory, DatabaseInterface, etc.',
                 ],
+                'confirm_execute_php' => [
+                    'type' => 'boolean',
+                    'description' => 'Must be true to acknowledge this is in-process PHP execution, not an isolated sandbox.',
+                ],
             ],
-            'required' => ['code'],
+            'required' => ['code', 'confirm_execute_php'],
         ];
     }
 
     public function handle(array $arguments): array
     {
         $code = $arguments['code'] ?? '';
+
+        if (($arguments['confirm_execute_php'] ?? null) !== true) {
+            return [
+                'error' => 'sandbox/execute-php requires confirm_execute_php=true.',
+                'code' => 'execute_php_confirmation_required',
+                'safety_note' => 'This tool runs PHP in-process via eval(); it is transaction-wrapped but not isolated.',
+            ];
+        }
 
         if ($code === '') {
             return ['error' => 'Missing required parameter: code'];
@@ -199,9 +212,7 @@ class SandboxExecutePhpTool extends AbstractTool
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => true,
-            'requires_elevation' => true,
+            'risk_level' => self::RISK_DANGEROUS_EXEC,
             'idempotent' => false,
         ];
     }

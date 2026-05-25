@@ -12,28 +12,53 @@ class ToolRegistry
      * Static metadata for core tools so the admin dashboard can summarize them
      * without instantiating every lazy tool on page load.
      *
-     * @var array<string, array{description: string, destructive: bool}>
+     * @var array<string, array{description: string, risk_level: string}>
      */
     private const CORE_TOOL_METADATA = [
-        'system/info' => ['description' => 'Returns comprehensive Joomla runtime information: CMS version, PHP version, DB engine, installed languages, active extensions with status, template summary (name, style ID, language assignments), YOOtheme version, environment detection, and MirasAI capabilities.', 'destructive' => false],
-        'content/list' => ['description' => 'Lists articles with their language, category, publication state, and existing translation associations.', 'destructive' => false],
-        'content/read' => ['description' => 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category.', 'destructive' => false],
-        'content/translate' => ['description' => 'Creates or updates a translated version of an article. YOU must provide the translated content.', 'destructive' => false],
-        'content/translate-batch' => ['description' => 'Translates multiple articles to a target language in a single call.', 'destructive' => false],
-        'content/check-links' => ['description' => 'Scans translated articles for internal links pointing to articles that lack a translation in the same language. Reports broken links and optionally rewrites them to point to the translated version when available.', 'destructive' => false],
-        'content/audit-multilingual' => ['description' => 'Scans the entire Joomla site and returns a structured diagnostic of multilingual completeness. Reports gaps in articles, menus, modules, categories, metadata, language switcher, and theme areas. Each gap includes the MCP tool call needed to fix it.', 'destructive' => false],
-        'category/translate' => ['description' => 'Creates a translated version of a Joomla category. YOU must provide translated_title (and optionally translated_description).', 'destructive' => false],
-        'site/setup-language-switcher' => ['description' => 'Checks if a language switcher exists and, if not, creates and publishes a mod_languages module in the appropriate position. Detects YOOtheme theme positions automatically.', 'destructive' => false],
-        'sandbox/status' => ['description' => 'Returns the current state of the MirasAI sandbox: whether it is active, its state (ok/loading/crashed/safe_mode), loaded files, crashed files, and environment detection.', 'destructive' => false],
-        'file/read' => ['description' => 'Reads the content of a file anywhere under the Joomla root directory. Returns the raw file content as text.', 'destructive' => false],
-        'file/write' => ['description' => 'Write content to a file in the sandbox directory (media/mirasai/sandbox/). PHP files are syntax-validated before writing. Supports overwrite and append modes, and UTF-8 or base64 encoding.', 'destructive' => true],
-        'file/edit' => ['description' => 'Replace a string in a file within the sandbox directory. By default, old_string must appear exactly once. Set replace_all=true for multiple replacements. PHP files are syntax-validated after editing.', 'destructive' => true],
-        'file/delete' => ['description' => 'Delete a file from the sandbox directory (media/mirasai/sandbox/).', 'destructive' => true],
-        'file/list' => ['description' => 'List directory contents anywhere under the Joomla root. Default depth=1 (non-recursive). Max depth=3, max 500 entries.', 'destructive' => false],
-        'sandbox/execute-php' => ['description' => 'Execute PHP code in a sandboxed environment with transaction wrapping.', 'destructive' => true],
-        'db/query' => ['description' => 'Execute read-only SQL queries (SELECT, SHOW) via the Joomla database layer.', 'destructive' => false],
-        'db/schema' => ['description' => 'Inspect database table structure. Returns column names, types, nullability, keys, and defaults.', 'destructive' => false],
-        'elevation/status' => ['description' => 'Check the current elevation status for destructive tools.', 'destructive' => false],
+        'system/info' => ['description' => 'Returns comprehensive Joomla runtime information: CMS version, PHP version, DB engine, installed languages, active extensions with status, template summary (name, style ID, language assignments), YOOtheme version, environment detection, and MirasAI capabilities.', 'risk_level' => AbstractTool::RISK_READ],
+        'system/diagnose' => ['description' => 'Runs a compact MirasAI diagnostic: environment, extension/addon status, registered tools, provider warnings, YOOtheme layout/template counts, and production elevation state.', 'risk_level' => AbstractTool::RISK_READ],
+        'content/list' => ['description' => 'Lists articles with their language, category, publication state, and existing translation associations.', 'risk_level' => AbstractTool::RISK_READ],
+        'content/read' => ['description' => 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category.', 'risk_level' => AbstractTool::RISK_READ],
+        'content/translate' => ['description' => 'Creates or updates a translated version of an article. YOU must provide the translated content.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
+        'content/translate-batch' => ['description' => 'Translates multiple articles to a target language in a single call.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
+        'content/check-links' => ['description' => 'Scans translated articles for internal links pointing to articles that lack a translation in the same language. Reports broken links and optionally rewrites them to point to the translated version when available.', 'risk_level' => AbstractTool::RISK_GUARDED_WRITE],
+        'content/audit-multilingual' => ['description' => 'Scans the entire Joomla site and returns a structured diagnostic of multilingual completeness. Reports gaps in articles, menus, modules, categories, metadata, language switcher, and theme areas. Each gap includes the MCP tool call needed to fix it.', 'risk_level' => AbstractTool::RISK_READ],
+        'category/translate' => ['description' => 'Creates a translated version of a Joomla category. YOU must provide translated_title (and optionally translated_description).', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
+        'site/setup-language-switcher' => ['description' => 'Checks if a language switcher exists and, if not, creates and publishes a mod_languages module in the appropriate position. Detects YOOtheme theme positions automatically.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
+        'sandbox/status' => ['description' => 'Returns the current state of the MirasAI sandbox: whether it is active, its state (ok/loading/crashed/safe_mode), loaded files, crashed files, and environment detection.', 'risk_level' => AbstractTool::RISK_READ],
+        'file/read' => ['description' => 'Reads non-sensitive file content anywhere under the Joomla root directory. Blocks common secret-bearing files such as Joomla configuration, .env files, private keys, and certificate bundles.', 'risk_level' => AbstractTool::RISK_READ],
+        'file/write' => ['description' => 'Write content to a file in the sandbox directory (media/mirasai/sandbox/). PHP files are syntax-validated before writing. Supports overwrite and append modes, and UTF-8 or base64 encoding.', 'risk_level' => AbstractTool::RISK_DANGEROUS_EXEC],
+        'file/edit' => ['description' => 'Replace a string in a file within the sandbox directory. By default, old_string must appear exactly once. Set replace_all=true for multiple replacements. PHP files are syntax-validated after editing.', 'risk_level' => AbstractTool::RISK_DANGEROUS_EXEC],
+        'file/delete' => ['description' => 'Delete a file from the sandbox directory (media/mirasai/sandbox/).', 'risk_level' => AbstractTool::RISK_DANGEROUS_EXEC],
+        'file/list' => ['description' => 'List directory contents anywhere under the Joomla root. Default depth=1 (non-recursive). Max depth=3, max 500 entries.', 'risk_level' => AbstractTool::RISK_READ],
+        'sandbox/execute-php' => ['description' => 'Execute PHP code in-process with DB transaction wrapping. This is not an isolated security sandbox.', 'risk_level' => AbstractTool::RISK_DANGEROUS_EXEC],
+        'db/query' => ['description' => 'Execute read-only SQL queries (SELECT, SHOW) via the Joomla database layer.', 'risk_level' => AbstractTool::RISK_READ],
+        'db/schema' => ['description' => 'Inspect database table structure. Returns column names, types, nullability, keys, and defaults.', 'risk_level' => AbstractTool::RISK_READ],
+        'elevation/status' => ['description' => 'Check the current elevation status for dangerous execution tools.', 'risk_level' => AbstractTool::RISK_READ],
+    ];
+
+    /**
+     * First-call tools that should stay prominent in crowded MCP clients.
+     *
+     * tools/list still returns every tool by default for compatibility. Clients
+     * that support filtered discovery can call tools/list with
+     * params.surface="essential" to get this smaller guided surface.
+     *
+     * @var array<string, true>
+     */
+    private const ESSENTIAL_TOOL_NAMES = [
+        'system/info' => true,
+        'system/diagnose' => true,
+        'content/list' => true,
+        'content/read' => true,
+        'content/audit-multilingual' => true,
+        'template/list' => true,
+        'template/summary' => true,
+        'template/element-types' => true,
+        'template/element-list' => true,
+        'template/element-read' => true,
+        'template/element-source-read' => true,
+        'elevation/status' => true,
     ];
 
     /**
@@ -57,7 +82,7 @@ class ToolRegistry
     /**
      * Lightweight metadata for tools, used by the admin dashboard.
      *
-     * @var array<string, array{description: string, destructive: bool}>
+     * @var array<string, array{description: string, risk_level: string, destructive: bool, requires_elevation: bool}>
      */
     private array $toolMetadata = [];
 
@@ -94,6 +119,7 @@ class ToolRegistry
 
         // Core tools — registered lazily by class name.
         $registry->registerLazy('system/info',                 SystemInfoTool::class, 'core', self::CORE_TOOL_METADATA['system/info']);
+        $registry->registerLazy('system/diagnose',             SystemDiagnoseTool::class, 'core', self::CORE_TOOL_METADATA['system/diagnose']);
         $registry->registerLazy('content/list',                ContentListTool::class, 'core', self::CORE_TOOL_METADATA['content/list']);
         $registry->registerLazy('content/read',                ContentReadTool::class, 'core', self::CORE_TOOL_METADATA['content/read']);
         $registry->registerLazy('content/translate',           ContentTranslateTool::class, 'core', self::CORE_TOOL_METADATA['content/translate']);
@@ -207,9 +233,12 @@ class ToolRegistry
 
                     $tool = $provider->createTool($toolName);
                     $this->register($tool, $providerId);
+                    $permissions = AbstractTool::normalizePermissions($tool->getPermissions());
                     $this->toolMetadata[$toolName] = [
                         'description' => $tool->getDescription(),
-                        'destructive' => !empty($tool->getPermissions()['destructive']),
+                        'risk_level' => $permissions['risk_level'],
+                        'destructive' => $permissions['destructive'],
+                        'requires_elevation' => $permissions['requires_elevation'],
                     ];
                     $registeredTools++;
                 }
@@ -358,15 +387,15 @@ class ToolRegistry
     /**
      * Return a lightweight summary of all tools without instantiating them.
      *
-     * For lazy (class-string) entries the description and destructive flag are
+     * For lazy (class-string) entries the description and risk level are
      * obtained by instantiating a temporary instance. For already-resolved
      * instances, the live object is used directly.
      *
      * This is designed for the admin dashboard where we need name, description,
-     * provider, and destructive flag for all tools — but don't need to pay the
+     * provider, and risk level for all tools — but don't need to pay the
      * full cost of keeping 25+ tool objects in memory simultaneously.
      *
-     * @return list<array{name: string, description: string, provider: string, destructive: bool}>
+     * @return list<array{name: string, description: string, provider: string, risk_level: string, destructive: bool, requires_elevation: bool}>
      */
     public function toToolSummaryList(): array
     {
@@ -384,7 +413,9 @@ class ToolRegistry
                 'name'        => $name,
                 'description' => $metadata['description'],
                 'provider'    => $this->providers[$name] ?? 'unknown',
+                'risk_level'  => $metadata['risk_level'],
                 'destructive' => $metadata['destructive'],
+                'requires_elevation' => $metadata['requires_elevation'],
             ];
         }
 
@@ -435,29 +466,60 @@ class ToolRegistry
      *
      * @return list<array<string, mixed>>
      */
-    public function toMcpToolsList(): array
+    public function toMcpToolsList(?string $surface = null): array
     {
         $list = [];
+        $surface = $this->normalizeSurface($surface);
 
         foreach (array_keys($this->tools) as $name) {
-            $tool = $this->get($name);
+            if ($surface !== null && $this->getToolSurface($name) !== $surface) {
+                continue;
+            }
 
-            if ($tool !== null) {
-                $list[] = $tool->toMcpTool();
+            try {
+                $tool = $this->get($name);
+
+                if ($tool !== null) {
+                    $mcpTool = $tool->toMcpTool();
+                    $mcpTool['metadata'] = array_merge(
+                        is_array($mcpTool['metadata'] ?? null) ? $mcpTool['metadata'] : [],
+                        ['surface' => $this->getToolSurface($name)]
+                    );
+                    $list[] = $mcpTool;
+                }
+            } catch (\Throwable $e) {
+                $this->warn("MirasAI: failed to serialize tool '{$name}' for tools/list: " . $e->getMessage());
+                continue;
             }
         }
 
         return $list;
     }
 
+    private function getToolSurface(string $name): string
+    {
+        return isset(self::ESSENTIAL_TOOL_NAMES[$name]) ? 'essential' : 'advanced';
+    }
+
+    private function normalizeSurface(?string $surface): ?string
+    {
+        if ($surface === null || trim($surface) === '' || $surface === 'all') {
+            return null;
+        }
+
+        $surface = trim($surface);
+
+        return in_array($surface, ['essential', 'advanced'], true) ? $surface : null;
+    }
+
     /**
      * @param ToolInterface|class-string<ToolInterface> $entry
-     * @return array{description: string, destructive: bool}
+     * @return array{description: string, risk_level: string, destructive: bool, requires_elevation: bool}
      */
     private function getToolMetadata(string $name, ToolInterface|string $entry): array
     {
         if (isset($this->toolMetadata[$name])) {
-            return $this->toolMetadata[$name];
+            return $this->normalizeToolMetadata($this->toolMetadata[$name]);
         }
 
         if (\is_string($entry)) {
@@ -467,14 +529,37 @@ class ToolRegistry
             $tool = $entry;
         }
 
+        $permissions = AbstractTool::normalizePermissions($tool->getPermissions());
         $metadata = [
             'description' => $tool->getDescription(),
-            'destructive' => !empty($tool->getPermissions()['destructive']),
+            'risk_level' => $permissions['risk_level'],
+            'destructive' => $permissions['destructive'],
+            'requires_elevation' => $permissions['requires_elevation'],
         ];
 
         $this->toolMetadata[$name] = $metadata;
 
         return $metadata;
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array{description: string, risk_level: string, destructive: bool, requires_elevation: bool}
+     */
+    private function normalizeToolMetadata(array $metadata): array
+    {
+        $permissions = AbstractTool::normalizePermissions([
+            'risk_level' => $metadata['risk_level'] ?? null,
+            'destructive' => $metadata['destructive'] ?? false,
+            'requires_elevation' => $metadata['requires_elevation'] ?? false,
+        ]);
+
+        return [
+            'description' => (string) ($metadata['description'] ?? ''),
+            'risk_level' => $permissions['risk_level'],
+            'destructive' => $permissions['destructive'],
+            'requires_elevation' => $permissions['requires_elevation'],
+        ];
     }
 
     private function warn(string $message): void

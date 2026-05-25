@@ -407,16 +407,16 @@ class RereplacerService
             $reasons[] = 'Script or PHP output is not allowed in the simple tool set.';
         }
 
-        $riskLevel = 'low';
+        $scopeRiskLevel = 'low';
 
         if ($requiresElevation || count($reasons) >= 3) {
-            $riskLevel = 'high';
+            $scopeRiskLevel = 'high';
         } elseif ($reasons !== []) {
-            $riskLevel = 'medium';
+            $scopeRiskLevel = 'medium';
         }
 
         return [
-            'risk_level' => $riskLevel,
+            'scope_risk_level' => $scopeRiskLevel,
             'scope_summary' => sprintf(
                 'Replacement in %s%s.',
                 $area,

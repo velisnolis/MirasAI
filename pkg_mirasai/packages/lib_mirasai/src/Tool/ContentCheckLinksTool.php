@@ -43,8 +43,7 @@ class ContentCheckLinksTool extends AbstractTool
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => false,
+            'risk_level' => self::RISK_GUARDED_WRITE,
             'idempotent' => true,
         ];
     }

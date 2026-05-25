@@ -9,10 +9,10 @@ use Joomla\CMS\Log\Log;
 use Joomla\Database\DatabaseInterface;
 
 /**
- * Service for time-limited elevation of destructive MCP tools on production.
+ * Service for time-limited elevation of dangerous_exec MCP tools on production.
  *
  * "Smart Sudo" — authenticate once, get elevated privileges for N minutes,
- * then they auto-expire. Every destructive action is logged.
+ * then they auto-expire. Every elevated action is logged.
  *
  * Fail-closed: any DB exception during elevation check returns null (blocks tool).
  * Never fail-open.
@@ -170,7 +170,7 @@ class ElevationService
     }
 
     /**
-     * Log a destructive tool usage to the audit table.
+     * Log an elevated tool usage to the audit table.
      *
      * Called BEFORE execution (result_summary = 'pending').
      *

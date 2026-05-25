@@ -11,7 +11,7 @@ use Mirasai\Library\Sandbox\EnvironmentGuard;
  * Read-only MCP tool for checking elevation status.
  *
  * Works on both staging and production. Lets the agent check
- * whether destructive tools are available before attempting them.
+     * whether dangerous_exec tools are available before attempting them.
  */
 class ElevationStatusTool extends AbstractTool
 {
@@ -22,9 +22,9 @@ class ElevationStatusTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Check the current elevation status for destructive tools. '
+        return 'Check the current elevation status for dangerous_exec tools. '
             . 'Returns whether elevation is active, remaining time, allowed scopes, '
-            . 'and recent audit entries. Use this before attempting destructive operations on production.';
+            . 'and recent audit entries. Use this before attempting dangerous_exec operations on production.';
     }
 
     public function getInputSchema(): array
@@ -58,7 +58,7 @@ class ElevationStatusTool extends AbstractTool
                 'environment' => 'unknown',
                 'elevation' => [
                     'state' => 'unknown',
-                    'message' => 'Could not determine environment. Treated as production — destructive tools are blocked.',
+                    'message' => 'Could not determine environment. Treated as production — dangerous_exec tools are blocked.',
                 ],
             ];
         }
@@ -72,7 +72,7 @@ class ElevationStatusTool extends AbstractTool
                 'environment' => 'production',
                 'elevation' => [
                     'state' => 'inactive',
-                    'message' => 'Destructive tools are BLOCKED. Ask the site administrator to activate elevation in the Joomla admin panel (Components → MirasAI → Elevation).',
+                    'message' => 'dangerous_exec tools are BLOCKED. Ask the site administrator to activate elevation in the Joomla admin panel (Components → MirasAI → Elevation).',
                 ],
             ];
         }

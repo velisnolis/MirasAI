@@ -53,6 +53,26 @@ final class MissingPropertiesTool extends AbstractTool
     public function handle(array $arguments): array { return []; }
 }
 
+final class GuardedWriteTool extends AbstractTool
+{
+    public function __construct() {}
+    public function getName(): string { return 'test/guarded-write'; }
+    public function getDescription(): string { return 'test'; }
+    public function getInputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+    public function getPermissions(): array { return ['risk_level' => self::RISK_GUARDED_WRITE, 'idempotent' => false]; }
+    public function handle(array $arguments): array { return []; }
+}
+
+final class DangerousExecTool extends AbstractTool
+{
+    public function __construct() {}
+    public function getName(): string { return 'test/dangerous-exec'; }
+    public function getDescription(): string { return 'test'; }
+    public function getInputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+    public function getPermissions(): array { return ['risk_level' => self::RISK_DANGEROUS_EXEC, 'idempotent' => false]; }
+    public function handle(array $arguments): array { return []; }
+}
+
 echo "\n=== MCP schema normalization ===\n";
 
 $emptyJson = json_encode((new EmptyPropertiesTool())->toMcpTool(), JSON_THROW_ON_ERROR);
@@ -64,6 +84,17 @@ $missingJson = json_encode((new MissingPropertiesTool())->toMcpTool(), JSON_THRO
 $missingDecoded = json_decode($missingJson, true, flags: JSON_THROW_ON_ERROR);
 expect('missing properties is added as JSON object', $missingDecoded['inputSchema']['properties'], []);
 expect('missing properties raw JSON contains object', str_contains($missingJson, '"properties":{}'), true);
+
+$guardedDecoded = (new GuardedWriteTool())->toMcpTool();
+expect('guarded write exposes risk level', $guardedDecoded['metadata']['risk_level'] ?? null, AbstractTool::RISK_GUARDED_WRITE);
+expect('guarded write exposes workflow hint', $guardedDecoded['metadata']['workflow_hint'] ?? null, 'dry_run_confirm_if_match');
+expect('guarded write omits legacy destructive hint', $guardedDecoded['metadata']['destructive'] ?? null, null);
+expect('guarded write does not require elevation', $guardedDecoded['metadata']['requires_elevation'] ?? null, null);
+
+$dangerousDecoded = (new DangerousExecTool())->toMcpTool();
+expect('dangerous exec exposes risk level', $dangerousDecoded['metadata']['risk_level'] ?? null, AbstractTool::RISK_DANGEROUS_EXEC);
+expect('dangerous exec exposes workflow hint', $dangerousDecoded['metadata']['workflow_hint'] ?? null, 'elevation_required');
+expect('dangerous exec requires elevation', $dangerousDecoded['metadata']['requires_elevation'] ?? null, true);
 
 if ($failed > 0) {
     echo "\n{$failed} schema test(s) failed.\n";

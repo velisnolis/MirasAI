@@ -15,6 +15,10 @@ class McpController extends ApiController
 
     public function add()
     {
+        if (!$this->authorizeMcp()) {
+            return $this;
+        }
+
         $handler = $this->buildHandler();
 
         $input = file_get_contents('php://input');
@@ -50,6 +54,10 @@ class McpController extends ApiController
 
     public function displayList()
     {
+        if (!$this->authorizeMcp()) {
+            return $this;
+        }
+
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
         header('Connection: keep-alive');
@@ -88,5 +96,24 @@ class McpController extends ApiController
     private function buildHandler(): McpHandler
     {
         return new McpHandler(ToolRegistry::buildDefault());
+    }
+
+    private function authorizeMcp(): bool
+    {
+        $user = $this->app->getIdentity();
+
+        if (!$user || $user->guest || !$user->authorise('core.admin')) {
+            header('Content-Type: application/json', true, 403);
+            echo json_encode([
+                'jsonrpc' => '2.0',
+                'error' => ['code' => -32000, 'message' => 'MCP access requires a Super User API token.'],
+                'id' => null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $this->app->close();
+
+            return false;
+        }
+
+        return true;
     }
 };

@@ -66,6 +66,7 @@ class TemplateReadTool extends AbstractTool
             'name' => $this->yooHelper->getTemplateName($template),
             'type' => is_string($template['type'] ?? null) ? $template['type'] : '',
             'language' => $this->yooHelper->getTemplateLanguage($template) ?: '*',
+            'etag' => $this->yooHelper->buildTemplateEtag($template),
             'dynamic_only' => $translatableNodes === [],
             'has_static_text' => $translatableNodes !== [],
             'assignment_fingerprint' => $this->yooHelper->buildTemplateAssignmentFingerprint($template),

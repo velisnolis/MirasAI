@@ -23,8 +23,19 @@ $container->alias(\Joomla\Session\SessionInterface::class, 'session.web.site');
 $app = $container->get(\Joomla\CMS\Application\SiteApplication::class);
 \Joomla\CMS\Factory::$application = $app;
 
+try {
+    $initializer = new \ReflectionMethod($app, 'initialiseApp');
+    $initializer->setAccessible(true);
+    $initializer->invoke($app);
+} catch (\Throwable) {
+    // Keep the standalone endpoint usable on hosts where the full site app
+    // bootstrap cannot be repeated. Tools that need language/session state may
+    // still fall back to static inspection.
+}
+
 // Load the MirasAI library
 // Core interfaces
+require_once JPATH_LIBRARIES . '/mirasai/src/Mirasai.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolInterface.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolProviderInterface.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentLayoutProcessorInterface.php';
@@ -32,11 +43,14 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Mcp/MirasaiCollectToolsEvent.php';
 // Base class and helpers
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/AbstractTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeLayoutProcessor.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeLayoutSummarizer.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeElementNavigator.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeHelper.php';
 // Registry
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolRegistry.php';
 // Core tools
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemDiagnoseTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';

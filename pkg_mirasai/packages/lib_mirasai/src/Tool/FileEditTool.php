@@ -154,9 +154,7 @@ class FileEditTool extends AbstractTool
     public function getPermissions(): array
     {
         return [
-            'readonly' => false,
-            'destructive' => true,
-            'requires_elevation' => true,
+            'risk_level' => self::RISK_DANGEROUS_EXEC,
             'idempotent' => false,
         ];
     }

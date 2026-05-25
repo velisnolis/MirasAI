@@ -32,10 +32,10 @@ class HtmlView extends BaseHtmlView
     /** @var bool */
     protected bool $allCoreEnabled = true;
 
-    /** @var list<array{name: string, description: string, provider: string, destructive: bool}> */
+    /** @var list<array{name: string, description: string, provider: string, risk_level: string, destructive: bool, requires_elevation: bool}> */
     protected array $toolSummary = [];
 
-    /** @var array<string, list<array{name: string, description: string, provider: string, destructive: bool}>> */
+    /** @var array<string, list<array{name: string, description: string, provider: string, risk_level: string, destructive: bool, requires_elevation: bool}>> */
     protected array $toolsByDomain = [];
 
     /** @var list<array<string, mixed>> */
@@ -330,8 +330,8 @@ class HtmlView extends BaseHtmlView
     /**
      * Group tools by their domain prefix (content/*, file/*, etc.).
      *
-     * @param list<array{name: string, description: string, provider: string, destructive: bool}> $tools
-     * @return array<string, list<array{name: string, description: string, provider: string, destructive: bool}>>
+     * @param list<array{name: string, description: string, provider: string, risk_level: string, destructive: bool, requires_elevation: bool}> $tools
+     * @return array<string, list<array{name: string, description: string, provider: string, risk_level: string, destructive: bool, requires_elevation: bool}>>
      */
     private function groupToolsByDomain(array $tools): array
     {

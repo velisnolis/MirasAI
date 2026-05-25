@@ -52,6 +52,18 @@ wait_for_http() {
   done
 }
 
+wait_for_joomla_cli() {
+  local retries=60
+  until docker compose exec -T joomla test -f /var/www/html/installation/joomla.php; do
+    retries=$((retries - 1))
+    if [[ "$retries" -le 0 ]]; then
+      echo "Joomla CLI installer did not become available in time." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
 prepare_yootheme_archive() {
   if [[ "${WITH_YOOTHEME:-1}" != "1" ]]; then
     return 0
@@ -85,6 +97,8 @@ install_joomla_if_needed() {
     echo "Joomla already installed."
     return 0
   fi
+
+  wait_for_joomla_cli
 
   docker compose exec \
     -T \
@@ -127,6 +141,30 @@ install_extension_zip_optional() {
   fi
 
   echo "Warning: optional extension install failed for ${label}; continuing." >&2
+}
+
+enable_plugin() {
+  local folder="$1"
+  local element="$2"
+  local label="$3"
+  local found
+
+  found="$(docker compose exec -T db sh -eu -c "mysql -N -u\"${MYSQL_USER}\" -p\"${MYSQL_PASSWORD}\" \"${MYSQL_DATABASE}\" <<SQL
+UPDATE ${JOOMLA_DB_PREFIX}extensions
+SET enabled = 1
+WHERE type = 'plugin'
+  AND folder = '${folder}'
+  AND element = '${element}';
+SELECT COUNT(*)
+FROM ${JOOMLA_DB_PREFIX}extensions
+WHERE type = 'plugin'
+  AND folder = '${folder}'
+  AND element = '${element}';
+SQL")"
+
+  if [[ "${found// /}" == "0" ]]; then
+    echo "Warning: plugin not found for ${label} (${folder}/${element})." >&2
+  fi
 }
 
 configure_admin_api_token() {
@@ -195,6 +233,7 @@ main() {
 
   if [[ "${WITH_YOOTHEME:-1}" == "1" ]]; then
     install_extension_zip "$YOOTHEME_ARCHIVE" /tmp/yootheme-pro-lab.zip
+    enable_plugin system yootheme "YOOtheme system plugin"
   fi
 
   "${ROOT_DIR}/docker/build-package.sh" >/dev/null
@@ -202,6 +241,13 @@ main() {
   install_extension_zip "${BUILD_DIR}/package-stage/pkg_mirasai/packages/plg_system_mirasai.zip" /tmp/plg_system_mirasai.zip
   install_extension_zip "${BUILD_DIR}/package-stage/pkg_mirasai/packages/plg_webservices_mirasai.zip" /tmp/plg_webservices_mirasai.zip
   install_extension_zip_optional "${BUILD_DIR}/package-stage/pkg_mirasai/packages/com_mirasai.zip" /tmp/com_mirasai.zip "com_mirasai"
+  enable_plugin system mirasai "MirasAI system plugin"
+  enable_plugin webservices mirasai "MirasAI webservices plugin"
+
+  if [[ "${WITH_YOOTHEME:-1}" == "1" ]]; then
+    install_extension_zip "${BUILD_DIR}/package-stage/pkg_mirasai/packages/plg_mirasai_yootheme.zip" /tmp/plg_mirasai_yootheme.zip
+    enable_plugin mirasai yootheme "MirasAI YOOtheme addon"
+  fi
 
   configure_admin_api_token
 

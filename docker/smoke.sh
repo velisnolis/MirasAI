@@ -69,10 +69,17 @@ main() {
   assert_http_ok "http://127.0.0.1:${JOOMLA_HTTP_PORT}/administrator/index.php"
 
   assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}' 'system/info'
+  assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/list","params":{"surface":"essential"},"id":11}' 'system/diagnose'
   assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"system/info","arguments":{}},"id":2}' 'yootheme'
+  assert_mcp_contains '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"system/diagnose","arguments":{}},"id":3}' 'status'
 
   php "${ROOT_DIR}/docker/test-mcp-schema.php"
   php "${ROOT_DIR}/docker/test-mcp-path-normalizer.php"
+  php "${ROOT_DIR}/docker/test-tool-registry-resilience.php"
+  php "${ROOT_DIR}/docker/test-file-read-denylist.php"
+  php "${ROOT_DIR}/docker/test-sandbox-execute-php-contract.php"
+  php "${ROOT_DIR}/docker/test-yootheme-summary.php"
+  php "${ROOT_DIR}/docker/test-yootheme-elements.php"
 
   echo "Smoke checks passed."
 

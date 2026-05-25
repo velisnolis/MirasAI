@@ -15,7 +15,7 @@ class ContentReadTool extends AbstractTool
     {
         return 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category. '
             . 'For standard articles: introtext and fulltext contain the article HTML. '
-            . 'For YOOtheme Builder articles (has_yootheme_builder=true): returns yootheme_translatable_nodes — '
+            . 'For YOOtheme Builder articles (has_yootheme_builder=true): returns yootheme_layout_summary and yootheme_translatable_nodes — '
             . 'an array of {path, field, replacement_key, text, format}. '
             . 'Use each node\'s replacement_key as the key in yootheme_text_replacements when calling content/translate.';
     }
@@ -76,6 +76,7 @@ class ContentReadTool extends AbstractTool
             'introtext' => $row['introtext'],
             'has_yootheme_builder' => false,
             'yootheme_layout' => null,
+            'yootheme_layout_summary' => null,
         ];
 
         $fulltext = $row['fulltext_raw'] ?? '';
@@ -90,6 +91,7 @@ class ContentReadTool extends AbstractTool
 
                 if (is_array($layout)) {
                     $result['yootheme_layout'] = $layout;
+                    $result['yootheme_layout_summary'] = (new YooThemeLayoutSummarizer())->summarize($layout);
                     $result['yootheme_translatable_nodes'] = $processor->findTranslatableNodes($layout);
                 }
             }
