@@ -405,7 +405,6 @@ $coreOnboardingDetail = empty($coreMissingItems)
             <?php echo Text::_('COM_MIRASAI_ONBOARDING_COMPLETE'); ?>
         </button>
     </div>
-</div>
 
 <section class="mirasai-onboarding-checklist" aria-labelledby="mirasai-onboarding-checklist-title">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
