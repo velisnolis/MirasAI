@@ -885,6 +885,51 @@ document.addEventListener('DOMContentLoaded', function() {
         setOnboardingStep('diagnose', 'pending', onboardingText.diagnoseWaiting);
     }
 
+    function copyTextToClipboard(text) {
+        function fallbackCopy() {
+            return new Promise(function(resolve, reject) {
+                var textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', 'readonly');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+
+                try {
+                    if (document.execCommand('copy')) {
+                        resolve();
+                    } else {
+                        reject(new Error('copy command failed'));
+                    }
+                } catch (error) {
+                    reject(error);
+                } finally {
+                    document.body.removeChild(textarea);
+                }
+            });
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text).catch(fallbackCopy);
+        }
+
+        return fallbackCopy();
+    }
+
+    function flashCopyButton(button) {
+        button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPIED')); ?>';
+        setTimeout(function() {
+            button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPY')); ?>';
+        }, 1500);
+    }
+
+    function markClientConfigCopied(target) {
+        var activeTab = document.querySelector('[data-mirasai-client-tab="' + target + '"]');
+        var label = activeTab ? (activeTab.textContent || target).trim() : target;
+        setOnboardingStep('config', 'passed', onboardingText.configOk.replace('%s', label));
+    }
+
     var clientTabs = document.querySelectorAll('[data-mirasai-client-tab]');
     var clientPanels = document.querySelectorAll('[data-mirasai-client-panel]');
     var tokenTemplateNodes = document.querySelectorAll('[data-mirasai-token-template]');
@@ -925,19 +970,14 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', function() {
             var target = button.getAttribute('data-mirasai-copy-config');
             var panel = document.querySelector('[data-mirasai-client-panel="' + target + '"] code');
-            if (!panel || !navigator.clipboard) {
+            if (!panel) {
                 return;
             }
 
-            navigator.clipboard.writeText(panel.textContent || '').then(function() {
-                var activeTab = document.querySelector('[data-mirasai-client-tab="' + target + '"]');
-                var label = activeTab ? (activeTab.textContent || target).trim() : target;
-                setOnboardingStep('config', 'passed', onboardingText.configOk.replace('%s', label));
-                button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPIED')); ?>';
-                setTimeout(function() {
-                    button.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPY')); ?>';
-                }, 1500);
-            });
+            markClientConfigCopied(target);
+            copyTextToClipboard(panel.textContent || '').then(function() {
+                flashCopyButton(button);
+            }).catch(function() {});
         });
     });
 
@@ -945,16 +985,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (curlCopyButton) {
         curlCopyButton.addEventListener('click', function() {
             var curlCode = document.getElementById('mirasai-curl-example');
-            if (!curlCode || !navigator.clipboard) {
+            if (!curlCode) {
                 return;
             }
 
-            navigator.clipboard.writeText(curlCode.textContent || '').then(function() {
-                curlCopyButton.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPIED')); ?>';
-                setTimeout(function() {
-                    curlCopyButton.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPY')); ?>';
-                }, 1500);
-            });
+            copyTextToClipboard(curlCode.textContent || '').then(function() {
+                flashCopyButton(curlCopyButton);
+            }).catch(function() {});
         });
     }
 
