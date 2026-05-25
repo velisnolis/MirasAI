@@ -183,6 +183,29 @@
 - **Depends on:** TODO-013.
 - **Added:** 2026-03-25
 
+### TODO-015: Dashboard onboarding wizard i remaquetació final (P1)
+- **What:** Convertir el dashboard actual en un onboarding/client wizard real i, quan tinguem tota la informació funcional, remaquetar-lo perquè sigui més clar, escanejable i fàcil d'entendre.
+- **Context:** El dashboard ja inclou una part important de l'onboarding: endpoint amb copy, getting started, exemple curl, snippets per clients AI, estat MirasAI, resum de tools/idiomes/elevation/registry i inventari de tools amb risc. No cal crear una vista nova des de zero; cal evolucionar el dashboard existent.
+- **Subtasques funcionals:**
+  1. Afegir validació temporal de token sense persistir-lo.
+  2. Afegir smoke test des del dashboard: `initialize`, `tools/list surface=essential`, `tools/call system/diagnose`.
+  3. Mostrar errors accionables: `401` token, `404` ruta/subdirectori, tools YOOtheme absents, elevation bloquejada.
+  4. Millorar els snippets de clients: Codex, Claude, Cursor, Zed, mcp2cli, separant comanda de terminal i JSON config.
+  5. Afegir presets d'ús: `essential`, `advanced` i, si s'implementa, `yootheme-only`.
+- **Subtasques de remaquetació:**
+  1. Reordenar la jerarquia visual perquè el primer viewport respongui: estat, endpoint, token/client, smoke result.
+  2. Separar clarament "connectar client" de "diagnosi del sistema" i "inventari de tools".
+  3. Reduir soroll visual del llistat de tools amb filtres o agrupació més clara.
+  4. Fer que el dashboard sigui comprensible per algú que no coneix MCP: passos, estat i propera acció.
+  5. Revisar microcopy i estats buits després de tenir tancats els fluxos reals de client.
+- **No fer ara:**
+  - Crear tokens automàticament via DB.
+  - Escriure configuracions locals de clients des de Joomla.
+  - Construir una vista separada si el dashboard pot absorbir el flux.
+- **Depends on:** Validar formats actuals dels clients MCP abans de fixar snippets finals.
+- **Added:** 2026-05-25
+- **Started:** 2026-05-25. Primera entrega implementada al dashboard: validació temporal de token, smoke test `initialize` + `tools/list surface=essential` + `system/diagnose`, checks d'`annotations` i `structuredContent`, i errors accionables per `401`, `403`, `404` i JSON-RPC.
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.

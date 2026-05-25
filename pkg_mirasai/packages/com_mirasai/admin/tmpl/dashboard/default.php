@@ -54,6 +54,27 @@ $riskLabels = [
     'guarded_write' => 'COM_MIRASAI_RISK_GUARDED_WRITE',
     'dangerous_exec' => 'COM_MIRASAI_RISK_DANGEROUS_EXEC',
 ];
+$smokeText = [
+    'pending' => Text::_('COM_MIRASAI_SMOKE_STATE_PENDING'),
+    'running' => Text::_('COM_MIRASAI_SMOKE_STATE_RUNNING'),
+    'passed' => Text::_('COM_MIRASAI_SMOKE_STATE_PASSED'),
+    'failed' => Text::_('COM_MIRASAI_SMOKE_STATE_FAILED'),
+    'tokenRequired' => Text::_('COM_MIRASAI_SMOKE_TOKEN_REQUIRED'),
+    'endpointOk' => Text::_('COM_MIRASAI_SMOKE_ENDPOINT_OK'),
+    'authOk' => Text::_('COM_MIRASAI_SMOKE_AUTH_OK'),
+    'toolsOk' => Text::_('COM_MIRASAI_SMOKE_TOOLS_OK'),
+    'diagnoseOk' => Text::_('COM_MIRASAI_SMOKE_DIAGNOSE_OK'),
+    'annotationsOk' => Text::_('COM_MIRASAI_SMOKE_ANNOTATIONS_OK'),
+    'structuredOk' => Text::_('COM_MIRASAI_SMOKE_STRUCTURED_OK'),
+    'http401' => Text::_('COM_MIRASAI_SMOKE_ERROR_401'),
+    'http403' => Text::_('COM_MIRASAI_SMOKE_ERROR_403'),
+    'http404' => Text::_('COM_MIRASAI_SMOKE_ERROR_404'),
+    'httpOther' => Text::_('COM_MIRASAI_SMOKE_ERROR_HTTP'),
+    'jsonRpcError' => Text::_('COM_MIRASAI_SMOKE_ERROR_JSONRPC'),
+    'networkError' => Text::_('COM_MIRASAI_SMOKE_ERROR_NETWORK'),
+    'complete' => Text::_('COM_MIRASAI_SMOKE_COMPLETE'),
+    'rawSummary' => Text::_('COM_MIRASAI_SMOKE_RAW_SUMMARY'),
+];
 ?>
 
 <style>
@@ -188,6 +209,61 @@ $riskLabels = [
 .mirasai-config-toggle[open] summary::before {
     transform: rotate(90deg);
 }
+.mirasai-smoke {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.mirasai-smoke-form {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: .5rem;
+    align-items: end;
+    margin: .75rem 0 1rem;
+}
+.mirasai-smoke-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .5rem;
+}
+.mirasai-smoke-check {
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+    padding: .65rem .75rem;
+    min-height: 4.5rem;
+}
+.mirasai-smoke-check-title {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+    align-items: center;
+    margin-bottom: .25rem;
+    font-weight: 600;
+}
+.mirasai-smoke-detail {
+    color: var(--mirasai-secondary);
+    font-size: .8rem;
+    overflow-wrap: anywhere;
+}
+.mirasai-smoke-result {
+    display: none;
+    margin-top: 1rem;
+}
+.mirasai-smoke-result.active {
+    display: block;
+}
+.mirasai-smoke-result pre {
+    margin: .5rem 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+@media (max-width: 767.98px) {
+    .mirasai-smoke-form {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <?php // ── Onboarding block (localStorage-driven) ── ?>
@@ -298,6 +374,56 @@ $clientConfigs = [
         <?php $clientIndex++; ?>
     <?php endforeach; ?>
     <p class="text-muted small mt-2 mb-0"><?php echo Text::_('COM_MIRASAI_CLIENT_NOTE'); ?></p>
+</details>
+
+<details id="mirasai-smoke-test" class="mirasai-smoke mirasai-config-toggle mb-4" open data-mirasai-smoke-endpoint="<?php echo htmlspecialchars($endpoint); ?>">
+    <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_SMOKE_TITLE'); ?></summary>
+    <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_SMOKE_DESC'); ?></p>
+    <div class="mirasai-smoke-form">
+        <div>
+            <label for="mirasai-smoke-token" class="form-label small fw-bold mb-1"><?php echo Text::_('COM_MIRASAI_SMOKE_TOKEN_LABEL'); ?></label>
+            <input
+                type="password"
+                id="mirasai-smoke-token"
+                class="form-control form-control-sm"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="<?php echo htmlspecialchars(Text::_('COM_MIRASAI_SMOKE_TOKEN_PLACEHOLDER')); ?>"
+            >
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="mirasai-smoke-run">
+            <?php echo Text::_('COM_MIRASAI_SMOKE_RUN'); ?>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="mirasai-smoke-clear">
+            <?php echo Text::_('COM_MIRASAI_SMOKE_CLEAR'); ?>
+        </button>
+    </div>
+    <p class="text-muted small mb-3"><?php echo Text::_('COM_MIRASAI_SMOKE_PRIVACY'); ?></p>
+    <div class="mirasai-smoke-checks" aria-live="polite">
+        <?php
+        $smokeChecks = [
+            'endpoint' => 'COM_MIRASAI_SMOKE_CHECK_ENDPOINT',
+            'auth' => 'COM_MIRASAI_SMOKE_CHECK_AUTH',
+            'tools' => 'COM_MIRASAI_SMOKE_CHECK_TOOLS',
+            'diagnose' => 'COM_MIRASAI_SMOKE_CHECK_DIAGNOSE',
+            'annotations' => 'COM_MIRASAI_SMOKE_CHECK_ANNOTATIONS',
+            'structured' => 'COM_MIRASAI_SMOKE_CHECK_STRUCTURED',
+        ];
+        ?>
+        <?php foreach ($smokeChecks as $checkId => $label): ?>
+            <div class="mirasai-smoke-check" data-mirasai-smoke-check="<?php echo htmlspecialchars($checkId); ?>">
+                <div class="mirasai-smoke-check-title">
+                    <span><?php echo Text::_($label); ?></span>
+                    <span class="badge bg-secondary" data-mirasai-smoke-state><?php echo Text::_('COM_MIRASAI_SMOKE_STATE_PENDING'); ?></span>
+                </div>
+                <div class="mirasai-smoke-detail" data-mirasai-smoke-detail><?php echo Text::_('COM_MIRASAI_SMOKE_WAITING'); ?></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <div id="mirasai-smoke-result" class="mirasai-smoke-result">
+        <strong class="small"><?php echo Text::_('COM_MIRASAI_SMOKE_RAW_SUMMARY'); ?></strong>
+        <pre class="bg-light p-3 rounded"><code></code></pre>
+    </div>
 </details>
 
 <?php // ── Status banner (full-width) ── ?>
@@ -532,6 +658,8 @@ $clientConfigs = [
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var smokeText = <?php echo json_encode($smokeText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+
     // ── Copy endpoint button ──
     var copyBtn = document.getElementById('mirasai-copy-btn');
     if (copyBtn) {
@@ -618,6 +746,265 @@ document.addEventListener('DOMContentLoaded', function() {
                     curlCopyButton.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_COPY')); ?>';
                 }, 1500);
             });
+        });
+    }
+
+    var smokePanel = document.getElementById('mirasai-smoke-test');
+    var smokeRun = document.getElementById('mirasai-smoke-run');
+    var smokeClear = document.getElementById('mirasai-smoke-clear');
+    var smokeToken = document.getElementById('mirasai-smoke-token');
+    var smokeResult = document.getElementById('mirasai-smoke-result');
+
+    function setSmokeCheck(name, state, detail) {
+        var check = document.querySelector('[data-mirasai-smoke-check="' + name + '"]');
+        if (!check) {
+            return;
+        }
+
+        var badge = check.querySelector('[data-mirasai-smoke-state]');
+        var detailEl = check.querySelector('[data-mirasai-smoke-detail]');
+        var badgeClass = 'bg-secondary';
+
+        if (state === 'running') {
+            badgeClass = 'bg-info text-dark';
+        } else if (state === 'passed') {
+            badgeClass = 'bg-success';
+        } else if (state === 'failed') {
+            badgeClass = 'bg-danger';
+        } else if (state === 'warning') {
+            badgeClass = 'bg-warning text-dark';
+        }
+
+        if (badge) {
+            badge.className = 'badge ' + badgeClass;
+            badge.textContent = smokeText[state] || state;
+        }
+
+        if (detailEl) {
+            detailEl.textContent = detail || '';
+        }
+    }
+
+    function resetSmokeChecks() {
+        ['endpoint', 'auth', 'tools', 'diagnose', 'annotations', 'structured'].forEach(function(name) {
+            setSmokeCheck(name, 'pending', '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_WAITING')); ?>');
+        });
+
+        if (smokeResult) {
+            smokeResult.classList.remove('active');
+            var code = smokeResult.querySelector('code');
+            if (code) {
+                code.textContent = '';
+            }
+        }
+    }
+
+    function showSmokeSummary(summary) {
+        if (!smokeResult) {
+            return;
+        }
+
+        var code = smokeResult.querySelector('code');
+        if (code) {
+            code.textContent = JSON.stringify(summary, null, 2);
+        }
+
+        smokeResult.classList.add('active');
+    }
+
+    function httpErrorMessage(status) {
+        if (status === 401) {
+            return smokeText.http401;
+        }
+        if (status === 403) {
+            return smokeText.http403;
+        }
+        if (status === 404) {
+            return smokeText.http404;
+        }
+
+        return smokeText.httpOther.replace('%s', String(status));
+    }
+
+    async function callMcp(endpoint, token, method, params, id) {
+        var response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Joomla-Token': token
+            },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: method,
+                params: params || {},
+                id: id
+            })
+        });
+        var text = await response.text();
+        var json = null;
+
+        try {
+            json = text ? JSON.parse(text) : null;
+        } catch (e) {
+            json = null;
+        }
+
+        return {
+            ok: response.ok,
+            status: response.status,
+            json: json,
+            text: text
+        };
+    }
+
+    function assertMcpResponse(result) {
+        if (!result.ok) {
+            throw new Error(httpErrorMessage(result.status));
+        }
+
+        if (!result.json || typeof result.json !== 'object') {
+            throw new Error('<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_ERROR_INVALID_JSON')); ?>');
+        }
+
+        if (result.json.error) {
+            var message = result.json.error.message || JSON.stringify(result.json.error);
+            throw new Error(smokeText.jsonRpcError.replace('%s', message));
+        }
+
+        return result.json.result || {};
+    }
+
+    async function runSmokeTest() {
+        if (!smokePanel || !smokeToken || !smokeRun) {
+            return;
+        }
+
+        var endpoint = smokePanel.getAttribute('data-mirasai-smoke-endpoint') || '';
+        var token = (smokeToken.value || '').trim();
+
+        resetSmokeChecks();
+
+        if (!token) {
+            setSmokeCheck('auth', 'failed', smokeText.tokenRequired);
+            smokeToken.focus();
+            return;
+        }
+
+        smokeRun.disabled = true;
+        smokeRun.textContent = smokeText.running;
+
+        var summary = {
+            endpoint: endpoint,
+            initialized: false,
+            essential_tool_count: 0,
+            diagnose_status: null,
+            mirasai_version: null,
+            annotations: false,
+            structuredContent: false
+        };
+
+        try {
+            setSmokeCheck('endpoint', 'running', smokeText.running);
+            setSmokeCheck('auth', 'running', smokeText.running);
+
+            var initialize = assertMcpResponse(await callMcp(endpoint, token, 'initialize', {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: {
+                    name: 'mirasai-dashboard',
+                    version: '<?php echo addslashes($version); ?>'
+                }
+            }, 1));
+
+            summary.initialized = !!initialize.serverInfo;
+            setSmokeCheck('endpoint', 'passed', smokeText.endpointOk);
+            setSmokeCheck('auth', 'passed', smokeText.authOk);
+
+            setSmokeCheck('tools', 'running', smokeText.running);
+            setSmokeCheck('annotations', 'running', smokeText.running);
+            var toolsList = assertMcpResponse(await callMcp(endpoint, token, 'tools/list', {surface: 'essential'}, 2));
+            var tools = Array.isArray(toolsList.tools) ? toolsList.tools : [];
+            summary.essential_tool_count = tools.length;
+
+            if (tools.length < 1) {
+                throw new Error('<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_ERROR_NO_TOOLS')); ?>');
+            }
+
+            setSmokeCheck('tools', 'passed', smokeText.toolsOk.replace('%d', String(tools.length)));
+
+            var annotatedTool = tools.find(function(tool) {
+                return tool && tool.annotations && typeof tool.annotations.readOnlyHint === 'boolean';
+            });
+            summary.annotations = !!annotatedTool;
+
+            if (!annotatedTool) {
+                setSmokeCheck('annotations', 'failed', '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_ERROR_NO_ANNOTATIONS')); ?>');
+            } else {
+                setSmokeCheck('annotations', 'passed', smokeText.annotationsOk);
+            }
+
+            setSmokeCheck('diagnose', 'running', smokeText.running);
+            setSmokeCheck('structured', 'running', smokeText.running);
+            var diagnoseCall = assertMcpResponse(await callMcp(endpoint, token, 'tools/call', {
+                name: 'system/diagnose',
+                arguments: {}
+            }, 3));
+
+            summary.structuredContent = !!diagnoseCall.structuredContent;
+            var diagnosePayload = diagnoseCall.structuredContent || null;
+
+            if (!diagnosePayload && diagnoseCall.content && diagnoseCall.content[0] && diagnoseCall.content[0].text) {
+                try {
+                    diagnosePayload = JSON.parse(diagnoseCall.content[0].text);
+                } catch (e) {
+                    diagnosePayload = null;
+                }
+            }
+
+            if (diagnoseCall.isError) {
+                throw new Error((diagnosePayload && diagnosePayload.error) || '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_ERROR_DIAGNOSE')); ?>');
+            }
+
+            summary.diagnose_status = diagnosePayload ? diagnosePayload.status : null;
+            summary.mirasai_version = diagnosePayload ? diagnosePayload.mirasai_version : null;
+
+            setSmokeCheck('diagnose', 'passed', smokeText.diagnoseOk.replace('%s', summary.diagnose_status || 'ok'));
+
+            if (summary.structuredContent) {
+                setSmokeCheck('structured', 'passed', smokeText.structuredOk);
+            } else {
+                setSmokeCheck('structured', 'failed', '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_ERROR_NO_STRUCTURED')); ?>');
+            }
+
+            showSmokeSummary(summary);
+        } catch (error) {
+            var message = error && error.message ? error.message : smokeText.networkError;
+
+            ['endpoint', 'auth', 'tools', 'diagnose', 'annotations', 'structured'].forEach(function(name) {
+                var check = document.querySelector('[data-mirasai-smoke-check="' + name + '"] [data-mirasai-smoke-state]');
+                if (check && check.textContent === smokeText.running) {
+                    setSmokeCheck(name, 'failed', message);
+                }
+            });
+
+            showSmokeSummary(Object.assign(summary, {error: message}));
+        } finally {
+            smokeRun.disabled = false;
+            smokeRun.textContent = '<?php echo addslashes(Text::_('COM_MIRASAI_SMOKE_RUN')); ?>';
+        }
+    }
+
+    if (smokeRun) {
+        smokeRun.addEventListener('click', runSmokeTest);
+    }
+
+    if (smokeClear) {
+        smokeClear.addEventListener('click', function() {
+            if (smokeToken) {
+                smokeToken.value = '';
+            }
+            resetSmokeChecks();
         });
     }
 });
