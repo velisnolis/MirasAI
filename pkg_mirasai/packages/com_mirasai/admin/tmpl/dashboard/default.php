@@ -5,7 +5,6 @@ declare(strict_types=1);
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Language\Text;
-use Joomla\CMS\Router\Route;
 
 /** @var \Mirasai\Component\Mirasai\Administrator\View\Dashboard\HtmlView $this */
 
@@ -40,8 +39,6 @@ $statusLabel = match ($dashboardStatus) {
 };
 $serverHost = (string) parse_url($endpoint, PHP_URL_HOST);
 $serverName = preg_replace('/[^a-z0-9]+/i', '-', $serverHost ?: 'mirasai') ?: 'mirasai';
-$pluginsUrl = Route::_('index.php?option=com_plugins&view=plugins&filter[search]=mirasai');
-$usersUrl = Route::_('index.php?option=com_users&view=users');
 $riskBadgeClasses = [
     'read' => 'bg-light text-dark border',
     'safe_write' => 'bg-info text-dark',
@@ -91,6 +88,35 @@ $onboardingText = [
     'diagnoseWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING'),
     'configWaiting' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING'),
 ];
+
+$coreMissingItems = [];
+foreach ($coreExts as $ext) {
+    if ((int) ($ext['enabled'] ?? 0) === 1) {
+        continue;
+    }
+
+    $extensionLabel = (string) ($ext['element'] ?? '');
+    $extensionMeta = (string) ($ext['type'] ?? '');
+    if (!empty($ext['folder'])) {
+        $extensionMeta .= '/' . (string) $ext['folder'];
+    }
+
+    if ($extensionMeta !== '') {
+        $extensionLabel .= ' (' . $extensionMeta . ')';
+    }
+
+    $coreMissingItems[] = sprintf(Text::_('COM_MIRASAI_ONBOARDING_CHECK_CORE_MISSING_EXTENSION'), $extensionLabel);
+}
+
+if (!$registryReady) {
+    $coreMissingItems[] = $registryWarningCount > 0
+        ? sprintf(Text::_('COM_MIRASAI_ONBOARDING_CHECK_CORE_REGISTRY_WARNINGS'), $registryWarningCount)
+        : Text::_('COM_MIRASAI_ONBOARDING_CHECK_CORE_REGISTRY_FAILED');
+}
+
+$coreOnboardingDetail = empty($coreMissingItems)
+    ? Text::_('COM_MIRASAI_ONBOARDING_CHECK_CORE_OK')
+    : implode(' ', $coreMissingItems);
 ?>
 
 <style>
@@ -164,15 +190,6 @@ $onboardingText = [
     min-width: 2.5rem;
     text-align: center;
 }
-.mirasai-onboarding {
-    background: #f0f6ff;
-    border: 1px solid #b6d4fe;
-    border-radius: .375rem;
-    padding: 1rem 1.25rem;
-    margin-bottom: 1.5rem;
-}
-.mirasai-onboarding ol { margin-bottom: .5rem; padding-left: 1.25rem; }
-.mirasai-onboarding li { margin-bottom: .35rem; font-size: .875rem; }
 .mirasai-onboarding-checklist {
     background: #fff;
     border: 1px solid #dee2e6;
@@ -314,26 +331,36 @@ $onboardingText = [
 }
 </style>
 
-<?php // ── Onboarding block (localStorage-driven) ── ?>
-<div id="mirasai-onboarding" class="mirasai-onboarding" style="display:none;">
-    <div class="d-flex justify-content-between align-items-start">
-        <strong><?php echo Text::_('COM_MIRASAI_ONBOARDING_TITLE'); ?></strong>
-        <button type="button" class="btn btn-sm btn-link text-muted p-0" id="mirasai-onboarding-dismiss">
-            <?php echo Text::_('COM_MIRASAI_ONBOARDING_DISMISS'); ?>
-        </button>
+<?php // ── Status banner (full-width) ── ?>
+<div class="mirasai-banner <?php echo $bannerClass; ?>" role="banner">
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+        <span class="fw-bold fs-5">MirasAI v<?php echo htmlspecialchars($version); ?></span>
+        <span class="badge bg-<?php echo $statusBadgeClass; ?> fs-6">
+            <?php echo Text::_($statusLabel); ?>
+        </span>
     </div>
-    <ol class="mt-2">
-        <li>
-            <?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP1_PREFIX'); ?>
-            <a href="<?php echo $pluginsUrl; ?>"><?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP1_LINK'); ?></a>.
-        </li>
-        <li><?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP2'); ?></li>
-        <li>
-            <?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP3_PREFIX'); ?>
-            <a href="<?php echo $usersUrl; ?>"><?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP3_LINK'); ?></a>
-            <?php echo Text::_('COM_MIRASAI_ONBOARDING_STEP3_SUFFIX'); ?>
-        </li>
-    </ol>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <label class="fw-bold small mb-0"><?php echo Text::_('COM_MIRASAI_ENDPOINT'); ?></label>
+        <div class="input-group input-group-sm" style="max-width: 500px;">
+            <input type="text" class="form-control form-control-sm" value="<?php echo htmlspecialchars($endpoint); ?>" readonly id="mcp-endpoint">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="mirasai-copy-btn" aria-label="<?php echo Text::_('COM_MIRASAI_COPY'); ?>">
+                <span class="icon-copy" aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+    <div class="text-muted small">
+        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_TOOLS'), $toolCount); ?>
+        &middot;
+        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_LANGUAGES'), $langCount); ?>
+        &middot;
+        <?php echo Text::_($elevated ? 'COM_MIRASAI_SUMMARY_ELEVATION_ON' : 'COM_MIRASAI_SUMMARY_ELEVATION_OFF'); ?>
+        &middot;
+        <?php echo Text::_($registryReady ? 'COM_MIRASAI_SUMMARY_REGISTRY_OK' : 'COM_MIRASAI_SUMMARY_REGISTRY_FAILED'); ?>
+        <?php if ($registryWarningCount > 0): ?>
+            &middot;
+            <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_REGISTRY_WARNINGS'), $registryWarningCount); ?>
+        <?php endif; ?>
+    </div>
 </div>
 
 <section class="mirasai-onboarding-checklist" aria-labelledby="mirasai-onboarding-checklist-title">
@@ -350,39 +377,37 @@ $onboardingText = [
                 'id' => 'core',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CORE',
                 'state' => $this->allCoreEnabled && $registryReady ? 'passed' : 'failed',
-                'detail' => $this->allCoreEnabled && $registryReady
-                    ? 'COM_MIRASAI_ONBOARDING_CHECK_CORE_OK'
-                    : 'COM_MIRASAI_ONBOARDING_CHECK_CORE_FAILED',
+                'detail' => $coreOnboardingDetail,
             ],
             [
                 'id' => 'endpoint',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT',
                 'state' => 'pending',
-                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_ENDPOINT_WAITING'),
             ],
             [
                 'id' => 'token',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOKEN',
                 'state' => 'pending',
-                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOKEN_WAITING'),
             ],
             [
                 'id' => 'tools',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_TOOLS',
                 'state' => 'pending',
-                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_TOOLS_WAITING'),
             ],
             [
                 'id' => 'diagnose',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE',
                 'state' => 'pending',
-                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_DIAGNOSE_WAITING'),
             ],
             [
                 'id' => 'config',
                 'label' => 'COM_MIRASAI_ONBOARDING_CHECK_CONFIG',
                 'state' => 'pending',
-                'detail' => 'COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING',
+                'detail' => Text::_('COM_MIRASAI_ONBOARDING_CHECK_CONFIG_WAITING'),
             ],
         ];
         $onboardingBadgeClasses = [
@@ -407,28 +432,12 @@ $onboardingText = [
                     </span>
                 </div>
                 <div class="mirasai-onboarding-step-detail" data-mirasai-onboarding-detail>
-                    <?php echo Text::_($step['detail']); ?>
+                    <?php echo htmlspecialchars((string) $step['detail']); ?>
                 </div>
             </div>
         <?php endforeach; ?>
     </div>
 </section>
-
-<details class="mb-4">
-    <summary class="fw-bold small text-muted" style="cursor: pointer;">
-        <?php echo Text::_('COM_MIRASAI_CURL_SHOW'); ?>
-    </summary>
-    <div class="mirasai-config-toolbar mt-2">
-        <span class="text-muted small"><?php echo Text::_('COM_MIRASAI_CURL_NOTE'); ?></span>
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-mirasai-copy-curl>
-            <?php echo Text::_('COM_MIRASAI_COPY'); ?>
-        </button>
-    </div>
-    <pre class="bg-light p-3 rounded"><code id="mirasai-curl-example" data-mirasai-token-template>curl -X POST <?php echo htmlspecialchars($endpoint); ?> \
-  -H "Content-Type: application/json" \
-  -H "X-Joomla-Token: YOUR_TOKEN" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'</code></pre>
-</details>
 
 <?php
 $clientConfigs = [
@@ -569,37 +578,21 @@ $clientConfigs = [
     </div>
 </details>
 
-<?php // ── Status banner (full-width) ── ?>
-<div class="mirasai-banner <?php echo $bannerClass; ?>" role="banner">
-    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-        <span class="fw-bold fs-5">MirasAI v<?php echo htmlspecialchars($version); ?></span>
-        <span class="badge bg-<?php echo $statusBadgeClass; ?> fs-6">
-            <?php echo Text::_($statusLabel); ?>
-        </span>
+<details class="mirasai-config-toggle mb-4">
+    <summary class="fw-bold small text-muted">
+        <?php echo Text::_('COM_MIRASAI_CURL_SHOW'); ?>
+    </summary>
+    <div class="mirasai-config-toolbar mt-2">
+        <span class="text-muted small"><?php echo Text::_('COM_MIRASAI_CURL_NOTE'); ?></span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-mirasai-copy-curl>
+            <?php echo Text::_('COM_MIRASAI_COPY'); ?>
+        </button>
     </div>
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <label class="fw-bold small mb-0"><?php echo Text::_('COM_MIRASAI_ENDPOINT'); ?></label>
-        <div class="input-group input-group-sm" style="max-width: 500px;">
-            <input type="text" class="form-control form-control-sm" value="<?php echo htmlspecialchars($endpoint); ?>" readonly id="mcp-endpoint">
-            <button class="btn btn-outline-secondary btn-sm" type="button" id="mirasai-copy-btn" aria-label="<?php echo Text::_('COM_MIRASAI_COPY'); ?>">
-                <span class="icon-copy" aria-hidden="true"></span>
-            </button>
-        </div>
-    </div>
-    <div class="text-muted small">
-        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_TOOLS'), $toolCount); ?>
-        &middot;
-        <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_LANGUAGES'), $langCount); ?>
-        &middot;
-        <?php echo Text::_($elevated ? 'COM_MIRASAI_SUMMARY_ELEVATION_ON' : 'COM_MIRASAI_SUMMARY_ELEVATION_OFF'); ?>
-        &middot;
-        <?php echo Text::_($registryReady ? 'COM_MIRASAI_SUMMARY_REGISTRY_OK' : 'COM_MIRASAI_SUMMARY_REGISTRY_FAILED'); ?>
-        <?php if ($registryWarningCount > 0): ?>
-            &middot;
-            <?php echo sprintf(Text::_('COM_MIRASAI_SUMMARY_REGISTRY_WARNINGS'), $registryWarningCount); ?>
-        <?php endif; ?>
-    </div>
-</div>
+    <pre class="bg-light p-3 rounded"><code id="mirasai-curl-example" data-mirasai-token-template>curl -X POST <?php echo htmlspecialchars($endpoint); ?> \
+  -H "Content-Type: application/json" \
+  -H "X-Joomla-Token: YOUR_TOKEN" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'</code></pre>
+</details>
 
 <?php // ── System + Translations (2 columns) ── ?>
 <div class="row" role="main">
@@ -818,29 +811,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }
-        });
-    }
-
-    // ── Onboarding (localStorage) ──
-    var onboarding = document.getElementById('mirasai-onboarding');
-    var dismissBtn = document.getElementById('mirasai-onboarding-dismiss');
-    var storageKey = 'mirasai_onboarding_dismissed';
-
-    if (onboarding) {
-        try {
-            if (!localStorage.getItem(storageKey)) {
-                onboarding.style.display = '';
-            }
-        } catch(e) {
-            // localStorage unavailable — show by default
-            onboarding.style.display = '';
-        }
-    }
-
-    if (dismissBtn) {
-        dismissBtn.addEventListener('click', function() {
-            try { localStorage.setItem(storageKey, '1'); } catch(e) {}
-            if (onboarding) { onboarding.style.display = 'none'; }
         });
     }
 
