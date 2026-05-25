@@ -298,7 +298,7 @@ $smokeText = [
             <?php echo Text::_('COM_MIRASAI_COPY'); ?>
         </button>
     </div>
-    <pre class="bg-light p-3 rounded"><code id="mirasai-curl-example">curl -X POST <?php echo htmlspecialchars($endpoint); ?> \
+    <pre class="bg-light p-3 rounded"><code id="mirasai-curl-example" data-mirasai-token-template>curl -X POST <?php echo htmlspecialchars($endpoint); ?> \
   -H "Content-Type: application/json" \
   -H "X-Joomla-Token: YOUR_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'</code></pre>
@@ -310,6 +310,11 @@ $clientConfigs = [
         'label' => Text::_('COM_MIRASAI_CLIENT_CLAUDE_CODE'),
         'helper' => Text::_('COM_MIRASAI_CLIENT_HELPER_CLAUDE_CODE'),
         'code' => "claude mcp add --transport http " . $serverName . " " . $endpoint . " \\\n  --header \"X-Joomla-Token: YOUR_TOKEN\"",
+    ],
+    'codex' => [
+        'label' => Text::_('COM_MIRASAI_CLIENT_CODEX'),
+        'helper' => Text::_('COM_MIRASAI_CLIENT_HELPER_CODEX'),
+        'code' => "[mcp_servers." . addslashes($serverName) . "]\nurl = \"" . addslashes($endpoint) . "\"\n\n[mcp_servers." . addslashes($serverName) . ".http_headers]\nX-Joomla-Token = \"YOUR_TOKEN\"",
     ],
     'claude-desktop' => [
         'label' => Text::_('COM_MIRASAI_CLIENT_CLAUDE_DESKTOP'),
@@ -341,12 +346,24 @@ $clientConfigs = [
         'helper' => Text::_('COM_MIRASAI_CLIENT_HELPER_OPENCODE'),
         'code' => "{\n  \"mcpServers\": {\n    \"" . addslashes($serverName) . "\": {\n      \"transport\": \"http\",\n      \"url\": \"" . addslashes($endpoint) . "\",\n      \"headers\": {\n        \"X-Joomla-Token\": \"YOUR_TOKEN\"\n      }\n    }\n  }\n}",
     ],
+    'mcp2cli' => [
+        'label' => Text::_('COM_MIRASAI_CLIENT_MCP2CLI'),
+        'helper' => Text::_('COM_MIRASAI_CLIENT_HELPER_MCP2CLI'),
+        'code' => "mcp2cli --mcp " . $endpoint . " \\\n  --transport streamable \\\n  --auth-header \"X-Joomla-Token:YOUR_TOKEN\" \\\n  --list",
+    ],
 ];
 ?>
 
 <details class="mirasai-client-config mirasai-config-toggle mb-4" open>
     <summary class="fw-bold"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?></summary>
     <p class="text-muted small mb-2"><?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_DESC'); ?></p>
+    <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" role="switch" id="mirasai-client-use-token">
+        <label class="form-check-label small" for="mirasai-client-use-token">
+            <?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN'); ?>
+        </label>
+        <div class="text-muted small"><?php echo Text::_('COM_MIRASAI_CLIENT_USE_TOKEN_HELP'); ?></div>
+    </div>
     <div class="mirasai-client-tabs" role="tablist" aria-label="<?php echo Text::_('COM_MIRASAI_CLIENT_CONNECT_TITLE'); ?>">
         <?php $clientIndex = 0; ?>
         <?php foreach ($clientConfigs as $clientId => $clientConfig): ?>
@@ -369,7 +386,7 @@ $clientConfigs = [
                     <?php echo Text::_('COM_MIRASAI_COPY'); ?>
                 </button>
             </div>
-            <pre class="bg-dark text-light p-3 rounded"><code><?php echo htmlspecialchars($clientConfig['code']); ?></code></pre>
+            <pre class="bg-dark text-light p-3 rounded"><code data-mirasai-token-template><?php echo htmlspecialchars($clientConfig['code']); ?></code></pre>
         </div>
         <?php $clientIndex++; ?>
     <?php endforeach; ?>
@@ -702,6 +719,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var clientTabs = document.querySelectorAll('[data-mirasai-client-tab]');
     var clientPanels = document.querySelectorAll('[data-mirasai-client-panel]');
+    var tokenTemplateNodes = document.querySelectorAll('[data-mirasai-token-template]');
+    var useTokenInSnippets = document.getElementById('mirasai-client-use-token');
+
+    tokenTemplateNodes.forEach(function(node) {
+        node.setAttribute('data-mirasai-original-template', node.textContent || '');
+    });
+
+    function updateTokenizedSnippets() {
+        var token = smokeToken ? (smokeToken.value || '').trim() : '';
+        var useToken = !!(useTokenInSnippets && useTokenInSnippets.checked && token);
+
+        tokenTemplateNodes.forEach(function(node) {
+            var template = node.getAttribute('data-mirasai-original-template') || '';
+            node.textContent = useToken ? template.split('YOUR_TOKEN').join(token) : template;
+        });
+    }
+
+    if (useTokenInSnippets) {
+        useTokenInSnippets.addEventListener('change', updateTokenizedSnippets);
+    }
+
     clientTabs.forEach(function(tab) {
         tab.addEventListener('click', function() {
             var target = tab.getAttribute('data-mirasai-client-tab');
@@ -754,6 +792,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var smokeClear = document.getElementById('mirasai-smoke-clear');
     var smokeToken = document.getElementById('mirasai-smoke-token');
     var smokeResult = document.getElementById('mirasai-smoke-result');
+
+    if (smokeToken) {
+        smokeToken.addEventListener('input', updateTokenizedSnippets);
+    }
 
     function setSmokeCheck(name, state, detail) {
         var check = document.querySelector('[data-mirasai-smoke-check="' + name + '"]');
@@ -1004,6 +1046,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (smokeToken) {
                 smokeToken.value = '';
             }
+            if (useTokenInSnippets) {
+                useTokenInSnippets.checked = false;
+            }
+            updateTokenizedSnippets();
             resetSmokeChecks();
         });
     }
