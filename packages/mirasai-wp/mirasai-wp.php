@@ -4,7 +4,7 @@
  * Plugin Name: MirasAI
  * Plugin URI: https://miras.pro
  * Description: MirasAI host endpoint for WordPress. Exposes a small MCP-compatible HTTP surface for the local MirasAI router.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: Miras
@@ -17,10 +17,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MIRASAI_WP_VERSION', '0.5.0');
+define('MIRASAI_WP_VERSION', '0.5.1');
 define('MIRASAI_WP_CONTRACT_VERSION', '1');
 define('MIRASAI_WP_PLUGIN_FILE', __FILE__);
 define('MIRASAI_WP_PLUGIN_DIR', __DIR__);
+define('MIRASAI_WP_UPDATE_FEED_URL', 'https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/mirasai-wp.json');
 
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolInterface.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTool.php';
@@ -82,8 +83,10 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolRegistry.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpHandler.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/RestController.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Admin/DashboardPage.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Updater/GitHubFeedUpdater.php';
 
 \Mirasai\WordPress\Admin\DashboardPage::register();
+\Mirasai\WordPress\Updater\GitHubFeedUpdater::register();
 
 add_action('rest_api_init', static function (): void {
     $registry = \Mirasai\WordPress\Tool\ToolRegistry::buildDefault();

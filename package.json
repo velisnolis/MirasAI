@@ -1,6 +1,6 @@
 {
   "name": "mirasai",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "MirasAI multi-platform MCP toolkit for Joomla and WordPress hosts.",
   "workspaces": [
@@ -14,7 +14,8 @@
     "lint:wp": "npm run lint:php -w @miras/mirasai-wp",
     "build:joomla": "npm run build:zip -w @miras/mirasai-joomla",
     "build:wp": "npm run build:zip -w @miras/mirasai-wp",
-    "check:packages": "npm run test && npm run build:joomla && npm run build:wp"
+    "check:packages": "npm run test && npm run build:joomla && npm run build:wp",
+    "release:prepare": "node scripts/prepare-release.mjs"
   },
   "engines": {
     "node": ">=20"

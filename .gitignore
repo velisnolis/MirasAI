@@ -3,6 +3,7 @@ pkg_mirasai-0.1.0.zip
 .gstack/
 .env
 .docker-build/
+.release/
 .tmp_yootheme/
 yootheme*.zip
 joomla-novamira-consideracions.md

@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the v prefix, for example 0.5.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate requested version
+        run: |
+          node -e "const pkg=require('./package.json'); if (pkg.version !== process.env.VERSION) { throw new Error('package.json version '+pkg.version+' does not match workflow input '+process.env.VERSION); }"
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Prepare release assets and feeds
+        run: npm run release:prepare
+
+      - name: Commit update feeds
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/pkg_mirasai.xml updates/mirasai-wp.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update release feeds for v${VERSION}"
+          fi
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Tag release commit
+        run: |
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists" >&2
+            exit 1
+          fi
+          git tag -a "v${VERSION}" -m "MirasAI ${VERSION}"
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Push commit and tag
+        run: |
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Create GitHub release
+        run: |
+          gh release create "v${VERSION}" ".release/v${VERSION}/"* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "MirasAI ${VERSION}" \
+            --notes-file ".release/v${VERSION}/release-notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}

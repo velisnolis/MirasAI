@@ -255,6 +255,10 @@ class DashboardPage
                     <strong><?php esc_html_e('Endpoint:', 'mirasai'); ?></strong>
                     <code><?php echo esc_html($endpoint); ?></code>
                 </p>
+                <p>
+                    <strong><?php esc_html_e('Update feed:', 'mirasai'); ?></strong>
+                    <code><?php echo esc_html(MIRASAI_WP_UPDATE_FEED_URL); ?></code>
+                </p>
             </section>
 
             <section class="mirasai-grid" aria-label="<?php esc_attr_e('Status', 'mirasai'); ?>">
@@ -262,6 +266,7 @@ class DashboardPage
                     <h3><?php esc_html_e('Endpoint', 'mirasai'); ?></h3>
                     <p class="mirasai-ok"><?php esc_html_e('Ready', 'mirasai'); ?></p>
                     <p class="mirasai-muted"><?php echo esc_html($endpoint); ?></p>
+                    <p class="mirasai-muted"><?php echo esc_html(MIRASAI_WP_UPDATE_FEED_URL); ?></p>
                 </div>
                 <div class="mirasai-card">
                     <h3><?php esc_html_e('Tools', 'mirasai'); ?></h3>

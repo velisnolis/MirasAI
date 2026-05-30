@@ -1,12 +1,17 @@
 {
   "name": "@miras/mirasai-mcp",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Local multi-site MirasAI MCP router for Joomla and WordPress hosts.",
   "bin": {
     "mirasai-mcp": "./bin/mirasai-mcp.mjs"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test"
   },

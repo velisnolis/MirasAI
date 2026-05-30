@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The current release is `0.5.0`. It includes:
+The current release is `0.5.1`. It includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -10,6 +10,24 @@ The current release is `0.5.0`. It includes:
 - a local multi-site MCP router that can expose many Joomla and WordPress installations through one client-facing MCP server.
 
 Use it on staging first. Use backups. Treat production as a gated environment.
+
+## Install And Update URLs
+
+Public release assets live on GitHub Releases:
+
+```text
+https://github.com/velisnolis/MirasAI/releases
+```
+
+Latest install/update endpoints:
+
+| Target | Install asset | Automatic update feed |
+| --- | --- | --- |
+| Joomla host package | `pkg_mirasai-<version>.zip` from the matching GitHub release | `https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml` |
+| WordPress host plugin | `mirasai-wp-<version>.zip` from the matching GitHub release | `https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/mirasai-wp.json` |
+| Local MCP router | `miras-mirasai-mcp-<version>.tgz` from the matching GitHub release | No feed; install the release tarball or use the repo checkout. |
+
+Joomla reads its XML feed through the package update server. WordPress reads its JSON feed through the bundled MirasAI updater.
 
 ## Architecture
 
@@ -224,7 +242,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.5.0.zip
+packages/mirasai-wp/dist/mirasai-wp-0.5.1.zip
 ```
 
 The WordPress admin dashboard includes:
@@ -345,7 +363,7 @@ Bad reasons:
 - to run arbitrary PHP because it is convenient;
 - to treat production as the development environment.
 
-## Joomla Auto-Updates
+## Update Feeds
 
 The Joomla package includes an update server:
 
@@ -353,7 +371,19 @@ The Joomla package includes an update server:
 https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/pkg_mirasai.xml
 ```
 
-The package, update feed, GitHub release, and release asset should stay aligned.
+The WordPress plugin includes an updater that reads:
+
+```text
+https://raw.githubusercontent.com/velisnolis/MirasAI/main/updates/mirasai-wp.json
+```
+
+The package files, update feeds, GitHub release, and release assets should stay aligned. Use:
+
+```bash
+npm run release:prepare
+```
+
+The script builds the Joomla ZIP, WordPress ZIP, local MCP router tarball, updates both feeds, and writes release helper notes under `.release/v<version>/`.
 
 ## Docker Integration Lab
 
