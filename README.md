@@ -68,7 +68,7 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 | Runtime schema | YOOtheme element schema | YOOtheme element schema | Host discovery |
 | ReReplacer | Supported via addon | Not applicable | Routes host tools |
 | ACF / WP abilities | Not applicable | Read-only ACF tools and guarded WP abilities bridge | Routes host tools |
-| Dangerous execution | Joomla sandbox/elevation tools | Status/control plane only, no dangerous tools yet | Does not add dangerous tools |
+| Dangerous execution | Joomla sandbox/elevation tools | Domain-locked `sandbox/execute-php` behind dangerous-exec toggle | Does not add dangerous tools |
 
 ## MCP Surface
 
@@ -253,7 +253,7 @@ The WordPress admin dashboard includes:
 - direct MCP client snippets;
 - YOOtheme layout counts for templates, pages/posts, and Builder widgets;
 - multilingual, ACF, sandbox, and elevation status;
-- a dangerous-execution control-plane toggle. This does not register dangerous tools yet.
+- a dangerous-execution control-plane toggle that exposes `sandbox/execute-php` only for the locked current domain.
 
 ## Tool Highlights
 
@@ -342,9 +342,9 @@ Important safeguards:
 - guarded writes require preview/confirmation and ETags where applicable;
 - `file/read` blocks common secret-bearing paths such as CMS config variants, `.env`, private keys, certificates, and SQL dumps;
 - Joomla `dangerous_exec` tools require elevation in production;
-- WordPress dangerous execution is not registered yet.
+- WordPress `sandbox/execute-php` is hidden unless dangerous execution is enabled for the current domain.
 
-`sandbox/execute-php` on Joomla is transaction-wrapped PHP execution, not an isolated security sandbox. It runs in the Joomla worker process and must pass `confirm_execute_php=true`.
+`sandbox/execute-php` on Joomla and WordPress is transaction-wrapped PHP execution, not an isolated security sandbox. It runs in the CMS PHP worker process and must pass `confirm_execute_php=true`.
 
 ## Elevation
 

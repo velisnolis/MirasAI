@@ -52,8 +52,9 @@ The WordPress admin dashboard includes a compact onboarding surface for:
 - generating and revoking MirasAI WordPress Application Passwords;
 - copying direct HTTP MCP config snippets for Codex/Claude-style clients and JSON clients;
 - checking endpoint, tool, YOOtheme, multilingual, sandbox, and elevation status;
-- toggling the dangerous-execution control plane. This toggle does not register
-  dangerous tools by itself; it is a guard for a later sandbox/execute-php phase.
+- toggling the dangerous-execution control plane. This toggle records the
+  current domain and exposes `sandbox/execute-php` only while the domain lock
+  matches.
 
 ## Current Tools
 
@@ -100,15 +101,20 @@ The WordPress admin dashboard includes a compact onboarding surface for:
 - `file/read`
 - `sandbox/status`
 - `elevation/status`
+- `sandbox/execute-php` (only listed when dangerous execution is enabled for the current domain)
 
 Most tools are read-only. `wp/ability-call` is `safe_write` for explicit
 allowlisted abilities, and YOOtheme write tools are `guarded_write`: they require
 `if_match` plus `dry_run` or `confirm_guarded_write`.
 
-`sandbox/status` and `elevation/status` are parity/status tools only in this MVP.
-They now report the sandbox directory, safe-mode marker, PHP lint availability,
-domain-locked dangerous-execution control state, and the fact that no
-dangerous_exec tools are registered yet.
+`sandbox/status` and `elevation/status` report the sandbox directory, safe-mode
+marker, PHP lint availability, and domain-locked dangerous-execution control
+state.
+
+`sandbox/execute-php` is hidden unless dangerous execution is enabled for the
+current domain. It executes PHP in-process through `eval()` with WordPress
+runtime access and DB transaction wrapping. This is not an isolated security
+sandbox. Each call must pass `confirm_execute_php=true`.
 
 `content/translate` is a `safe_write` tool for WPML/Polylang sites. It creates
 or updates a target-language post/page from a source post, requires the source

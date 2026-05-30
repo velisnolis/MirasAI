@@ -97,14 +97,15 @@ class SystemDiagnoseTool extends AbstractTool
                 ]),
                 'sandbox' => [
                     'status_tool' => 'sandbox/status',
-                    'implemented' => false,
+                    'implemented' => true,
+                    'execute_tool' => RuntimeSettings::isDangerousExecEnabled() ? 'sandbox/execute-php' : null,
                     'dangerous_exec_available' => RuntimeSettings::isDangerousExecEnabled(),
                     'safe_mode' => RuntimeSettings::sandboxSafeModeActive(),
                     'sandbox_dir' => RuntimeSettings::relativeSandboxDir(),
                 ],
                 'elevation' => [
                     'status_tool' => 'elevation/status',
-                    'implemented' => false,
+                    'implemented' => true,
                     'dangerous_exec_available' => RuntimeSettings::isDangerousExecEnabled(),
                     'state' => RuntimeSettings::dangerousExecStatus()['state'],
                 ],

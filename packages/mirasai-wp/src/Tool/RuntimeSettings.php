@@ -62,19 +62,19 @@ class RuntimeSettings
         $enabledAt = get_option(self::OPTION_DANGEROUS_ENABLED_AT, null);
 
         return [
-            'implemented' => false,
+            'implemented' => true,
             'configured_enabled' => $configured,
             'available' => self::isDangerousExecEnabled(),
             'state' => match (true) {
                 !$configured => 'disabled',
                 $domain !== $currentHost => 'domain_mismatch',
-                default => 'enabled_no_tools',
+                default => 'enabled',
             },
             'domain_lock' => $domain,
             'current_domain' => $currentHost,
             'enabled_by_user_id' => (int) get_option(self::OPTION_DANGEROUS_ENABLED_BY, 0),
             'enabled_at' => is_numeric($enabledAt) ? gmdate('c', (int) $enabledAt) : null,
-            'message' => 'Dangerous execution controls are present, but no dangerous_exec tools are registered yet.',
+            'message' => 'Dangerous execution controls gate sandbox/execute-php for the current domain.',
         ];
     }
 

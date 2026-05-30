@@ -7,9 +7,10 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test:contract && npm run test:mcp && npm run lint:joomla && npm run lint:wp",
+    "test": "npm run test:contract && npm run test:mcp && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
+    "test:wp-sandbox": "php docker/test-wp-sandbox-execute-php-contract.php",
     "lint:joomla": "npm run lint:php -w @miras/mirasai-joomla",
     "lint:wp": "npm run lint:php -w @miras/mirasai-wp",
     "build:joomla": "npm run build:zip -w @miras/mirasai-joomla",

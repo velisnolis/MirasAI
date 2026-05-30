@@ -27,6 +27,9 @@ class ToolRegistry
         $registry->register(new FileListTool());
         $registry->register(new FileReadTool());
         $registry->register(new SandboxStatusTool());
+        if (RuntimeSettings::isDangerousExecEnabled()) {
+            $registry->register(new SandboxExecutePhpTool());
+        }
         $registry->register(new ElevationStatusTool());
         $registry->register(new WpAbilitiesListTool());
         $registry->register(new WpAbilityCallTool());

@@ -13,7 +13,7 @@ class ElevationStatusTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Checks whether dangerous execution elevation is enabled for the MirasAI WordPress host. The control plane exists, but dangerous_exec tools are not registered yet.';
+        return 'Checks whether dangerous execution elevation is enabled for the MirasAI WordPress host.';
     }
 
     /**
@@ -40,17 +40,17 @@ class ElevationStatusTool extends AbstractTool
             'environment' => function_exists('wp_get_environment_type') ? wp_get_environment_type() : 'production',
             'looks_like_production' => RuntimeSettings::looksLikeProduction(),
             'elevation' => [
-                'implemented' => false,
+                'implemented' => true,
                 'state' => $dangerous['state'],
                 'domain_lock' => $dangerous['domain_lock'],
                 'current_domain' => $dangerous['current_domain'],
-                'message' => 'dangerous_exec controls are implemented in the admin UI, but no dangerous_exec tools are registered yet.',
+                'message' => 'dangerous_exec controls gate sandbox/execute-php for the current domain.',
             ],
             'dangerous_exec' => [
-                'implemented' => false,
+                'implemented' => true,
                 'configured_enabled' => $dangerous['configured_enabled'],
                 'available' => $dangerous['available'],
-                'tools' => [],
+                'tools' => $dangerous['available'] ? ['sandbox/execute-php'] : [],
             ],
         ];
     }

@@ -48,6 +48,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/FilePathValidator.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/FileListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/FileReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SandboxStatusTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SandboxExecutePhpTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ElevationStatusTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/WordPressAbilityPolicy.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/WpAbilitiesListTool.php';
