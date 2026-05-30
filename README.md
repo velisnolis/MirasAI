@@ -61,7 +61,7 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password, `manage_options` gated | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
-| Automatic updates | XML feed verified on `autovigatana` and `gibaix` | JSON feed published; live WP auto-update smoke pending | No feed; install release tarball |
+| Automatic updates | XML feed verified on `autovigatana` and `gibaix` | JSON feed verified on `jordifont` and `crisalide` | No feed; install release tarball |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
 | Dynamic Sources | Read, preview, set, delete bindings | Read, preview, set, delete bindings | Routes host tools |
