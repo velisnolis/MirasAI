@@ -31,7 +31,7 @@ plg_mirasai_myplugin/
         └── MyCustomTool.php      ← Your MCP tool(s)
 ```
 
-See `pkg_mirasai/packages/plg_mirasai_example/` for a complete working example.
+See `packages/mirasai-joomla/packages/plg_mirasai_example/` for a complete working example.
 
 ---
 

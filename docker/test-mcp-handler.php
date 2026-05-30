@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-$libSrc = dirname(__DIR__) . '/pkg_mirasai/packages/lib_mirasai/src';
+$libSrc = dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src';
 
 require_once $libSrc . '/Tool/ToolInterface.php';
 require_once $libSrc . '/Tool/AbstractTool.php';

@@ -15,7 +15,7 @@ if (file_exists(__DIR__ . '/bootstrap-test.php')) {
     require_once __DIR__ . '/bootstrap-test.php';
 } else {
     // Minimal standalone bootstrap for lib_mirasai
-    $libSrc = dirname(__DIR__) . '/pkg_mirasai/packages/lib_mirasai/src';
+    $libSrc = dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src';
     require_once $libSrc . '/Tool/ToolInterface.php';
     require_once $libSrc . '/Tool/ToolProviderInterface.php';
     require_once $libSrc . '/Tool/ContentLayoutProcessorInterface.php';

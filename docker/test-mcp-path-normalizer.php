@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/pkg_mirasai/packages/lib_mirasai/src/Mcp/McpPathNormalizer.php';
+require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpPathNormalizer.php';
 
 use Mirasai\Library\Mcp\McpPathNormalizer;
 

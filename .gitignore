@@ -1,6 +1,5 @@
 novamira-1.0.0.zip
 pkg_mirasai-0.1.0.zip
-pkg_mirasai/packages/*.zip
 .gstack/
 .env
 .docker-build/
@@ -11,3 +10,4 @@ revisiógemeni.md
 security_best_practices_report.md
 node_modules/
 packages/mirasai-wp/dist/
+packages/mirasai-joomla/packages/*.zip

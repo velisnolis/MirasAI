@@ -15,8 +15,8 @@ declare(strict_types=1);
 if (file_exists(__DIR__ . '/bootstrap.php')) {
     require_once __DIR__ . '/bootstrap.php';
 } else {
-    require_once dirname(__DIR__) . '/pkg_mirasai/packages/lib_mirasai/src/Tool/ContentLayoutProcessorInterface.php';
-    require_once dirname(__DIR__) . '/pkg_mirasai/packages/lib_mirasai/src/Tool/YooThemeLayoutProcessor.php';
+    require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ContentLayoutProcessorInterface.php';
+    require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/YooThemeLayoutProcessor.php';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

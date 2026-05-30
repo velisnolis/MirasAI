@@ -29,7 +29,7 @@ d'eines encara que la resta de tools siguin correctes.
 
 Canvi minim:
 
-- A `pkg_mirasai/packages/plg_mirasai_rereplacer/src/Tool/RereplacerCapabilitiesTool.php`,
+- A `packages/mirasai-joomla/packages/plg_mirasai_rereplacer/src/Tool/RereplacerCapabilitiesTool.php`,
   canviar `properties => []` per `properties => new \stdClass()` o `(object) []`.
 
 Canvi robust:
@@ -199,7 +199,7 @@ Causa probable:
 
 Canvi preventiu al paquet:
 
-- `pkg_mirasai/script.php` ara neteja caches best-effort en `postflight` despres
+- `packages/mirasai-joomla/script.php` ara neteja caches best-effort en `postflight` despres
   d'activar plugins i migrar l'update site.
 - Grups netejats: `_system`, `com_installer`, `com_menus`, `com_modules`,
   `com_plugins`, `mod_menu`.
