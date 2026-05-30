@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The current release is `0.5.1`. It includes:
+The current release is `0.5.2`. It includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -57,10 +57,11 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.5.0` | `0.5.0` | `0.5.0` |
+| Version | `0.5.2` | `0.5.2` | `0.5.2` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password, `manage_options` gated | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
+| Automatic updates | XML feed verified on `autovigatana` and `gibaix` | JSON feed published; live WP auto-update smoke pending | No feed; install release tarball |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
 | Dynamic Sources | Read, preview, set, delete bindings | Read, preview, set, delete bindings | Routes host tools |
@@ -242,7 +243,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.5.1.zip
+packages/mirasai-wp/dist/mirasai-wp-0.5.2.zip
 ```
 
 The WordPress admin dashboard includes:

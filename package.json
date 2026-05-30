@@ -1,6 +1,6 @@
 {
   "name": "mirasai",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "description": "MirasAI multi-platform MCP toolkit for Joomla and WordPress hosts.",
   "workspaces": [
