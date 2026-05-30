@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://miras.ai/schemas/mirasai-host-tool-v1.json",
+  "title": "MirasAI Host Tool v1",
+  "type": "object",
+  "required": ["name", "description", "inputSchema", "metadata"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": ["type", "properties"],
+      "properties": {
+        "type": {
+          "const": "object"
+        },
+        "properties": {
+          "type": "object"
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "annotations": {
+      "type": "object",
+      "properties": {
+        "readOnlyHint": {
+          "type": "boolean"
+        },
+        "destructiveHint": {
+          "type": "boolean"
+        },
+        "idempotentHint": {
+          "type": "boolean"
+        },
+        "openWorldHint": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["risk_level", "workflow_hint", "surface"],
+      "properties": {
+        "risk_level": {
+          "enum": ["read", "safe_write", "guarded_write", "dangerous_exec"]
+        },
+        "workflow_hint": {
+          "enum": ["direct", "validate_then_apply", "dry_run_confirm_if_match", "elevation_required"]
+        },
+        "surface": {
+          "enum": ["essential", "advanced"]
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "enum": ["joomla", "wordpress"]
+          }
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

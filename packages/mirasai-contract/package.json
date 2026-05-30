@@ -1,0 +1,13 @@
+{
+  "name": "@miras/mirasai-contract",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared MirasAI host MCP contract, schemas, and fixtures.",
+  "scripts": {
+    "test": "node bin/validate-fixture.mjs fixtures/joomla-tools-list.min.json && node bin/validate-fixture.mjs fixtures/wordpress-tools-list.min.json"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@miras/mirasai-wp",
+  "version": "0.5.0",
+  "private": true,
+  "description": "MirasAI WordPress host plugin.",
+  "scripts": {
+    "lint:php": "find . -path './dist' -prune -o -name '*.php' -print0 | xargs -0 -n 1 php -l",
+    "build:zip": "rm -rf dist/mirasai-wp && mkdir -p dist/mirasai-wp && rsync -a --exclude='dist' --exclude='node_modules' --exclude='.git' ./ dist/mirasai-wp/ && cd dist && rm -f mirasai-wp-${npm_package_version}.zip && zip -qr mirasai-wp-${npm_package_version}.zip mirasai-wp"
+  }
+}

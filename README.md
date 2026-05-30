@@ -6,6 +6,23 @@ It gives an AI controlled access to Joomla content, multilingual workflows, syst
 
 Use it on staging first. Use backups. Treat production as a gated environment.
 
+## Multi-Platform Direction
+
+The Joomla package remains the current production host, but the project is moving toward a multi-platform MirasAI ecosystem:
+
+- `pkg_mirasai/`: Joomla host package.
+- `packages/mirasai-contract/`: shared host MCP contract for Joomla, WordPress, and the local router.
+- `packages/mirasai-mcp/`: local multi-site MCP router. This is the single client-facing MCP that routes to Joomla and WordPress hosts by `site_id`.
+- `packages/mirasai-wp/`: WordPress host plugin, inspired by Novamira patterns but using the MirasAI host contract.
+
+The intended architecture is:
+
+```text
+AI client -> @miras/mirasai-mcp -> Joomla / WordPress MirasAI host endpoints
+```
+
+Hosts remain usable directly over HTTP MCP, while the router provides the preferred multi-site and multi-platform client experience.
+
 ## What It Is
 
 MirasAI installs a small Joomla runtime made of:
@@ -79,6 +96,8 @@ Available on plain Joomla sites:
 - `content/translate-batch`
 - `content/check-links`
 - `content/audit-multilingual`
+- `taxonomy/term-list`
+- `taxonomy/term-translate`
 - `category/translate`
 - `site/setup-language-switcher`
 - `sandbox/status`
@@ -116,6 +135,7 @@ When `plg_mirasai_yootheme` is enabled and YOOtheme is installed:
 - `template/element-delete`
 - `template/read`
 - `template/translate`
+- `template/widget-translate`
 
 ### 3. Core + ReReplacer addon
 
