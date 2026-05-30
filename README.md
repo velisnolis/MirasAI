@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The current release is `0.5.2`. It includes:
+The current release is `0.5.3`. It includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -57,7 +57,7 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.5.2` | `0.5.2` | `0.5.2` |
+| Version | `0.5.3` | `0.5.3` | `0.5.3` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password, `manage_options` gated | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
@@ -243,7 +243,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.5.2.zip
+packages/mirasai-wp/dist/mirasai-wp-0.5.3.zip
 ```
 
 The WordPress admin dashboard includes:

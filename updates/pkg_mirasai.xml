@@ -6,10 +6,10 @@
     <element>pkg_mirasai</element>
     <type>package</type>
     <client>site</client>
-    <version>0.5.2</version>
-    <infourl title="MirasAI">https://github.com/velisnolis/MirasAI/releases/tag/v0.5.2</infourl>
+    <version>0.5.3</version>
+    <infourl title="MirasAI">https://github.com/velisnolis/MirasAI/releases/tag/v0.5.3</infourl>
     <downloads>
-      <downloadurl type="full" format="zip">https://github.com/velisnolis/MirasAI/releases/download/v0.5.2/pkg_mirasai-0.5.2.zip</downloadurl>
+      <downloadurl type="full" format="zip">https://github.com/velisnolis/MirasAI/releases/download/v0.5.3/pkg_mirasai-0.5.3.zip</downloadurl>
     </downloads>
     <tags>
       <tag>stable</tag>
@@ -17,6 +17,6 @@
     <maintainer>Alex Miras</maintainer>
     <maintainerurl>https://miras.pro</maintainerurl>
     <targetplatform name="joomla" version="[56]\.[0-9]+"/>
-    <sha256>e45b6e6a78b4cc4f0041a78d1b76b7096ba8970c330aaded6a530aa763ce4d99</sha256>
+    <sha256>b599362a25e463d2b20a86e01094ed8f517fc3015123f03a5b77fc0661574c38</sha256>
   </update>
 </updates>

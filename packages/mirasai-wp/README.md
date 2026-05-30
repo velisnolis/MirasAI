@@ -22,7 +22,7 @@ npm run build:zip
 The ZIP is written to:
 
 ```text
-dist/mirasai-wp-0.5.2.zip
+dist/mirasai-wp-0.5.3.zip
 ```
 
 Authenticate with:

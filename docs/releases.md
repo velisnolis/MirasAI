@@ -53,7 +53,7 @@ ls .release/v<version>/
 
 ## Automated Release
 
-Use the `Release` GitHub Actions workflow with the exact package version as input, for example `0.5.2`.
+Use the `Release` GitHub Actions workflow with the exact package version as input, for example `0.5.3`.
 
 The workflow:
 
