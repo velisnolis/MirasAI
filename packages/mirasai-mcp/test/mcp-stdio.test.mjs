@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createRouterHandler } from '../src/mcp-stdio.mjs';
+
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 const registry = {
   schema_version: 1,
@@ -16,6 +19,100 @@ const registry = {
     },
   ],
 };
+
+test('router initialize reports package version', async () => {
+  const handler = createRouterHandler(registry);
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'initialize',
+    id: 1,
+  });
+
+  assert.equal(response.jsonrpc, '2.0');
+  assert.equal(response.result.serverInfo.version, packageVersion);
+});
+
+test('router warns when a remote host reports an unexpected contract version', async () => {
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => ({
+      initialize: async () => ({
+        serverInfo: { host_contract_version: '2' },
+      }),
+      toolsList: async () => ({ tools: [] }),
+    }),
+  });
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/list',
+    id: 1,
+  });
+
+  assert.equal(response.result.metadata.discovery_warnings[0].code, 'host_contract_version_mismatch');
+  assert.equal(response.result.metadata.discovery_warnings[0].expected, '1');
+  assert.equal(response.result.metadata.discovery_warnings[0].actual, '2');
+});
+
+test('router keeps discovering tools when contract version check fails', async () => {
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => ({
+      initialize: async () => {
+        throw new Error('initialize unavailable');
+      },
+      toolsList: async () => ({
+        tools: [
+          {
+            name: 'content/read',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ],
+      }),
+    }),
+  });
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/list',
+    id: 1,
+  });
+
+  assert.equal(response.result.metadata.discovery_warnings[0].code, 'host_contract_version_check_failed');
+  assert(response.result.tools.some((tool) => tool.name === 'content/read'));
+});
+
+test('router surfaces registry warnings in discovery metadata and sites-list', async () => {
+  const warningRegistry = {
+    ...registry,
+    warnings: [
+      {
+        code: 'registry_permissions_too_open',
+        path: '/tmp/sites.json',
+        mode: '0644',
+      },
+    ],
+  };
+  const handler = createRouterHandler(warningRegistry, {
+    clientFactory: () => ({
+      toolsList: async () => ({ tools: [] }),
+    }),
+  });
+
+  const toolsResponse = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/list',
+    id: 1,
+  });
+  assert.equal(toolsResponse.result.metadata.registry_warnings[0].code, 'registry_permissions_too_open');
+
+  const sitesResponse = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      name: 'mirasai/sites-list',
+      arguments: {},
+    },
+    id: 2,
+  });
+  assert.equal(sitesResponse.result.structuredContent.warnings[0].mode, '0644');
+});
 
 test('router exposes local tools', async () => {
   const handler = createRouterHandler(registry, {

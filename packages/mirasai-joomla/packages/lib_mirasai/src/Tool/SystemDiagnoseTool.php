@@ -75,6 +75,7 @@ class SystemDiagnoseTool extends AbstractTool
         return [
             'status' => $status,
             'mirasai_version' => Mirasai::VERSION,
+            'host_contract_version' => Mirasai::CONTRACT_VERSION,
             'cms' => [
                 'name' => 'Joomla',
                 'version' => (new Version())->getShortVersion(),

@@ -31,7 +31,8 @@ class DbQueryTool extends AbstractTool
         '/\bRELEASE_LOCK\s*\(/i',
         '/\bFOR\s+UPDATE\b/i',
         '/\bLOCK\s+IN\s+SHARE\s+MODE\b/i',
-        '/\bINTO\b(?!\s*@)/i',          // allow SELECT ... INTO @var? No: block everything except SHOW handled above
+        '/\bINTO\b/i',
+        '/:=/',
         '/\bSET\s+@/i',
         '/\bPREPARE\b/i',
         '/\bEXECUTE\b/i',

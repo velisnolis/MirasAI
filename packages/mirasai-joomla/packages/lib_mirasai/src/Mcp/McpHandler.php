@@ -143,6 +143,8 @@ class McpHandler
             'serverInfo' => [
                 'name' => 'MirasAI',
                 'version' => Mirasai::VERSION,
+                'host_platform' => 'joomla',
+                'host_contract_version' => Mirasai::CONTRACT_VERSION,
             ],
             'instructions' => $instructions,
         ];

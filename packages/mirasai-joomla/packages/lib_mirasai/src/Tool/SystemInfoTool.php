@@ -46,6 +46,7 @@ class SystemInfoTool extends AbstractTool
             'template' => $this->getTemplateSummary(),
             'yootheme' => $this->getYoothemeInfo(),
             'mirasai_version' => Mirasai::VERSION,
+            'host_contract_version' => Mirasai::CONTRACT_VERSION,
         ];
     }
 

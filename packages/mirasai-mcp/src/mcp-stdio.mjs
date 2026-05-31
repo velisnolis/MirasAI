@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
 import { MirasaiHostClient } from './site-client.mjs';
+
+const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 export function createRouterHandler(registry, options = {}) {
   const clientFactory = options.clientFactory ?? ((site) => new MirasaiHostClient(site));
@@ -20,7 +23,7 @@ export function createRouterHandler(registry, options = {}) {
           },
           serverInfo: {
             name: '@miras/mirasai-mcp',
-            version: '0.5.0',
+            version: ROUTER_VERSION,
           },
           instructions:
             'MirasAI MCP router. Use mirasai/sites-list to inspect configured sites, mirasai/sites-test to validate one host, and mirasai/host-diagnose to run system/diagnose on a host.',
@@ -121,6 +124,7 @@ async function callRouterTool(registry, clientFactory, params) {
   if (name === 'mirasai/sites-list') {
     return callToolResult({
       default_site_id: registry.default_site_id,
+      warnings: registryWarnings(registry),
       sites: registry.sites.map((site) => ({
         site_id: site.site_id,
         label: site.label,
@@ -150,14 +154,23 @@ async function callRouterTool(registry, clientFactory, params) {
 async function listAllTools(registry, clientFactory, params = {}) {
   const surface = typeof params?.surface === 'string' ? params.surface : undefined;
   const remote = await discoverRemoteTools(registry, clientFactory, surface);
+  const warnings = registryWarnings(registry);
+  const metadata = {
+    ...(remote.warnings.length > 0 ? { discovery_warnings: remote.warnings } : {}),
+    ...(warnings.length > 0 ? { registry_warnings: warnings } : {}),
+  };
 
   return {
     tools: [
       ...routerTools(),
       ...remote.tools,
     ],
-    ...(remote.warnings.length > 0 ? { metadata: { discovery_warnings: remote.warnings } } : {}),
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
   };
+}
+
+function registryWarnings(registry) {
+  return Array.isArray(registry.warnings) ? registry.warnings : [];
 }
 
 async function discoverRemoteTools(registry, clientFactory, surface = undefined) {
@@ -166,7 +179,13 @@ async function discoverRemoteTools(registry, clientFactory, surface = undefined)
 
   await Promise.all(registry.sites.map(async (site) => {
     try {
-      const result = await clientFactory(site).toolsList(surface === undefined ? {} : { surface });
+      const client = clientFactory(site);
+      const contractWarning = await checkHostContractVersion(client, site);
+      if (contractWarning !== null) {
+        warnings.push(contractWarning);
+      }
+
+      const result = await client.toolsList(surface === undefined ? {} : { surface });
       const tools = Array.isArray(result?.tools) ? result.tools : [];
 
       for (const tool of tools) {
@@ -194,6 +213,41 @@ async function discoverRemoteTools(registry, clientFactory, surface = undefined)
   return {
     tools: [...toolsByName.values()].sort((left, right) => left.name.localeCompare(right.name)),
     warnings,
+  };
+}
+
+async function checkHostContractVersion(client, site) {
+  if (typeof client?.initialize !== 'function') {
+    return null;
+  }
+
+  let result;
+  try {
+    result = await client.initialize();
+  } catch (caught) {
+    return {
+      site_id: site.site_id,
+      platform: site.platform,
+      code: 'host_contract_version_check_failed',
+      expected: '1',
+      actual: null,
+      message: `Could not check host_contract_version for ${site.site_id}: ${caught instanceof Error ? caught.message : String(caught)}`,
+    };
+  }
+
+  const actual = result?.serverInfo?.host_contract_version;
+
+  if (actual === '1') {
+    return null;
+  }
+
+  return {
+    site_id: site.site_id,
+    platform: site.platform,
+    code: 'host_contract_version_mismatch',
+    expected: '1',
+    actual: actual ?? null,
+    message: `Host ${site.site_id} reports host_contract_version ${actual ?? 'missing'}, expected 1.`,
   };
 }
 

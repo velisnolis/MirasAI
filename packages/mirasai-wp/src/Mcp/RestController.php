@@ -28,6 +28,18 @@ class RestController
      */
     public function authorize($request)
     {
+        $token = $this->header($request, 'x-mirasai-token');
+
+        if ($token !== '') {
+            if ($this->isValidToken($token)) {
+                return true;
+            }
+
+            if (!is_user_logged_in()) {
+                return new \WP_Error('mirasai_invalid_token', 'Invalid MirasAI token.', ['status' => 401]);
+            }
+        }
+
         if (is_user_logged_in()) {
             if (current_user_can('manage_options')) {
                 return true;
@@ -40,21 +52,11 @@ class RestController
             );
         }
 
-        $token = $this->header($request, 'x-mirasai-token');
-
-        if ($token === '') {
-            return new \WP_Error(
-                'mirasai_missing_auth',
-                'Authenticate with a WordPress Application Password or provide X-MirasAI-Token.',
-                ['status' => 401]
-            );
-        }
-
-        if (!$this->isValidToken($token)) {
-            return new \WP_Error('mirasai_invalid_token', 'Invalid MirasAI token.', ['status' => 401]);
-        }
-
-        return true;
+        return new \WP_Error(
+            'mirasai_missing_auth',
+            'Authenticate with a WordPress Application Password or provide X-MirasAI-Token.',
+            ['status' => 401]
+        );
     }
 
     /**

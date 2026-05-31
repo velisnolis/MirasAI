@@ -11,6 +11,7 @@ export function defaultConfigPath() {
 
 export function loadRegistry(configPath = defaultConfigPath()) {
   const resolvedPath = path.resolve(configPath);
+  const permissionWarnings = registryPermissionWarnings(resolvedPath);
   const raw = fs.readFileSync(resolvedPath, 'utf8');
   const registry = JSON.parse(raw);
   const errors = validateRegistry(registry);
@@ -19,7 +20,13 @@ export function loadRegistry(configPath = defaultConfigPath()) {
     throw new Error(`Invalid MirasAI site registry:\n${errors.map((error) => `- ${error}`).join('\n')}`);
   }
 
-  return normalizeRegistry(registry, resolvedPath);
+  return normalizeRegistry({
+    ...registry,
+    warnings: [
+      ...(Array.isArray(registry.warnings) ? registry.warnings : []),
+      ...permissionWarnings,
+    ],
+  }, resolvedPath);
 }
 
 export function loadRegistryOrEmpty(configPath = defaultConfigPath()) {
@@ -160,6 +167,7 @@ export function normalizeRegistry(registry, configPath = null) {
     schema_version: 1,
     default_site_id: registry.default_site_id ?? (registry.sites[0]?.site_id ?? null),
     config_path: configPath,
+    warnings: Array.isArray(registry.warnings) ? registry.warnings : [],
     sites: registry.sites.map((site) => ({
       site_id: site.site_id,
       label: site.label,
@@ -175,6 +183,24 @@ export function normalizeRegistry(registry, configPath = null) {
       default: site.site_id === (registry.default_site_id ?? registry.sites[0]?.site_id),
     })),
   };
+}
+
+function registryPermissionWarnings(configPath) {
+  const stats = fs.statSync(configPath);
+  const extraPermissions = stats.mode & 0o077;
+
+  if (extraPermissions === 0) {
+    return [];
+  }
+
+  return [
+    {
+      code: 'registry_permissions_too_open',
+      path: configPath,
+      mode: `0${(stats.mode & 0o777).toString(8)}`,
+      message: 'MirasAI registry file is readable or writable by group/other users. Recommended mode: 0600.',
+    },
+  ];
 }
 
 export function findSite(registry, siteId = null) {

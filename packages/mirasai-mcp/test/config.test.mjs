@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { normalizeRegistry, validateRegistry, findSite, serializeRegistry, upsertSite, setDefaultSite } from '../src/config.mjs';
+import { normalizeRegistry, validateRegistry, findSite, serializeRegistry, upsertSite, setDefaultSite, loadRegistry } from '../src/config.mjs';
 
 test('valid registry normalizes default site', () => {
   const registry = {
@@ -187,4 +190,33 @@ test('setDefaultSite changes default and validates the site exists', () => {
 
   assert.equal(setDefaultSite(registry, 'two').default_site_id, 'two');
   assert.throws(() => setDefaultSite(registry, 'missing'), /Unknown site_id/);
+});
+
+test('loadRegistry warns when registry file permissions are too open', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mirasai-registry-'));
+  const configPath = path.join(tempDir, 'sites.json');
+
+  try {
+    fs.writeFileSync(configPath, `${JSON.stringify({
+      schema_version: 1,
+      sites: [
+        {
+          site_id: 'wp-demo',
+          label: 'WP demo',
+          platform: 'wordpress',
+          url: 'https://wp.example.test/wp-json/mirasai/v1/mcp',
+          basic_env: 'WP_BASIC',
+        },
+      ],
+    }, null, 2)}\n`, { mode: 0o644 });
+    fs.chmodSync(configPath, 0o644);
+
+    const registry = loadRegistry(configPath);
+
+    assert.equal(registry.warnings.length, 1);
+    assert.equal(registry.warnings[0].code, 'registry_permissions_too_open');
+    assert.equal(registry.warnings[0].mode, '0644');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
