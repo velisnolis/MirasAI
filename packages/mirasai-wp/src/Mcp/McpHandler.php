@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mirasai\WordPress\Mcp;
 
 use Mirasai\WordPress\Tool\AbstractTool;
+use Mirasai\WordPress\Tool\RuntimeSettings;
 use Mirasai\WordPress\Tool\ToolRegistry;
 
 class McpHandler
@@ -107,6 +108,35 @@ class McpHandler
         $tool = $this->registry->get($toolName);
         if ($tool === null) {
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
+        }
+
+        $permissions = AbstractTool::normalizePermissions($tool->getPermissions());
+
+        if ($permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE
+            && empty($arguments['dry_run'])
+            && empty($arguments['confirm_guarded_write'])
+        ) {
+            return $this->wrapToolResult([
+                'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',
+                'code' => 'guarded_write_confirmation_required',
+                'tool' => $toolName,
+                'risk_level' => $permissions['risk_level'],
+                'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
+                'action_required' => 'Run a dry_run or preview first, then retry the exact write with confirm_guarded_write=true and a fresh if_match when the tool supports ETags.',
+            ], true);
+        }
+
+        if ($permissions['risk_level'] === AbstractTool::RISK_DANGEROUS_EXEC
+            && !RuntimeSettings::isDangerousExecEnabled()
+        ) {
+            return $this->wrapToolResult([
+                'error' => 'This dangerous_exec tool requires dangerous execution controls to be enabled for the current domain.',
+                'code' => 'dangerous_exec_not_enabled',
+                'tool' => $toolName,
+                'risk_level' => $permissions['risk_level'],
+                'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
+                'dangerous_exec' => RuntimeSettings::dangerousExecStatus(),
+            ], true);
         }
 
         try {
