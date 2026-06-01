@@ -167,7 +167,7 @@ element tools can operate on templates, articles, and Builder modules.
 `template/source-types` introspects the installed YOOtheme Dynamic Source
 GraphQL runtime when available, including WordPress, ACF, filesystem and other
 source packages registered by the active theme/plugins. `template/element-source-read`
-summarizes existing element bindings from `props.source`, `source`, or
+summarizes existing element bindings from `source`, `props.source`, or
 `source_extended` without exposing the raw payload unless `include_raw:true` is
 passed.
 

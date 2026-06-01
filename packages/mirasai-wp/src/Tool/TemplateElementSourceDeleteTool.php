@@ -15,7 +15,7 @@ class TemplateElementSourceDeleteTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Deletes YOOtheme Dynamic Source bindings from one element. Defaults to removing props.source plus compatibility carriers source and source_extended. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
+        return 'Deletes YOOtheme Dynamic Source bindings from one element. Defaults to removing source plus compatibility carriers props.source and source_extended. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
     }
 
     public function getInputSchema(): array
@@ -102,7 +102,7 @@ class TemplateElementSourceDeleteTool extends AbstractTemplateElementWriteTool
      */
     private function normalizeLocations($value): array
     {
-        $default = ['props.source', 'source', 'source_extended'];
+        $default = ['source', 'props.source', 'source_extended'];
 
         if ($value === null) {
             return $default;

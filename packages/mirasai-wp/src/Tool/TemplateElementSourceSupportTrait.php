@@ -14,7 +14,7 @@ trait TemplateElementSourceSupportTrait
         return [
             'source' => [
                 'type' => 'object',
-                'description' => 'Raw YOOtheme source payload to write to props.source.',
+                'description' => 'Raw YOOtheme source payload to write to the element source binding.',
             ],
             'source_name' => [
                 'type' => 'string',
@@ -105,20 +105,20 @@ trait TemplateElementSourceSupportTrait
     {
         $props = is_array($node['props'] ?? null) ? $node['props'] : [];
 
-        if (is_array($props['source'] ?? null)) {
-            return ['props.source', $props['source']];
-        }
-
-        if (is_string($props['source'] ?? null) && trim((string) $props['source']) !== '') {
-            return ['props.source', ['query' => ['name' => trim((string) $props['source'])]]];
-        }
-
         if (is_array($node['source'] ?? null)) {
             return ['source', $node['source']];
         }
 
         if (is_string($node['source'] ?? null) && trim((string) $node['source']) !== '') {
             return ['source', ['query' => ['name' => trim((string) $node['source'])]]];
+        }
+
+        if (is_array($props['source'] ?? null)) {
+            return ['props.source', $props['source']];
+        }
+
+        if (is_string($props['source'] ?? null) && trim((string) $props['source']) !== '') {
+            return ['props.source', ['query' => ['name' => trim((string) $props['source'])]]];
         }
 
         if (is_array($node['source_extended'] ?? null)) {

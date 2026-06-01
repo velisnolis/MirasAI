@@ -15,7 +15,7 @@ class TemplateElementSourceSetTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Sets the canonical YOOtheme Dynamic Source binding for one element at props.source. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
+        return 'Sets the canonical YOOtheme Dynamic Source binding for one element at source. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
     }
 
     public function getInputSchema(): array
