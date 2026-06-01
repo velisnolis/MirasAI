@@ -1,6 +1,6 @@
 {
   "name": "@miras/mirasai-wp",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "description": "MirasAI WordPress host plugin.",
   "scripts": {

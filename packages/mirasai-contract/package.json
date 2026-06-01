@@ -1,6 +1,6 @@
 {
   "name": "@miras/mirasai-contract",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "description": "Shared MirasAI host MCP contract, schemas, and fixtures.",
