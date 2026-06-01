@@ -27,7 +27,7 @@ class TemplateElementSourceReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads the Dynamic Source binding for one YOOtheme Builder element. Uses props.source as the canonical binding, with source and source_extended as compatibility fallbacks.';
+        return 'Reads the Dynamic Source binding for one YOOtheme Builder element. Uses source as the canonical binding, with props.source and source_extended as compatibility fallbacks.';
     }
 
     public function getInputSchema(): array

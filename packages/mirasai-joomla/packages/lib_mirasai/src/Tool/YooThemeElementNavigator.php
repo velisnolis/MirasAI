@@ -147,10 +147,10 @@ final class YooThemeElementNavigator
     }
 
     /**
-     * Set the canonical Dynamic Source binding for one element at props.source.
+     * Set the canonical Dynamic Source binding for one element at source.
      *
-     * Compatibility carriers source/source_extended are removed so future reads
-     * have one clear source of truth.
+     * Compatibility carriers props.source/source_extended are removed so future
+     * reads have one clear source of truth.
      *
      * @param array<string, mixed> $layout
      * @param array<string, mixed> $source
@@ -169,12 +169,12 @@ final class YooThemeElementNavigator
             $updated,
             $path,
             static function (array &$node) use ($source): void {
-                if (!isset($node['props']) || !is_array($node['props'])) {
-                    $node['props'] = [];
+                if (is_array($node['props'] ?? null)) {
+                    unset($node['props']['source']);
                 }
 
-                unset($node['source'], $node['source_extended']);
-                $node['props']['source'] = $source;
+                unset($node['source_extended']);
+                $node['source'] = $source;
             },
         );
 
@@ -202,7 +202,7 @@ final class YooThemeElementNavigator
      * @param list<string> $locations
      * @return array{layout: array<string, mixed>, metadata: array<string, mixed>, element: array<string, mixed>, removed_locations: list<string>}|array{error: string, code: string}
      */
-    public function deleteElementSource(array $layout, string $path, array $locations = ['props.source', 'source', 'source_extended']): array
+    public function deleteElementSource(array $layout, string $path, array $locations = ['source', 'props.source', 'source_extended']): array
     {
         $path = trim($path);
 
@@ -210,7 +210,7 @@ final class YooThemeElementNavigator
             return ['error' => 'path is required.', 'code' => 'invalid_path'];
         }
 
-        $allowed = ['props.source', 'source', 'source_extended'];
+        $allowed = ['source', 'props.source', 'source_extended'];
         $locations = array_values(array_intersect($locations, $allowed));
 
         if ($locations === []) {
@@ -223,17 +223,17 @@ final class YooThemeElementNavigator
             $updated,
             $path,
             static function (array &$node) use ($locations, &$removed): void {
+                if (in_array('source', $locations, true) && array_key_exists('source', $node)) {
+                    unset($node['source']);
+                    $removed[] = 'source';
+                }
+
                 if (in_array('props.source', $locations, true)
                     && is_array($node['props'] ?? null)
                     && array_key_exists('source', $node['props'])
                 ) {
                     unset($node['props']['source']);
                     $removed[] = 'props.source';
-                }
-
-                if (in_array('source', $locations, true) && array_key_exists('source', $node)) {
-                    unset($node['source']);
-                    $removed[] = 'source';
                 }
 
                 if (in_array('source_extended', $locations, true) && array_key_exists('source_extended', $node)) {

@@ -274,7 +274,7 @@ class TemplateElementSourcePreviewTool extends AbstractTool
     private function sourceInputProperties(): array
     {
         return [
-            'source' => ['type' => 'object', 'description' => 'Raw YOOtheme source payload to write to props.source.'],
+            'source' => ['type' => 'object', 'description' => 'Raw YOOtheme source payload to write to the element source binding.'],
             'source_name' => ['type' => 'string', 'description' => 'Source type/name used when source is omitted, for example Article or article.'],
             'query_field' => ['type' => 'string', 'description' => 'Optional query field name, for example article.'],
             'query_arguments' => ['type' => 'object', 'description' => 'Optional query field arguments.'],

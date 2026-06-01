@@ -145,17 +145,17 @@ $templates['mirasai-etag-lab'] = [
                             'type' => 'text',
                             'props' => [
                                 'content' => 'Original body copy',
-                                'source' => [
-                                    'query' => [
-                                        'name' => 'Article',
-                                        'field' => [
-                                            'name' => 'article',
-                                            'arguments' => ['id' => '1'],
-                                        ],
+                            ],
+                            'source' => [
+                                'query' => [
+                                    'name' => 'Article',
+                                    'field' => [
+                                        'name' => 'article',
+                                        'arguments' => ['id' => '1'],
                                     ],
-                                    'props' => [
-                                        'content' => ['name' => 'title'],
-                                    ],
+                                ],
+                                'props' => [
+                                    'content' => ['name' => 'title'],
                                 ],
                             ],
                         ],
@@ -294,7 +294,7 @@ main() {
 
   element_source_response="$(mcp_call 'template/element-source-read' "$(jq -cn --arg key "$TEMPLATE_KEY" --arg path "$text_source_path" '{key:$key,path:$path}')")"
   element_source_result="$(extract_result "$element_source_response")"
-  assert_jq "$element_source_result" '.binding.has_binding == true and .binding.canonical_location == "props.source" and .binding.source_name == "Article" and (.binding.field_mappings[]? | select(.prop == "content" and .field == "title")) and (.binding.raw_source | not)' 'template/element-source-read summarizes props.source bindings'
+  assert_jq "$element_source_result" '.binding.has_binding == true and .binding.canonical_location == "source" and .binding.source_name == "Article" and (.binding.field_mappings[]? | select(.prop == "content" and .field == "title")) and (.binding.raw_source | not)' 'template/element-source-read summarizes source bindings'
 
   local source_preview_args source_preview_response source_preview_result unconfirmed_source_set_args unconfirmed_source_set_response unconfirmed_source_set_result dry_run_source_set_args dry_run_source_set_response dry_run_source_set_result source_set_args source_set_response source_set_result source_set_etag source_set_read_response source_set_read_result dry_run_source_delete_args dry_run_source_delete_response dry_run_source_delete_result source_delete_args source_delete_response source_delete_result source_deleted_etag
   source_preview_args="$(jq -cn \
@@ -382,7 +382,7 @@ main() {
     }')"
   dry_run_source_delete_response="$(mcp_call 'template/element-source-delete' "$dry_run_source_delete_args")"
   dry_run_source_delete_result="$(extract_result "$dry_run_source_delete_response")"
-  assert_jq "$dry_run_source_delete_result" --arg etag "$source_set_etag" '.dry_run == true and .old_etag == $etag and .cache.reason == "dry_run" and (.removed_locations | index("props.source")) and .after.has_binding == false' 'template/element-source-delete dry_run previews source removal'
+  assert_jq "$dry_run_source_delete_result" --arg etag "$source_set_etag" '.dry_run == true and .old_etag == $etag and .cache.reason == "dry_run" and (.removed_locations | index("source")) and .after.has_binding == false' 'template/element-source-delete dry_run previews source removal'
 
   source_delete_args="$(jq -cn \
     --arg key "$TEMPLATE_KEY" \
@@ -396,7 +396,7 @@ main() {
     }')"
   source_delete_response="$(mcp_call 'template/element-source-delete' "$source_delete_args")"
   source_delete_result="$(extract_result "$source_delete_response")"
-  assert_jq "$source_delete_result" --arg etag "$source_set_etag" '.old_etag == $etag and (.new_etag | type == "string") and (.cache.groups | index("com_templates")) and (.removed_locations | index("props.source")) and .after.has_binding == false' 'template/element-source-delete removes source binding with matching if_match'
+  assert_jq "$source_delete_result" --arg etag "$source_set_etag" '.old_etag == $etag and (.new_etag | type == "string") and (.cache.groups | index("com_templates")) and (.removed_locations | index("source")) and .after.has_binding == false' 'template/element-source-delete removes source binding with matching if_match'
   source_deleted_etag="$(printf '%s' "$source_delete_result" | jq -r '.new_etag')"
   etag="$source_deleted_etag"
 

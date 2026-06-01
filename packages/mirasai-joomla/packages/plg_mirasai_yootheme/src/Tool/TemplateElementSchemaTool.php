@@ -447,7 +447,7 @@ class TemplateElementSchemaTool extends AbstractTool
         )));
 
         return [
-            'canonical_location' => 'props.source',
+            'canonical_location' => 'source',
             'mappable_props' => $mappableProps,
             'shape' => [
                 'type' => 'object',

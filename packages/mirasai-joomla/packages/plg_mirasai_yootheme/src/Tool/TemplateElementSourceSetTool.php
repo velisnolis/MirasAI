@@ -17,7 +17,7 @@ class TemplateElementSourceSetTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Sets the canonical YOOtheme Dynamic Source binding for one template element at props.source. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
+        return 'Sets the canonical YOOtheme Dynamic Source binding for one template element at source. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
     }
 
     public function getInputSchema(): array
@@ -30,7 +30,7 @@ class TemplateElementSourceSetTool extends AbstractTemplateElementWriteTool
                 'module_id' => ['type' => 'integer', 'description' => 'Optional YOOtheme Builder module ID with a layout in #__modules.content. Use one of key, article_id, or module_id.'],
                 'path' => ['type' => 'string', 'description' => 'Element path as returned by template/element-list.'],
                 'if_match' => ['type' => 'string', 'description' => 'Required current template etag. Stale values are rejected before any write.'],
-                'source' => ['type' => 'object', 'description' => 'Raw YOOtheme source payload to write to props.source.'],
+                'source' => ['type' => 'object', 'description' => 'Raw YOOtheme source payload to write to the element source binding.'],
                 'source_name' => ['type' => 'string', 'description' => 'Source type/name used when source is omitted, for example Article or article.'],
                 'query_field' => ['type' => 'string', 'description' => 'Optional query field name, for example article.'],
                 'query_arguments' => ['type' => 'object', 'description' => 'Optional query field arguments.'],
