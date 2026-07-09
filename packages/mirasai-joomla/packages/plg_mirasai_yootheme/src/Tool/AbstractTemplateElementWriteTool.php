@@ -26,6 +26,27 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    protected function targetSelectorSchema(): array
+    {
+        return [
+            'key' => [
+                'type' => 'string',
+                'description' => 'Template storage key as returned by template/list. Use one of key, article_id, or module_id.',
+            ],
+            'article_id' => [
+                'type' => 'integer',
+                'description' => 'Optional Joomla article ID with a YOOtheme Builder layout in fulltext. Use one of key, article_id, or module_id.',
+            ],
+            'module_id' => [
+                'type' => 'integer',
+                'description' => 'Optional YOOtheme Builder module ID with a layout in #__modules.content. Use one of key, article_id, or module_id.',
+            ],
+        ];
+    }
+
+    /**
      * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
      * @return array<string, mixed>
      */
