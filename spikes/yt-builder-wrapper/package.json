@@ -1,0 +1,14 @@
+{
+  "name": "mirasai-yt-builder-wrapper-spike",
+  "private": true,
+  "type": "module",
+  "description": "Spike: can MirasAI inject external tools into @wootsup/yt-builder-mcp without forking it?",
+  "scripts": {
+    "spike": "node spike-wrapper.mjs",
+    "hybrid": "node hybrid-wrapper.mjs"
+  },
+  "dependencies": {
+    "@wootsup/yt-builder-mcp": "1.1.7",
+    "zod": "^4.3.6"
+  }
+}

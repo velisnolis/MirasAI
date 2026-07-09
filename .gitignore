@@ -12,3 +12,4 @@ security_best_practices_report.md
 node_modules/
 packages/mirasai-wp/dist/
 packages/mirasai-joomla/packages/*.zip
+.work/
