@@ -2,7 +2,7 @@
 
 This package is the WordPress host plugin for the MirasAI multi-platform architecture.
 
-Current internal version: `0.5.4`.
+Current internal version: `0.6.0`.
 
 It is not a wrapper around Novamira or the WordPress MCP Adapter. It implements the MirasAI Host MCP Contract directly so the local `@miras/mirasai-mcp` router can treat WordPress and Joomla hosts consistently.
 
@@ -22,7 +22,7 @@ npm run build:zip
 The ZIP is written to:
 
 ```text
-dist/mirasai-wp-0.5.4.zip
+dist/mirasai-wp-0.6.0.zip
 ```
 
 Authenticate with:
