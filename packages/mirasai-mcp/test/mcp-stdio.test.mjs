@@ -377,3 +377,40 @@ test('router reuses one client per site across calls and evicts it on failure', 
   await call();
   assert.equal(created, 2);
 });
+
+test('serveStdio speaks newline-delimited JSON when the client does', async () => {
+  const { serveStdio } = await import('../src/mcp-stdio.mjs');
+  const handler = createRouterHandler(registry);
+
+  async function* clientInput() {
+    yield Buffer.from('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n');
+    yield Buffer.from('{"jsonrpc":"2.0","id":2,"method":"ping","params":{}}\n');
+  }
+
+  const written = [];
+  await serveStdio(handler, clientInput(), { write: (text) => written.push(text) });
+
+  assert.equal(written.length, 2);
+  for (const message of written) {
+    assert.ok(message.endsWith('\n'));
+    assert.ok(!message.includes('Content-Length'));
+  }
+  assert.equal(JSON.parse(written[0]).result.serverInfo.name, '@miras/mirasai-mcp');
+  assert.equal(JSON.parse(written[1]).result.status, 'ok');
+});
+
+test('serveStdio still speaks Content-Length framing when the client does', async () => {
+  const { serveStdio } = await import('../src/mcp-stdio.mjs');
+  const handler = createRouterHandler(registry);
+
+  const body = '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}';
+  async function* clientInput() {
+    yield Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  }
+
+  const written = [];
+  await serveStdio(handler, clientInput(), { write: (text) => written.push(text) });
+
+  assert.equal(written.length, 1);
+  assert.match(written[0], /^Content-Length: \d+\r\n\r\n/);
+});

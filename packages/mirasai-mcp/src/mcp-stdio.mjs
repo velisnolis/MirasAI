@@ -488,44 +488,76 @@ function error(id, code, message) {
   };
 }
 
-export function writeMcpMessage(stream, payload) {
+export function writeMcpMessage(stream, payload, framing = 'headers') {
   const body = JSON.stringify(payload);
+
+  if (framing === 'newline') {
+    stream.write(`${body}\n`);
+    return;
+  }
+
   stream.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
 }
 
 export async function serveStdio(handler, input = process.stdin, output = process.stdout) {
   let buffer = Buffer.alloc(0);
+  let framing = null;
 
   for await (const chunk of input) {
     buffer = Buffer.concat([buffer, chunk]);
 
     while (true) {
-      const headerEnd = buffer.indexOf('\r\n\r\n');
-      if (headerEnd === -1) {
-        break;
+      if (framing === null) {
+        const preview = buffer.toString('utf8');
+        if (preview.trimStart() === '') {
+          break;
+        }
+        framing = /^\s*Content-Length:/i.test(preview) ? 'headers' : 'newline';
       }
 
-      const header = buffer.subarray(0, headerEnd).toString('utf8');
-      const match = /^Content-Length:\s*(\d+)$/im.exec(header);
-      if (match === null) {
-        throw new Error('Missing Content-Length header.');
+      let body = null;
+
+      if (framing === 'headers') {
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd === -1) {
+          break;
+        }
+
+        const header = buffer.subarray(0, headerEnd).toString('utf8');
+        const match = /^Content-Length:\s*(\d+)$/im.exec(header);
+        if (match === null) {
+          throw new Error('Missing Content-Length header.');
+        }
+
+        const length = Number.parseInt(match[1], 10);
+        const messageStart = headerEnd + 4;
+        const messageEnd = messageStart + length;
+
+        if (buffer.length < messageEnd) {
+          break;
+        }
+
+        body = buffer.subarray(messageStart, messageEnd).toString('utf8');
+        buffer = buffer.subarray(messageEnd);
+      } else {
+        const lineEnd = buffer.indexOf('\n');
+        if (lineEnd === -1) {
+          break;
+        }
+
+        body = buffer.subarray(0, lineEnd).toString('utf8').trim();
+        buffer = buffer.subarray(lineEnd + 1);
+
+        if (body === '') {
+          continue;
+        }
       }
 
-      const length = Number.parseInt(match[1], 10);
-      const messageStart = headerEnd + 4;
-      const messageEnd = messageStart + length;
-
-      if (buffer.length < messageEnd) {
-        break;
-      }
-
-      const body = buffer.subarray(messageStart, messageEnd).toString('utf8');
-      buffer = buffer.subarray(messageEnd);
       const request = JSON.parse(body);
       const result = await handler(request);
 
       if (result !== null) {
-        writeMcpMessage(output, result);
+        writeMcpMessage(output, result, framing);
       }
     }
   }

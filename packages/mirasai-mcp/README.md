@@ -97,6 +97,10 @@ mirasai-mcp serve
 
 Use `--config /path/to/sites.json` to override the registry path.
 
+`serve` speaks both MCP stdio framings and answers in whichever the client
+uses: newline-delimited JSON (the MCP specification, used by Claude Desktop,
+Cursor, and mcp2cli) and LSP-style `Content-Length` headers.
+
 ## Current Scope
 
 Implemented now:
