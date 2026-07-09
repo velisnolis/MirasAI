@@ -220,3 +220,50 @@ test('loadRegistry warns when registry file permissions are too open', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('protocol accepts mcp, rejects unknown values, and defaults to mirasai', () => {
+  const base = {
+    site_id: 'wp-adapter',
+    label: 'WP adapter',
+    platform: 'wordpress',
+    url: 'https://wp.example.test/wp-json/mcp/mcp-adapter-default-server',
+    basic_env: 'WP_BASIC',
+  };
+
+  assert.deepEqual(validateRegistry({
+    schema_version: 1,
+    sites: [{ ...base, protocol: 'mcp' }],
+  }), []);
+
+  const errors = validateRegistry({
+    schema_version: 1,
+    sites: [{ ...base, protocol: 'rest' }],
+  });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /protocol must be "mirasai" or "mcp"/);
+
+  const registry = normalizeRegistry({
+    schema_version: 1,
+    sites: [base, { ...base, site_id: 'wp-adapter-2', protocol: 'mcp' }],
+  });
+  assert.equal(registry.sites[0].protocol, 'mirasai');
+  assert.equal(registry.sites[1].protocol, 'mcp');
+});
+
+test('serializeRegistry round-trips the protocol field', () => {
+  const registry = normalizeRegistry({
+    schema_version: 1,
+    sites: [{
+      site_id: 'wp-adapter',
+      label: 'WP adapter',
+      platform: 'wordpress',
+      protocol: 'mcp',
+      url: 'https://wp.example.test/wp-json/mcp/mcp-adapter-default-server',
+      basic_env: 'WP_BASIC',
+    }],
+  });
+
+  const serialized = serializeRegistry(registry);
+  assert.equal(serialized.sites[0].protocol, 'mcp');
+  assert.deepEqual(validateRegistry(serialized), []);
+});

@@ -2,13 +2,16 @@
 
 `@miras/mirasai-mcp` is the local MCP router for MirasAI hosts.
 
-It keeps the client-facing MCP surface in one place and routes calls to Joomla or WordPress MirasAI host endpoints by `site_id`.
+It keeps the client-facing MCP surface in one place and routes calls to Joomla or WordPress host endpoints by `site_id`.
 
-Current internal version: `0.5.4`.
+Current internal version: `0.6.0`.
 
 This release implements the registry, secret resolution with in-memory TTL,
 host probing, remote tool discovery, and a stdio MCP server that can expose
-tools from multiple Joomla and WordPress MirasAI hosts through one local MCP.
+tools from multiple Joomla and WordPress hosts through one local MCP. Hosts
+can speak either the MirasAI contract or the standard MCP Streamable HTTP
+protocol (for example the WordPress MCP Adapter used by WP Rocket 3.23+,
+Rank Math, and the WordPress AI plugin).
 
 ## Registry
 
@@ -39,10 +42,33 @@ Example:
       "platform": "wordpress",
       "url": "https://demo.test/wp-json/mirasai/v1/mcp",
       "token_env": "DEMO_WP_MIRASAI_TOKEN"
+    },
+    {
+      "site_id": "demo-wp-adapter",
+      "label": "Demo WordPress (MCP Adapter)",
+      "platform": "wordpress",
+      "protocol": "mcp",
+      "url": "https://demo.test/wp-json/mcp/mcp-adapter-default-server",
+      "basic_ref": "op://vault/item/field"
     }
   ]
 }
 ```
+
+## Host protocols
+
+Each site has an optional `protocol` field:
+
+- `mirasai` (default): MirasAI host contract. `mirasai/sites-test` also runs
+  `system/diagnose`, and discovery checks `host_contract_version`.
+- `mcp`: standard MCP Streamable HTTP endpoint, such as the WordPress MCP
+  Adapter (`/wp-json/mcp/mcp-adapter-default-server`). The router performs the
+  spec `initialize` handshake lazily, captures the `Mcp-Session-Id` response
+  header, and replays it on every later call from the same client. SSE
+  (`text/event-stream`) responses are parsed. `system/diagnose` and
+  `host_contract_version` checks are skipped. WordPress Application Passwords
+  work as-is through `basic_ref`/`basic_env` (spaces in the password are
+  accepted by WordPress).
 
 Supported token sources:
 
@@ -63,6 +89,7 @@ The cache is never written to disk and is cleared when the router process exits.
 ```bash
 mirasai-mcp list-sites
 mirasai-mcp add-site --site-id jordifont-wp --label "Jordi Font WordPress" --platform wordpress --url https://www.jordifont.com/wp-json/mirasai/v1/mcp --basic-ref op://vault/item/field --secret-ttl-seconds 3600 --default
+mirasai-mcp add-site --site-id demo-wp-adapter --label "Demo WP (MCP Adapter)" --platform wordpress --protocol mcp --url https://demo.test/wp-json/mcp/mcp-adapter-default-server --basic-ref op://vault/item/field
 mirasai-mcp set-default jordifont-wp
 mirasai-mcp test-site autovigatana
 mirasai-mcp serve

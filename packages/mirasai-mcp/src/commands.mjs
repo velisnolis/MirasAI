@@ -159,6 +159,10 @@ function siteFromFlags(flags) {
     url: requiredFlag(flags, 'url'),
   };
 
+  if (typeof flags.protocol === 'string' && flags.protocol !== '') {
+    site.protocol = flags.protocol;
+  }
+
   const secretFlags = {
     tokenRef: 'token_ref',
     tokenEnv: 'token_env',
@@ -202,7 +206,7 @@ function helpText() {
 
 Usage:
   mirasai-mcp list-sites [--config sites.json]
-  mirasai-mcp add-site --site-id ID --label LABEL --platform joomla|wordpress --url URL (--token-ref REF|--token-env ENV|--token-plain-dev TOKEN|--basic-ref REF|--basic-env ENV|--basic-plain-dev USER:PASS) [--secret-ttl-seconds 3600] [--default] [--config sites.json]
+  mirasai-mcp add-site --site-id ID --label LABEL --platform joomla|wordpress --url URL (--token-ref REF|--token-env ENV|--token-plain-dev TOKEN|--basic-ref REF|--basic-env ENV|--basic-plain-dev USER:PASS) [--protocol mirasai|mcp] [--secret-ttl-seconds 3600] [--default] [--config sites.json]
   mirasai-mcp set-default site_id [--config sites.json]
   mirasai-mcp test-site [site_id] [--config sites.json]
   mirasai-mcp serve [--config sites.json]

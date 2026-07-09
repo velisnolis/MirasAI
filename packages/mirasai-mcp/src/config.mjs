@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const VALID_PLATFORMS = new Set(['joomla', 'wordpress']);
+const VALID_PROTOCOLS = new Set(['mirasai', 'mcp']);
 
 export function defaultConfigPath() {
   const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
@@ -76,7 +77,7 @@ export function serializeSite(site) {
     url: site.url,
   };
 
-  for (const key of ['token_ref', 'token_env', 'token_plain_dev', 'basic_ref', 'basic_env', 'basic_plain_dev', 'secret_ttl_seconds']) {
+  for (const key of ['protocol', 'token_ref', 'token_env', 'token_plain_dev', 'basic_ref', 'basic_env', 'basic_plain_dev', 'secret_ttl_seconds']) {
     if (site[key] !== undefined) {
       serialized[key] = site[key];
     }
@@ -126,6 +127,10 @@ export function validateRegistry(registry) {
       errors.push(`${prefix}.platform must be "joomla" or "wordpress"`);
     }
 
+    if (site.protocol !== undefined && !VALID_PROTOCOLS.has(site.protocol)) {
+      errors.push(`${prefix}.protocol must be "mirasai" or "mcp" when present`);
+    }
+
     if (typeof site.url !== 'string' || site.url.trim() === '') {
       errors.push(`${prefix}.url must be a non-empty string`);
     } else {
@@ -172,6 +177,7 @@ export function normalizeRegistry(registry, configPath = null) {
       site_id: site.site_id,
       label: site.label,
       platform: site.platform,
+      protocol: site.protocol ?? 'mirasai',
       url: site.url,
       token_ref: site.token_ref,
       token_env: site.token_env,

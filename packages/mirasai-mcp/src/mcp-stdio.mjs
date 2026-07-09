@@ -144,6 +144,16 @@ async function callRouterTool(registry, clientFactory, params) {
 
   if (name === 'mirasai/host-diagnose') {
     const site = findSite(registry, args.site_id);
+
+    if ((site.protocol ?? 'mirasai') === 'mcp') {
+      return callToolResult({
+        error: `Site ${site.site_id} is a standard MCP host and does not expose system/diagnose. Use mirasai/sites-test instead.`,
+        code: 'tool_not_supported_on_protocol',
+        site_id: site.site_id,
+        protocol: 'mcp',
+      }, true);
+    }
+
     const result = await clientFactory(site).diagnose();
     return result;
   }
@@ -218,6 +228,10 @@ async function discoverRemoteTools(registry, clientFactory, surface = undefined)
 
 async function checkHostContractVersion(client, site) {
   if (typeof client?.initialize !== 'function') {
+    return null;
+  }
+
+  if ((site.protocol ?? 'mirasai') === 'mcp') {
     return null;
   }
 
