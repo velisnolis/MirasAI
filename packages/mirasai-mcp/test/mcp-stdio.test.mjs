@@ -338,3 +338,42 @@ test('router returns structured unsupported-platform errors for missing remote t
   assert.equal(response.result.structuredContent.code, 'tool_not_supported_on_platform');
   assert.equal(response.result.structuredContent.site_id, 'joomla-demo');
 });
+
+test('router reuses one client per site across calls and evicts it on failure', async () => {
+  let created = 0;
+  let failNext = false;
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => {
+      created += 1;
+      return {
+        initialize: async () => ({ serverInfo: { host_contract_version: '1' } }),
+        toolsList: async () => ({ tools: [{ name: 'demo/tool', inputSchema: { type: 'object' } }] }),
+        callTool: async () => {
+          if (failNext) {
+            failNext = false;
+            throw new Error('session expired');
+          }
+          return { content: [], structuredContent: { ok: true } };
+        },
+      };
+    },
+  });
+
+  const call = () => handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: { name: 'demo/tool', arguments: {} },
+    id: 1,
+  });
+
+  await call();
+  await call();
+  assert.equal(created, 1);
+
+  failNext = true;
+  const failed = await call();
+  assert.equal(failed.result.isError, true);
+
+  await call();
+  assert.equal(created, 2);
+});

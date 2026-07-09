@@ -6,6 +6,20 @@ const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import
 
 export function createRouterHandler(registry, options = {}) {
   const clientFactory = options.clientFactory ?? ((site) => new MirasaiHostClient(site));
+  const clientCache = new Map();
+  const cachingFactory = (site) => {
+    const cached = clientCache.get(site.site_id);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const client = clientFactory(site);
+    clientCache.set(site.site_id, client);
+    return client;
+  };
+  cachingFactory.evict = (site) => {
+    clientCache.delete(site.site_id);
+  };
 
   return async function handleJsonRpc(request) {
     const id = request?.id ?? null;
@@ -39,11 +53,11 @@ export function createRouterHandler(registry, options = {}) {
       }
 
       if (method === 'tools/list') {
-        return response(id, await listAllTools(registry, clientFactory, params));
+        return response(id, await listAllTools(registry, cachingFactory, params));
       }
 
       if (method === 'tools/call') {
-        return response(id, await callRouterTool(registry, clientFactory, params));
+        return response(id, await callRouterTool(registry, cachingFactory, params));
       }
 
       return error(id, -32601, `Method not found: ${method}`);
@@ -212,6 +226,7 @@ async function discoverRemoteTools(registry, clientFactory, surface = undefined)
         toolsByName.set(tool.name, mergeRemoteTool(merged, tool, site));
       }
     } catch (caught) {
+      clientFactory.evict?.(site);
       warnings.push({
         site_id: site.site_id,
         platform: site.platform,
@@ -292,6 +307,7 @@ async function callRemoteTool(registry, clientFactory, name, args) {
 
     return await client.callTool(name, remoteArgs);
   } catch (caught) {
+    clientFactory.evict?.(site);
     return callToolResult({
       error: caught instanceof Error ? caught.message : String(caught),
       code: 'remote_tool_call_failed',
