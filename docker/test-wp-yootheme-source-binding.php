@@ -9,6 +9,36 @@
 
 declare(strict_types=1);
 
+$GLOBALS['test_wp_options'] = [
+    'yootheme' => '{"news":"release"}',
+];
+
+function get_option(string $name, mixed $default = false): mixed
+{
+    return $GLOBALS['test_wp_options'][$name] ?? $default;
+}
+
+function update_option(string $name, mixed $value, bool $autoload = false): bool
+{
+    $GLOBALS['test_wp_options'][$name] = $value;
+    return true;
+}
+
+function wp_json_encode(mixed $value, int $flags = 0): string|false
+{
+    return json_encode($value, $flags);
+}
+
+function wp_cache_delete(string $key, string $group = ''): bool
+{
+    return true;
+}
+
+function wp_cache_flush(): bool
+{
+    return true;
+}
+
 function wp_strip_all_tags(string $text): string
 {
     return strip_tags($text);
@@ -16,9 +46,11 @@ function wp_strip_all_tags(string $text): string
 
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/YoothemeElementNavigator.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateElementSourceSupportTrait.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/YoothemeWpHelper.php';
 
 use Mirasai\WordPress\Tool\TemplateElementSourceSupportTrait;
 use Mirasai\WordPress\Tool\YoothemeElementNavigator;
+use Mirasai\WordPress\Tool\YoothemeWpHelper;
 
 $passed = 0;
 $failed = 0;
@@ -105,6 +137,17 @@ $deleted = $navigator->deleteElementSource($set['layout'], $path);
 expectWpYoothemeSource('deleteElementSource removes source', isset($deleted['element']['source']), false);
 expectWpYoothemeSource('deleteElementSource reports source location first', $deleted['removed_locations'], ['source']);
 expectWpYoothemeSource('deleteElementSource clears binding metadata', $deleted['metadata']['has_source_binding'] ?? null, false);
+
+$helper = new YoothemeWpHelper();
+expectWpYoothemeSource('loadState decodes YOOtheme JSON string', $helper->loadState()['news'] ?? null, 'release');
+$helper->writeState(['templates' => ['abc123' => ['name' => 'Test']]]);
+$storedState = $GLOBALS['test_wp_options']['yootheme'];
+expectWpYoothemeSource('writeState preserves YOOtheme JSON-string storage', is_string($storedState), true);
+expectWpYoothemeSource(
+    'writeState stores valid JSON',
+    json_decode((string) $storedState, true)['templates']['abc123']['name'] ?? null,
+    'Test',
+);
 
 if ($failed > 0) {
     echo "\n{$failed} WordPress YOOtheme source binding test(s) failed.\n";

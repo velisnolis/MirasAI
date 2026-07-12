@@ -59,7 +59,10 @@ class YoothemeWpHelper
      */
     public function writeState(array $state): array
     {
-        update_option('yootheme', $state, false);
+        // YOOtheme's WordPress Storage passes this option to Storage::addJson(),
+        // so the database value must remain a JSON string, not a PHP array.
+        $encoded = wp_json_encode($state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        update_option('yootheme', is_string($encoded) ? $encoded : '{}', false);
 
         return $this->invalidateBuilderCache();
     }
