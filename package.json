@@ -1,19 +1,20 @@
 {
   "name": "mirasai",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "description": "MirasAI multi-platform MCP toolkit for Joomla and WordPress hosts.",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
+    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
     "test:host-contract": "php docker/test-host-contract.php",
     "test:wp-auth": "php docker/test-wp-rest-auth-contract.php",
     "test:wp-mcp-handler": "php docker/test-wp-mcp-handler-contract.php",
     "test:wp-yootheme-source": "php docker/test-wp-yootheme-source-binding.php",
+    "test:wp-yootheme-post-write": "php docker/test-wp-yootheme-post-write.php",
     "test:db-query": "php docker/test-db-query-contract.php",
     "test:wp-sandbox": "php docker/test-wp-sandbox-execute-php-contract.php",
     "lint:joomla": "npm run lint:php -w @miras/mirasai-joomla",

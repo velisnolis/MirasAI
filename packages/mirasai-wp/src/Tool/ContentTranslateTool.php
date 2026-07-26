@@ -241,10 +241,10 @@ class ContentTranslateTool extends AbstractTool
 
         if ($plannedId !== null) {
             $postFields['ID'] = $plannedId;
-            $result = wp_update_post($postFields, true);
+            $result = wp_update_post(wp_slash($postFields), true);
             $action = 'updated';
         } else {
-            $result = wp_insert_post($postFields, true);
+            $result = wp_insert_post(wp_slash($postFields), true);
             $action = 'created';
         }
 
@@ -416,10 +416,10 @@ class ContentTranslateTool extends AbstractTool
 
         if (($layoutTarget['source'] ?? '') === 'post_content_comment') {
             $encoded = wp_json_encode($translatedLayout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            wp_update_post([
+            wp_update_post(wp_slash([
                 'ID' => $targetId,
                 'post_content' => '<!-- ' . (is_string($encoded) ? $encoded : '{}') . ' -->',
-            ]);
+            ]));
         }
     }
 

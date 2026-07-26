@@ -414,10 +414,10 @@ class YoothemeWpHelper
                 ];
             }
 
-            $result = wp_update_post([
+            $result = wp_update_post(wp_slash([
                 'ID' => $postId,
                 'post_content' => $content,
-            ], true);
+            ]), true);
 
             if (is_wp_error($result)) {
                 return [
