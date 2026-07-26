@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
 import { MirasaiHostClient } from './site-client.mjs';
+import { previewStyle, verifyCompiledStyle } from './style-preview.mjs';
 
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -105,6 +106,51 @@ export function routerTools() {
       },
     },
     {
+      name: 'mirasai/style-preview',
+      description:
+        'Compiles a YOOtheme Pro style with a candidate variable patch and reports what would change, without writing anything. YOOtheme has no server-side Less compiler, so the router runs the site\'s own worker.js headlessly.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          style_id: { type: 'string', description: 'Style to compile. Defaults to the active style.' },
+          variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
+          vars: {
+            type: 'object',
+            description: 'Less variable overrides to preview, for example {"@global-primary-background": "#e85039"}.',
+          },
+          custom_less: { type: 'string', description: 'Replaces the stored custom Less for this preview.' },
+          include_css: { type: 'boolean', description: 'Return the compiled CSS. Defaults to false; only sizes and hashes are reported.' },
+        },
+      },
+      annotations: readOnlyAnnotations(),
+      metadata: {
+        risk_level: 'read',
+        workflow_hint: 'direct',
+        surface: 'essential',
+        platforms: ['wordpress'],
+      },
+    },
+    {
+      name: 'mirasai/style-verify',
+      description:
+        'Recompiles the active YOOtheme style exactly as configured and compares it with the CSS the site is serving. Detects compiled CSS that has silently fallen behind its own Less sources. Writes nothing.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          include_css: { type: 'boolean', description: 'Return the freshly compiled CSS. Defaults to false.' },
+        },
+      },
+      annotations: readOnlyAnnotations(),
+      metadata: {
+        risk_level: 'read',
+        workflow_hint: 'direct',
+        surface: 'essential',
+        platforms: ['wordpress'],
+      },
+    },
+    {
       name: 'mirasai/host-diagnose',
       description: 'Run system/diagnose on one configured MirasAI host.',
       inputSchema: {
@@ -154,6 +200,43 @@ async function callRouterTool(registry, clientFactory, params) {
     const site = findSite(registry, args.site_id);
     const result = await clientFactory(site).test();
     return callToolResult(result, result.ok !== true);
+  }
+
+  if (name === 'mirasai/style-preview' || name === 'mirasai/style-verify') {
+    const site = findSite(registry, args.site_id);
+
+    if (site.platform !== 'wordpress') {
+      return callToolResult({
+        error: `Style tools require a WordPress host; site ${site.site_id} is ${site.platform}.`,
+        code: 'tool_not_supported_on_platform',
+        site_id: site.site_id,
+      }, true);
+    }
+
+    const siteUrl = new URL(site.url).origin;
+    const client = clientFactory(site);
+
+    try {
+      const result = name === 'mirasai/style-preview'
+        ? await previewStyle({
+            client,
+            siteUrl,
+            styleId: typeof args.style_id === 'string' ? args.style_id : null,
+            variation: typeof args.variation === 'string' ? args.variation : undefined,
+            vars: args.vars && typeof args.vars === 'object' && !Array.isArray(args.vars) ? args.vars : {},
+            customLess: typeof args.custom_less === 'string' ? args.custom_less : undefined,
+            includeCss: args.include_css === true,
+          })
+        : await verifyCompiledStyle({ client, siteUrl, includeCss: args.include_css === true });
+
+      return callToolResult(result, result.ok === false);
+    } catch (caught) {
+      return callToolResult({
+        error: caught instanceof Error ? caught.message : String(caught),
+        code: caught?.code ?? 'style_tool_failed',
+        site_id: site.site_id,
+      }, true);
+    }
   }
 
   if (name === 'mirasai/host-diagnose') {

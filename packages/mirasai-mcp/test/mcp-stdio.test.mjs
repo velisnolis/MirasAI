@@ -127,8 +127,25 @@ test('router exposes local tools', async () => {
   });
 
   assert.equal(response.jsonrpc, '2.0');
-  assert.equal(response.result.tools.length, 3);
-  assert(response.result.tools.some((tool) => tool.name === 'mirasai/sites-list'));
+
+  // Assert the actual surface rather than a count: a bare number tells you
+  // nothing about which tool went missing when it changes.
+  assert.deepEqual(
+    response.result.tools.map((tool) => tool.name).sort(),
+    [
+      'mirasai/host-diagnose',
+      'mirasai/sites-list',
+      'mirasai/sites-test',
+      'mirasai/style-preview',
+      'mirasai/style-verify',
+    ]
+  );
+
+  // Every router-local tool must be annotated read-only: none of them writes.
+  for (const tool of response.result.tools) {
+    assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} must be read-only`);
+    assert.equal(tool.metadata.risk_level, 'read', `${tool.name} must declare read risk`);
+  }
 });
 
 test('router sites-list does not expose token values', async () => {
