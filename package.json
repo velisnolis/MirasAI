@@ -1,13 +1,13 @@
 {
   "name": "mirasai",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "description": "MirasAI multi-platform MCP toolkit for Joomla and WordPress hosts.",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
+    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:joomla-yootheme-style-read && npm run test:yootheme-source-runtime && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
     "test:host-contract": "php docker/test-host-contract.php",
@@ -23,7 +23,9 @@
     "build:wp": "npm run build:zip -w @miras/mirasai-wp",
     "check:packages": "npm run test && npm run build:joomla && npm run build:wp",
     "release:prepare": "node scripts/prepare-release.mjs",
-    "test:wp-yootheme-style-read": "php docker/test-wp-yootheme-style-read.php"
+    "test:wp-yootheme-style-read": "php docker/test-wp-yootheme-style-read.php",
+    "test:joomla-yootheme-style-read": "php docker/test-joomla-yootheme-style-read.php",
+    "test:yootheme-source-runtime": "php docker/test-yootheme-source-runtime.php"
   },
   "engines": {
     "node": ">=20"
