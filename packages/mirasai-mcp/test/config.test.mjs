@@ -79,6 +79,45 @@ test('registry accepts non-negative secret ttl per site', () => {
   assert.deepEqual(errors, []);
 });
 
+test('registry accepts and preserves a pinned style worker hash', () => {
+  const hash = 'A'.repeat(64);
+  const registry = normalizeRegistry({
+    schema_version: 1,
+    sites: [
+      {
+        site_id: 'wp-demo',
+        label: 'WP demo',
+        platform: 'wordpress',
+        url: 'https://wp.example.test/wp-json/mirasai/v1/mcp',
+        basic_ref: 'op://vault/item/field',
+        style_worker_sha256: hash,
+      },
+    ],
+  });
+
+  assert.deepEqual(validateRegistry(serializeRegistry(registry)), []);
+  assert.equal(registry.sites[0].style_worker_sha256, hash.toLowerCase());
+  assert.equal(serializeRegistry(registry).sites[0].style_worker_sha256, hash.toLowerCase());
+});
+
+test('registry rejects malformed style worker hashes', () => {
+  const errors = validateRegistry({
+    schema_version: 1,
+    sites: [
+      {
+        site_id: 'wp-demo',
+        label: 'WP demo',
+        platform: 'wordpress',
+        url: 'https://wp.example.test/wp-json/mirasai/v1/mcp',
+        basic_ref: 'op://vault/item/field',
+        style_worker_sha256: 'not-a-sha256',
+      },
+    ],
+  });
+
+  assert.match(errors.join('\n'), /style_worker_sha256/);
+});
+
 test('registry rejects negative secret ttl', () => {
   const errors = validateRegistry({
     schema_version: 1,

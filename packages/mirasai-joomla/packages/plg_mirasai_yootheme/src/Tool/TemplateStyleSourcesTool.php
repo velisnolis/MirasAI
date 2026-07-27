@@ -2,15 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\WordPress\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
+
+use Joomla\CMS\Uri\Uri;
+use Mirasai\Library\Tool\AbstractTool;
 
 class TemplateStyleSourcesTool extends AbstractTool
 {
-    /**
-     * The resolved import tree for a full style runs to roughly 800 KB across
-     * ~280 files. Callers that only want to inspect the shape should leave
-     * include_imports off.
-     */
     private const DEFAULT_MAX_BYTES = 4194304;
 
     public function getName(): string
@@ -20,12 +18,7 @@ class TemplateStyleSourcesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Returns everything needed to compile a YOOtheme Pro style outside the browser: the entry Less file, the fully resolved import tree (url => Less source), forced style vars, and the active overrides. YOOtheme has no server-side Less compiler, so a client must compile this tree itself. Read-only.';
-    }
-
-    public function getSurface(): string
-    {
-        return 'advanced';
+        return 'Returns everything needed to compile a Joomla YOOtheme Pro style outside the browser: the entry Less file, fully resolved import tree, forced style vars, and active overrides. Read-only.';
     }
 
     public function getInputSchema(): array
@@ -35,19 +28,19 @@ class TemplateStyleSourcesTool extends AbstractTool
             'properties' => [
                 'style_id' => [
                     'type' => 'string',
-                    'description' => 'Style to resolve, for example "flow". Defaults to the active style.',
+                    'description' => 'YOOtheme library style to resolve, for example "nioh-studio". Defaults to the active style.',
                 ],
                 'apply_active_overrides' => [
                     'type' => 'boolean',
-                    'description' => 'Apply the active style variation, Less overrides, and custom Less when previewing a different style. Defaults to false; active styles always receive their own stored overrides.',
+                    'description' => 'Apply active variation, Less overrides, and custom Less to a different style. Defaults to false.',
                 ],
                 'include_imports' => [
                     'type' => 'boolean',
-                    'description' => 'Include the import tree contents. Defaults to true. Set false to inspect only the shape and size.',
+                    'description' => 'Include the import contents. Defaults to true.',
                 ],
                 'max_bytes' => [
                     'type' => 'integer',
-                    'description' => 'Refuse to return an import tree larger than this. Defaults to 4 MiB.',
+                    'description' => 'Refuse import trees larger than this. Defaults to 4 MiB.',
                 ],
             ],
         ];
@@ -59,23 +52,28 @@ class TemplateStyleSourcesTool extends AbstractTool
      */
     public function handle(array $arguments): array
     {
-        $helper = new YoothemeStyleHelper();
+        $helper = new YoothemeStyleHelper($this->db);
         $status = $helper->status();
 
-        if (!$status['installed'] || !$status['active']) {
-            return ['error' => 'YOOtheme Pro is not the active template.', 'code' => 'yootheme_inactive'];
+        if (!$status['installed'] || !$status['active'] || !is_int($status['template_style_id'])) {
+            return [
+                'error' => 'YOOtheme Pro is not the active Joomla site template.',
+                'code' => 'yootheme_inactive',
+            ];
         }
 
-        $config = $helper->loadConfig();
+        $templateStyleId = $status['template_style_id'];
+        $config = $helper->loadConfig($templateStyleId);
         $active = $helper->activeStyle($config);
-
         $styleId = $arguments['style_id'] ?? null;
 
         if ($styleId !== null && !is_string($styleId)) {
             return ['error' => 'style_id must be a string.', 'code' => 'invalid_style_id'];
         }
 
-        $styleId = is_string($styleId) && $styleId !== '' ? $styleId : $active['style_id'];
+        $styleId = is_string($styleId) && $styleId !== ''
+            ? $styleId
+            : $active['style_id'];
 
         if ($styleId === '') {
             return ['error' => 'No style is configured and no style_id was given.', 'code' => 'no_style'];
@@ -113,7 +111,7 @@ class TemplateStyleSourcesTool extends AbstractTool
             unset($sources['imports']);
         }
 
-        $compiled = $helper->compiledState();
+        $compiled = $helper->compiledState($templateStyleId);
         $isActiveStyle = $styleId === $active['style_id'];
         $overrides = $helper->compilationOverrides(
             $config,
@@ -125,17 +123,14 @@ class TemplateStyleSourcesTool extends AbstractTool
         return $sources + [
             'active' => $active,
             'is_active_style' => $isActiveStyle,
-            // The variation is applied as a Less variable, not as an import
-            // path: the entry file ends with
-            //   @import (optional) ".../styles/@{internal-style}.less";
-            // so a compiler must pass it through the caller-supplied vars.
+            'template_style_id' => $templateStyleId,
             'overrides' => $overrides,
             'compiled' => $compiled,
             'compile_contract' => [
-                'note' => 'YOOtheme Pro 5 compiles Less in a browser web worker and only stores the resulting CSS. To reproduce it, run the installed worker.js against this import tree.',
-                'platform' => 'wordpress',
-                'worker' => 'wp-content/themes/yootheme/assets/admin/js/worker.js',
-                'base_url' => admin_url('customize.php'),
+                'note' => 'YOOtheme Pro 5 compiles Less in a browser worker and only stores the resulting CSS.',
+                'platform' => 'joomla',
+                'worker' => 'templates/yootheme/assets/admin/js/worker.js',
+                'base_url' => rtrim(Uri::root(), '/') . '/administrator/index.php',
                 'commands' => ['css', 'vars', 'minify', 'rtl'],
                 'css_input' => [
                     'style' => ['filename', 'filepath', 'imports', 'vars'],

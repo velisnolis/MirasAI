@@ -6,6 +6,7 @@ namespace Mirasai\WordPress\Mcp;
 
 use Mirasai\WordPress\Tool\AbstractTool;
 use Mirasai\WordPress\Tool\RuntimeSettings;
+use Mirasai\WordPress\Tool\ToolArgumentValidator;
 use Mirasai\WordPress\Tool\ToolRegistry;
 
 class McpHandler
@@ -110,11 +111,17 @@ class McpHandler
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
+        $rejection = ToolArgumentValidator::validate($toolName, $tool->getInputSchema(), $arguments);
+
+        if ($rejection !== null) {
+            return $this->wrapToolResult($rejection, true);
+        }
+
         $permissions = AbstractTool::normalizePermissions($tool->getPermissions());
 
         if ($permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE
-            && empty($arguments['dry_run'])
-            && empty($arguments['confirm_guarded_write'])
+            && ($arguments['dry_run'] ?? null) !== true
+            && ($arguments['confirm_guarded_write'] ?? null) !== true
         ) {
             return $this->wrapToolResult([
                 'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',

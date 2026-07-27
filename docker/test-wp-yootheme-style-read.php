@@ -28,7 +28,8 @@ function check(string $label, bool $ok): void
 
 // ---------------------------------------------------------------- fixture ---
 
-$root = sys_get_temp_dir() . '/mirasai-style-test-' . bin2hex(random_bytes(4));
+$accountRoot = sys_get_temp_dir() . '/mirasai-style-test-' . bin2hex(random_bytes(4));
+$root = $accountRoot . '/public_html';
 $themeDir = $root . '/wp-content/themes/yootheme';
 $childDir = $root . '/wp-content/themes/yootheme-child';
 
@@ -88,6 +89,12 @@ $GLOBALS['test_config'] = [
     'yootheme_apikey' => $GLOBALS['test_apikey'],
 ];
 $GLOBALS['test_stylesheet'] = 'yootheme';
+$GLOBALS['test_update_option_calls'] = 0;
+$GLOBALS['test_clean_themes_cache_calls'] = 0;
+$GLOBALS['test_theme_mod_extras'] = ['nav_menu_locations' => ['primary' => 17]];
+$GLOBALS['test_force_cas_conflict'] = false;
+$GLOBALS['test_force_cas_conflict_on_query'] = null;
+$GLOBALS['test_cas_query_calls'] = 0;
 
 // ------------------------------------------------------------- WP stubs ----
 
@@ -97,6 +104,9 @@ function get_template(): string { return 'yootheme'; }
 function get_stylesheet(): string { return $GLOBALS['test_stylesheet']; }
 function get_template_directory(): string { return ABSPATH . 'wp-content/themes/yootheme'; }
 function get_stylesheet_directory(): string { return ABSPATH . 'wp-content/themes/' . $GLOBALS['test_stylesheet']; }
+function get_theme_root(): string { return ABSPATH . 'wp-content/themes'; }
+function admin_url(string $path = ''): string { return 'https://example.test/wp-admin/' . ltrim($path, '/'); }
+function wp_clean_themes_cache(): void { $GLOBALS['test_clean_themes_cache_calls']++; }
 function wp_json_encode(mixed $v, int $flags = 0): string|false { return json_encode($v, $flags); }
 function get_theme_mod(string $key, mixed $default = null): mixed
 {
@@ -105,9 +115,68 @@ function get_theme_mod(string $key, mixed $default = null): mixed
 function get_option(string $key, mixed $default = false): mixed
 {
     return $key === 'theme_mods_yootheme'
-        ? ['config' => (string) json_encode($GLOBALS['test_config'])]
+        ? ['config' => (string) json_encode($GLOBALS['test_config'])] + $GLOBALS['test_theme_mod_extras']
         : $default;
 }
+function update_option(string $key, mixed $value, mixed $autoload = null): bool
+{
+    $GLOBALS['test_update_option_calls']++;
+    if ($key === 'theme_mods_yootheme' && is_array($value) && is_string($value['config'] ?? null)) {
+        $decoded = json_decode($value['config'], true);
+        if (is_array($decoded)) {
+            $GLOBALS['test_config'] = $decoded;
+        }
+        $extras = $value;
+        unset($extras['config']);
+        $GLOBALS['test_theme_mod_extras'] = $extras;
+    }
+    return true;
+}
+function maybe_serialize(mixed $value): string
+{
+    return is_array($value) || is_object($value) ? serialize($value) : (string) $value;
+}
+
+final class TestStyleWpdb
+{
+    public string $options = 'wp_options';
+
+    public function prepare(string $query, mixed ...$arguments): array
+    {
+        return ['query' => $query, 'arguments' => $arguments];
+    }
+
+    public function query(mixed $prepared): int
+    {
+        $GLOBALS['test_cas_query_calls']++;
+
+        if ($GLOBALS['test_force_cas_conflict']
+            || $GLOBALS['test_force_cas_conflict_on_query'] === $GLOBALS['test_cas_query_calls']) {
+            return 0;
+        }
+
+        $arguments = is_array($prepared) ? ($prepared['arguments'] ?? []) : [];
+        [$candidate, $optionName, $expected] = $arguments + [null, null, null];
+
+        if ($optionName !== 'theme_mods_yootheme'
+            || !is_string($candidate)
+            || !is_string($expected)
+            || maybe_serialize(get_option($optionName, [])) !== $expected) {
+            return 0;
+        }
+
+        $value = unserialize($candidate, ['allowed_classes' => false]);
+        if (!is_array($value)) {
+            return 0;
+        }
+
+        update_option($optionName, $value);
+
+        return 1;
+    }
+}
+
+$GLOBALS['wpdb'] = new TestStyleWpdb();
 function wp_get_theme(string $slug = ''): object
 {
     return new class {
@@ -121,9 +190,13 @@ require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AbstractTool.php'
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/YoothemeStyleHelper.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateStyleReadTool.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateStyleSourcesTool.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateStyleCreateTool.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateStyleUpdateTool.php';
 
+use Mirasai\WordPress\Tool\TemplateStyleCreateTool;
 use Mirasai\WordPress\Tool\TemplateStyleReadTool;
 use Mirasai\WordPress\Tool\TemplateStyleSourcesTool;
+use Mirasai\WordPress\Tool\TemplateStyleUpdateTool;
 use Mirasai\WordPress\Tool\YoothemeStyleHelper;
 
 // ----------------------------------------------------------------- tests ---
@@ -201,24 +274,229 @@ check('redact() masks a populated key', ($helper->redact(['yootheme_apikey' => '
 check('redact() leaves an empty key null', $helper->redact(['yootheme_apikey' => ''])['yootheme_apikey'] === null);
 check('redact() keeps other keys intact', ($helper->redact(['style' => 'flow'])['style'] ?? '') === 'flow');
 
+$activeStyle = ['style_id' => 'flow', 'variation' => 'white-pink'];
+$activeCompile = $helper->compilationOverrides($GLOBALS['test_config'], $activeStyle, 'flow');
+check('active style compilation receives its stored variation', ($activeCompile['internal_style'] ?? null) === 'white-pink');
+check('active style compilation receives its stored variables', ($activeCompile['less']['@global-primary-background'] ?? '') === '#c63b28');
+
+$otherCompile = $helper->compilationOverrides($GLOBALS['test_config'], $activeStyle, 'fuse');
+check(
+    'non-active style compilation starts without the active variation',
+    array_key_exists('internal_style', $otherCompile) && $otherCompile['internal_style'] === null
+);
+check('non-active style compilation starts without active overrides', ($otherCompile['less'] ?? ['unexpected']) === []);
+check('non-active style compilation starts without active custom Less', ($otherCompile['custom_less'] ?? 'unexpected') === '');
+check('non-active style compilation identifies style defaults as its source', ($otherCompile['source'] ?? '') === 'style_defaults');
+
+$carriedCompile = $helper->compilationOverrides($GLOBALS['test_config'], $activeStyle, 'fuse', true);
+check('non-active style can explicitly carry active overrides', ($carriedCompile['source'] ?? '') === 'active_config');
+check('explicitly carried overrides retain the active variation', ($carriedCompile['internal_style'] ?? null) === 'white-pink');
+
+$secret = $GLOBALS['test_config']['yootheme_apikey'];
+$patched = $helper->patchConfig(
+    $GLOBALS['test_config'],
+    'flow',
+    'white-pink',
+    ['@global-primary-background' => '#123456', '@new-token' => '7px'],
+    ['@new-token'],
+    null,
+    false
+);
+check('style config patch preserves the YOOtheme API key', ($patched['yootheme_apikey'] ?? null) === $secret);
+check('omitted custom Less is preserved by the patch', ($patched['custom_less'] ?? null) === $GLOBALS['test_config']['custom_less']);
+
+$beforeDryRunWrites = $GLOBALS['test_update_option_calls'];
+$currentRead = (new TemplateStyleReadTool())->handle([]);
+$dryRunCss = '.x{color:red}';
+$dryRunRtl = '.x{color:red;direction:rtl}';
+$dryRun = (new TemplateStyleUpdateTool())->handle([
+    'if_match' => $currentRead['etag'],
+    'vars' => ['@global-primary-background' => '#123456'],
+    'compiled_css' => $dryRunCss,
+    'compiled_rtl' => $dryRunRtl,
+    'compiled_css_sha256' => hash('sha256', $dryRunCss),
+    'compiled_rtl_sha256' => hash('sha256', $dryRunRtl),
+    'dry_run' => true,
+]);
+check('style-update dry-run validates successfully', ($dryRun['action'] ?? null) === 'preview');
+check('style-update dry-run does not write theme mods', $GLOBALS['test_update_option_calls'] === $beforeDryRunWrites);
+check('style-update dry-run reports secret preservation', ($dryRun['secret_preserved'] ?? false) === true);
+
+$createTarget = $root . '/wp-content/themes/yootheme-brand';
+$createArguments = [
+    'if_match' => $currentRead['etag'],
+    'style_id' => 'industria-viva',
+    'name' => 'Indústria Viva',
+    'background' => 'White',
+    'color' => 'Pink',
+    'variations' => [
+        ['id' => 'white-pink', 'name' => 'White Pink', 'background' => 'White', 'color' => 'Pink'],
+    ],
+    'less_source' => "@global-primary-background: #e85039;\n",
+    'child_theme_slug' => 'yootheme-brand',
+    'child_theme_name' => 'YOOtheme Brand',
+];
+$createPreview = (new TemplateStyleCreateTool())->handle($createArguments + ['dry_run' => true]);
+check('style-create dry-run validates successfully', ($createPreview['action'] ?? null) === 'preview');
+check('style-create dry-run does not create the child theme', !is_dir($createTarget));
+check('style-create explicitly leaves activation for a separate operation', ($createPreview['child_theme']['will_activate'] ?? true) === false);
+
+$created = (new TemplateStyleCreateTool())->handle($createArguments + ['confirm_guarded_write' => true]);
+$createdStylePath = $createTarget . '/less/theme.industria-viva.less';
+$createdStyle = is_file($createdStylePath) ? (string) file_get_contents($createdStylePath) : '';
+check('style-create writes the versionable child-theme Style source', ($created['action'] ?? null) === 'created' && is_file($createdStylePath));
+check('style-create scaffolds a declared YOOtheme child theme', str_contains((string) file_get_contents($createTarget . '/style.css'), 'Template: yootheme'));
+check('style-create writes structured Style metadata', str_contains($createdStyle, "Name: Indústria Viva") && str_contains($createdStyle, "Style: white-pink"));
+check('style-create preserves the supplied Less body', str_contains($createdStyle, '@global-primary-background: #e85039;'));
+check('style-create creates a private snapshot before writing', ($created['snapshot_created'] ?? false) === true);
+check('style-create does not make an inactive child Style runtime-visible', ($created['runtime_visible'] ?? true) === false);
+
+$unchanged = (new TemplateStyleCreateTool())->handle($createArguments + ['confirm_guarded_write' => true]);
+check('style-create is idempotent when the source already matches', ($unchanged['action'] ?? null) === 'unchanged');
+
+$beforeCommitConfig = $helper->loadConfig();
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+$commitCandidate = $helper->patchConfig(
+    $beforeCommitConfig,
+    'flow',
+    '',
+    ['@global-primary-background' => '#654321'],
+    [],
+    null,
+    false
+);
+$ltrTarget = $themeDir . '/css/theme.1.css';
+$rtlTarget = $themeDir . '/css/theme.1.rtl.css';
+$originalLtr = (string) file_get_contents($ltrTarget);
+
+mkdir($rtlTarget);
+$failedCommit = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+check('style-update reports a write failure after a partial file replacement', ($failedCommit['code'] ?? null) === 'style_write_failed');
+check('style-update verifies config and file rollback separately', ($failedCommit['rollback']['restored'] ?? false) === true);
+check('style-update restores config after a partial file replacement', $helper->loadConfig() === $beforeCommitConfig);
+check('style-update restores the first CSS file after the second rename fails', (string) file_get_contents($ltrTarget) === $originalLtr);
+rmdir($rtlTarget);
+
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+mkdir($rtlTarget);
+$GLOBALS['test_force_cas_conflict_on_query'] = $GLOBALS['test_cas_query_calls'] + 2;
+$incompleteRollback = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+$GLOBALS['test_force_cas_conflict_on_query'] = null;
+check('style-update exposes an incomplete rollback instead of claiming recovery', ($incompleteRollback['rollback']['restored'] ?? true) === false);
+check('style-update incomplete rollback message requires snapshot recovery', str_contains((string) ($incompleteRollback['error'] ?? ''), 'rollback is incomplete'));
+
+update_option('theme_mods_yootheme', [
+    'config' => (string) json_encode($beforeCommitConfig),
+] + $GLOBALS['test_theme_mod_extras']);
+file_put_contents($ltrTarget, $originalLtr);
+rmdir($rtlTarget);
+
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+$committed = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+check('style-update commits config and CSS through compare-and-swap', !isset($committed['error']) && is_string($committed['new_etag'] ?? null));
+check('style-update compare-and-swap preserves unrelated theme mods', ($GLOBALS['test_theme_mod_extras']['nav_menu_locations']['primary'] ?? null) === 17);
+
+$cas = new ReflectionMethod(YoothemeStyleHelper::class, 'compareAndSwapThemeMods');
+$currentMods = get_option('theme_mods_yootheme', []);
+$conflictingMods = $currentMods;
+$conflictingMods['config'] = (string) json_encode($beforeCommitConfig);
+$GLOBALS['test_force_cas_conflict'] = true;
+$conflict = $cas->invoke($helper, $currentMods, $conflictingMods);
+$GLOBALS['test_force_cas_conflict'] = false;
+check('style-update rejects a lost-update race at the database gate', ($conflict['ok'] ?? true) === false);
+check('a rejected compare-and-swap leaves the current config untouched', $helper->loadConfig() === $commitCandidate);
+
+// YOOtheme's StyleFontLoader stores downloaded files in its own fonts cache,
+// then makes their URLs relative to the CSS destination directory passed to
+// css(). Passing the fonts directory here would produce bare filenames and
+// make the browser look for them under /css instead of /fonts.
+$GLOBALS['test_font_base_path'] = null;
+$GLOBALS['test_font_relative_url'] = '../fonts/varelaround-1f86b7a1.woff2';
+$GLOBALS['test_yootheme_app'] = new class {
+    public function __invoke(string $service): object
+    {
+        return new class {
+            public function parse(string $source): array
+            {
+                return [
+                    '@import url(https://fonts.googleapis.com/css?family=Varela+Round);',
+                    'https://fonts.googleapis.com/css?family=Varela+Round',
+                ];
+            }
+
+            public function css(string $url, string $basePath): string
+            {
+                $GLOBALS['test_font_base_path'] = $basePath;
+
+                return "@font-face{src:url({$GLOBALS['test_font_relative_url']})}\n";
+            }
+        };
+    }
+};
+eval('namespace YOOtheme { function app(): object { return $GLOBALS["test_yootheme_app"]; } }');
+$prepareCss = new ReflectionMethod(YoothemeStyleHelper::class, 'prepareCompiledCss');
+$preparedCss = $prepareCss->invoke(
+    $helper,
+    '@import url(https://fonts.googleapis.com/css?family=Varela+Round);.x{color:red}'
+);
+check('style-update resolves localized fonts relative to the CSS directory', $GLOBALS['test_font_base_path'] === $themeDir . '/css');
+check('style-update preserves the ../fonts URL needed by CSS files', str_contains($preparedCss, 'url(../fonts/varelaround-1f86b7a1.woff2)'));
+
+$GLOBALS['test_font_relative_url'] = 'varelaround-missing.woff2';
+$missingAssetRejected = false;
+try {
+    $prepareCss->invoke(
+        $helper,
+        '@import url(https://fonts.googleapis.com/css?family=Varela+Round);.x{color:red}'
+    );
+} catch (RuntimeException $exception) {
+    $missingAssetRejected = str_contains($exception->getMessage(), 'varelaround-missing.woff2');
+}
+check('style-update rejects a missing relative CSS asset before staging', $missingAssetRejected);
+
 // tool metadata
-$tools = [new TemplateStyleReadTool(), new TemplateStyleSourcesTool()];
+$tools = [
+    new TemplateStyleReadTool(),
+    new TemplateStyleSourcesTool(),
+    new TemplateStyleCreateTool(),
+    new TemplateStyleUpdateTool(),
+];
 foreach ($tools as $tool) {
     $mcp = $tool->toMcpTool();
-    check("{$mcp['name']} is annotated read-only", ($mcp['annotations']['readOnlyHint'] ?? false) === true);
-    check("{$mcp['name']} declares read risk", ($mcp['metadata']['risk_level'] ?? '') === 'read');
+    if (in_array($mcp['name'], ['template/style-create', 'template/style-update'], true)) {
+        check("{$mcp['name']} is annotated guarded", ($mcp['annotations']['destructiveHint'] ?? false) === true);
+        check("{$mcp['name']} declares guarded risk", ($mcp['metadata']['risk_level'] ?? '') === 'guarded_write');
+    } else {
+        check("{$mcp['name']} is annotated read-only", ($mcp['annotations']['readOnlyHint'] ?? false) === true);
+        check("{$mcp['name']} declares read risk", ($mcp['metadata']['risk_level'] ?? '') === 'read');
+    }
 }
 
 // ---------------------------------------------------------------- cleanup ---
 
 $it = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+    new RecursiveDirectoryIterator($accountRoot, FilesystemIterator::SKIP_DOTS),
     RecursiveIteratorIterator::CHILD_FIRST
 );
 foreach ($it as $item) {
     $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
 }
-@rmdir($root);
+@rmdir($accountRoot);
 
 if ($failures > 0) {
     fwrite(STDERR, "\n{$failures} YOOtheme Style read test(s) failed.\n");

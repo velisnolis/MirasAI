@@ -19,89 +19,267 @@
  *
  * Commands: css | vars | minify | rtl
  */
-import vm from 'node:vm';
+import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 const CALL_TIMEOUT_MS = 120_000;
+const BOOT_TIMEOUT_MS = 10_000;
+const MAX_WORKER_SOURCE_BYTES = 4 * 1024 * 1024;
+const MAX_RUNNER_REQUEST_BYTES = 32 * 1024 * 1024;
+const MAX_STDOUT_BUFFER_CHARS = 64 * 1024 * 1024;
+const RUNNER_HEAP_MB = 256;
+const RUNNER_FILE = fileURLToPath(new URL('./style-worker-runner.mjs', import.meta.url));
+const PERMISSION_FLAG = process.allowedNodeEnvironmentFlags.has('--permission')
+  ? '--permission'
+  : '--experimental-permission';
 
 /**
  * Boots a worker bundle and returns a call(cmd, data) function.
  *
+ * The remotely supplied bundle never runs in this process. A separate Node
+ * process starts with an empty environment and the Permission Model enabled,
+ * then evaluates the bundle in a context without host functions or objects.
+ * The process boundary also gives us a timeout that can stop a synchronous
+ * infinite loop instead of waiting for the blocked event loop.
+ *
  * @param {string} workerSource contents of the site's assets/admin/js/worker.js
  * @param {string} baseUrl an absolute URL on the target site; the worker's
  *   FileManager resolves import paths against it via extractUrlParts()
+ * @param {object} [options]
+ * @param {number} [options.callTimeoutMs]
+ * @param {number} [options.bootTimeoutMs]
  */
-export function bootStyleWorker(workerSource, baseUrl) {
-  const listeners = [];
-  const pending = new Map();
-  let nextId = 0;
-
-  // Only what the bundle actually needs.
-  //
-  // Do NOT add Node's intrinsics (Object, Array, Promise, Map…) here. The vm
-  // context has its own, and mixing objects from two realms silently breaks
-  // less.js's type checks: compilation reports no error, still returns the full
-  // variable list, and emits a fraction of the CSS. That failure mode costs
-  // hours to find because everything looks like it worked.
-  const sandbox = {
-    console: { warn() {}, error() {}, info() {}, debug() {}, log() {} },
-    setTimeout,
-    clearTimeout,
-    setInterval,
-    clearInterval,
-    queueMicrotask,
-    TextEncoder,
-    TextDecoder,
-    btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
-    atob: (s) => Buffer.from(s, 'base64').toString('binary'),
-    location: { href: baseUrl },
-    // every import arrives through api.staticFiles(); nothing may hit the network
-    fetch: async (url) => {
-      throw new Error(`Blocked network access from the style worker: ${url}`);
-    },
-    importScripts: () => {},
-  };
-
-  sandbox.self = sandbox;
-  sandbox.globalThis = sandbox;
-  sandbox.addEventListener = (type, fn) => {
-    if (type === 'message') listeners.push(fn);
-  };
-  sandbox.removeEventListener = () => {};
-  sandbox.postMessage = (message) => {
-    const entry = pending.get(message?.id);
-    if (!entry) return;
-    pending.delete(message.id);
-    clearTimeout(entry.timer);
-    if (message.error) entry.reject(message.error);
-    else entry.resolve(message.result);
-  };
-
-  vm.createContext(sandbox);
-  vm.runInContext(workerSource, sandbox, { filename: 'yootheme-worker.js' });
-
-  if (listeners.length === 0) {
-    throw new Error('worker.js did not register a message listener; it may not be a YOOtheme style worker.');
+export function bootStyleWorker(workerSource, baseUrl, options = {}) {
+  if (typeof workerSource !== 'string' || workerSource === '') {
+    throw new TypeError('workerSource must be a non-empty string.');
   }
 
-  return function call(cmd, data) {
+  const workerBytes = Buffer.byteLength(workerSource, 'utf8');
+  if (workerBytes > MAX_WORKER_SOURCE_BYTES) {
+    throw new RangeError(
+      `Style worker source exceeds the ${MAX_WORKER_SOURCE_BYTES}-byte safety limit.`,
+    );
+  }
+
+  const callTimeoutMs = positiveTimeout(options.callTimeoutMs, CALL_TIMEOUT_MS);
+  const bootTimeoutMs = positiveTimeout(options.bootTimeoutMs, BOOT_TIMEOUT_MS);
+  const pending = new Map();
+  let nextId = 0;
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
+  let closed = false;
+  let readyResolve;
+  let readyReject;
+
+  const ready = new Promise((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+
+  // Boot failures arrive from child events, so the rejection can land before
+  // any call() attaches a handler. Without this the router would die of an
+  // unhandled rejection instead of returning the error to the caller.
+  ready.catch(() => {});
+
+  const child = spawn(
+    process.execPath,
+    [
+      `--max-old-space-size=${RUNNER_HEAP_MB}`,
+      PERMISSION_FLAG,
+      `--allow-fs-read=${RUNNER_FILE}`,
+      '--no-warnings',
+      RUNNER_FILE,
+    ],
+    {
+      cwd: os.tmpdir(),
+      env: {},
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
+
+  const bootTimer = setTimeout(() => {
+    const error = new Error(`Style worker failed to start after ${bootTimeoutMs} ms.`);
+    readyReject(error);
+    rejectAll(error);
+    stopChild();
+  }, bootTimeoutMs);
+
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    stdoutBuffer += chunk;
+
+    if (stdoutBuffer.length > MAX_STDOUT_BUFFER_CHARS) {
+      const error = new Error('Style worker runner exceeded the stdout safety limit.');
+      clearTimeout(bootTimer);
+      readyReject(error);
+      rejectAll(error);
+      stopChild();
+      return;
+    }
+
+    for (;;) {
+      const newline = stdoutBuffer.indexOf('\n');
+      if (newline < 0) break;
+
+      const line = stdoutBuffer.slice(0, newline);
+      stdoutBuffer = stdoutBuffer.slice(newline + 1);
+      if (line === '') continue;
+
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        const error = new Error(`Style worker runner returned invalid JSON: ${line.slice(0, 200)}`);
+        readyReject(error);
+        rejectAll(error);
+        stopChild();
+        continue;
+      }
+
+      if (message.type === 'ready') {
+        clearTimeout(bootTimer);
+        readyResolve();
+        continue;
+      }
+
+      if (message.id === null && message.error) {
+        const error = new Error(String(message.error));
+        clearTimeout(bootTimer);
+        readyReject(error);
+        rejectAll(error);
+        stopChild();
+        continue;
+      }
+
+      const entry = pending.get(message.id);
+      if (!entry) continue;
+
+      pending.delete(message.id);
+      clearTimeout(entry.timer);
+      if (message.error) entry.reject(new Error(String(message.error)));
+      else entry.resolve(message.result);
+    }
+  });
+
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    if (stderrBuffer.length < 4_096) stderrBuffer += chunk;
+  });
+
+  child.stdin.on('error', (caught) => {
+    clearTimeout(bootTimer);
+    readyReject(caught);
+    rejectAll(caught);
+    stopChild();
+  });
+
+  child.on('error', (caught) => {
+    clearTimeout(bootTimer);
+    readyReject(caught);
+    rejectAll(caught);
+  });
+
+  child.on('exit', (code, signal) => {
+    if (closed) return;
+
+    const detail = stderrBuffer.trim();
+    const error = new Error(
+      `Style worker runner exited before completion (${signal ?? `code ${code}`})${detail ? `: ${detail}` : '.'}`,
+    );
+    clearTimeout(bootTimer);
+    readyReject(error);
+    rejectAll(error);
+  });
+
+  const initRequest = JSON.stringify({
+    type: 'init',
+    worker_source: workerSource,
+    base_url: baseUrl,
+    call_timeout_ms: callTimeoutMs,
+    boot_timeout_ms: bootTimeoutMs,
+  });
+  if (Buffer.byteLength(initRequest, 'utf8') > MAX_RUNNER_REQUEST_BYTES) {
+    stopChild();
+    throw new RangeError('Style worker initialization exceeds the runner request safety limit.');
+  }
+  child.stdin.write(`${initRequest}\n`);
+
+  function rejectAll(error) {
+    for (const entry of pending.values()) {
+      clearTimeout(entry.timer);
+      entry.reject(error);
+    }
+    pending.clear();
+  }
+
+  function stopChild() {
+    if (closed) return;
+    closed = true;
+    child.kill('SIGKILL');
+  }
+
+  async function call(cmd, data) {
+    await ready;
+
+    if (closed || !child.stdin.writable) {
+      throw new Error('Style worker runner is closed.');
+    }
+
     const id = ++nextId;
+    const request = JSON.stringify({ type: 'call', id, cmd, data });
+
+    if (Buffer.byteLength(request, 'utf8') > MAX_RUNNER_REQUEST_BYTES) {
+      throw new RangeError(
+        `Style worker request exceeds the ${MAX_RUNNER_REQUEST_BYTES}-byte safety limit.`,
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`Style worker timed out on "${cmd}" after ${CALL_TIMEOUT_MS} ms.`));
-      }, CALL_TIMEOUT_MS);
+        const error = new Error(`Style worker timed out on "${cmd}" after ${callTimeoutMs} ms.`);
+        reject(error);
+        rejectAll(error);
+        stopChild();
+      }, callTimeoutMs);
 
       pending.set(id, { resolve, reject, timer });
-
-      for (const fn of listeners) fn({ data: [id, { cmd, data }] });
+      child.stdin.write(`${request}\n`);
     });
+  }
+
+  call.close = async () => {
+    if (closed) return;
+    closed = true;
+    child.stdin.end();
+    rejectAll(new Error('Style worker runner was closed.'));
+
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          child.kill('SIGKILL');
+          resolve();
+        }, 1_000);
+        child.once('exit', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    }
   };
+
+  return call;
 }
 
 export function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function positiveTimeout(value, fallback) {
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 /**
@@ -165,45 +343,49 @@ export async function compileStyle({
 
   const started = Date.now();
 
-  const rendered = await call('css', {
-    style: {
-      filename: sources.filename,
-      filepath: sources.filepath,
-      imports,
-      vars: sources.vars && Object.keys(sources.vars).length > 0 ? sources.vars : {},
-    },
-    input: customLess ?? '',
-    vars: callerVars,
-  });
+  try {
+    const rendered = await call('css', {
+      style: {
+        filename: sources.filename,
+        filepath: sources.filepath,
+        imports,
+        vars: sources.vars && Object.keys(sources.vars).length > 0 ? sources.vars : {},
+      },
+      input: customLess ?? '',
+      vars: callerVars,
+    });
 
-  const errors = toHostRealm(Array.isArray(rendered?.errors) ? [...rendered.errors].map(String) : []);
+    const errors = toHostRealm(Array.isArray(rendered?.errors) ? [...rendered.errors].map(String) : []);
 
-  if (typeof rendered?.css !== 'string' || rendered.css === '') {
+    if (typeof rendered?.css !== 'string' || rendered.css === '') {
+      return {
+        ok: false,
+        errors: errors.length > 0 ? errors : ['The compiler returned no CSS.'],
+        variables: toHostRealm(rendered?.variables ?? {}),
+        duration_ms: Date.now() - started,
+      };
+    }
+
+    const minified = await call('minify', {
+      style: { desturl: sources.desturl },
+      css: rendered.css,
+    });
+
     return {
-      ok: false,
-      errors: errors.length > 0 ? errors : ['The compiler returned no CSS.'],
-      variables: toHostRealm(rendered?.variables ?? {}),
+      ok: errors.length === 0,
+      errors,
+      css: minified.css,
+      rtl: minified.rtl,
+      raw_css: rendered.css,
+      variables: toHostRealm(rendered.variables ?? {}),
+      bytes: Buffer.byteLength(minified.css, 'utf8'),
+      rtl_bytes: Buffer.byteLength(minified.rtl, 'utf8'),
+      sha256: sha256(minified.css),
       duration_ms: Date.now() - started,
     };
+  } finally {
+    await call.close();
   }
-
-  const minified = await call('minify', {
-    style: { desturl: sources.desturl },
-    css: rendered.css,
-  });
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    css: minified.css,
-    rtl: minified.rtl,
-    raw_css: rendered.css,
-    variables: toHostRealm(rendered.variables ?? {}),
-    bytes: minified.css.length,
-    rtl_bytes: minified.rtl.length,
-    sha256: sha256(minified.css),
-    duration_ms: Date.now() - started,
-  };
 }
 
 /**
@@ -215,18 +397,22 @@ export async function collectVariables({ workerSource, sources, vars = {}, varia
   const callerVars = { ...vars };
   if (variation) callerVars['@internal-style'] = variation;
 
-  const result = await call('vars', {
-    style: {
-      filename: sources.filename,
-      filepath: sources.filepath,
-      imports: sources.imports,
-      vars: sources.vars && Object.keys(sources.vars).length > 0 ? sources.vars : {},
-    },
-    input: customLess ?? '',
-    vars: callerVars,
-  });
+  try {
+    const result = await call('vars', {
+      style: {
+        filename: sources.filename,
+        filepath: sources.filepath,
+        imports: sources.imports,
+        vars: sources.vars && Object.keys(sources.vars).length > 0 ? sources.vars : {},
+      },
+      input: customLess ?? '',
+      vars: callerVars,
+    });
 
-  return toHostRealm(result?.variables ?? {});
+    return toHostRealm(result?.variables ?? {});
+  } finally {
+    await call.close();
+  }
 }
 
 /**
@@ -289,9 +475,22 @@ export function affectedComponents(changed) {
 }
 
 function deriveBaseUrl(sources) {
+  const contractBase = sources?.compile_contract?.base_url;
+  if (typeof contractBase === 'string' && contractBase !== '') {
+    try {
+      const parsed = new URL(contractBase);
+      if (['http:', 'https:'].includes(parsed.protocol)) return contractBase;
+    } catch {
+      // Fall through to the site-derived URL.
+    }
+  }
+
   // The FileManager resolves relative imports against location.href, so any
   // absolute URL on the same host works. Import keys are root-relative paths.
   const site = typeof sources?.site_url === 'string' ? sources.site_url : 'https://localhost';
+  const fallbackPath = sources?.compile_contract?.platform === 'joomla'
+    ? '/administrator/index.php'
+    : '/wp-admin/customize.php';
 
-  return `${site.replace(/\/+$/, '')}/wp-admin/customize.php`;
+  return `${site.replace(/\/+$/, '')}${fallbackPath}`;
 }

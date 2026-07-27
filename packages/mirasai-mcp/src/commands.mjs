@@ -21,6 +21,7 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo()) {
         url: site.url,
         default: site.default,
         token_source: tokenSourceForSite(site),
+        style_worker_pinned: typeof site.style_worker_sha256 === 'string',
       })),
     }, null, 2)}\n`);
     return 0;
@@ -182,6 +183,10 @@ function siteFromFlags(flags) {
     site.secret_ttl_seconds = Number(flags.secretTtlSeconds);
   }
 
+  if (typeof flags.styleWorkerSha256 === 'string' && flags.styleWorkerSha256 !== '') {
+    site.style_worker_sha256 = flags.styleWorkerSha256.toLowerCase();
+  }
+
   return site;
 }
 
@@ -206,7 +211,7 @@ function helpText() {
 
 Usage:
   mirasai-mcp list-sites [--config sites.json]
-  mirasai-mcp add-site --site-id ID --label LABEL --platform joomla|wordpress --url URL (--token-ref REF|--token-env ENV|--token-plain-dev TOKEN|--basic-ref REF|--basic-env ENV|--basic-plain-dev USER:PASS) [--protocol mirasai|mcp] [--secret-ttl-seconds 3600] [--default] [--config sites.json]
+  mirasai-mcp add-site --site-id ID --label LABEL --platform joomla|wordpress --url URL (--token-ref REF|--token-env ENV|--token-plain-dev TOKEN|--basic-ref REF|--basic-env ENV|--basic-plain-dev USER:PASS) [--protocol mirasai|mcp] [--secret-ttl-seconds 3600] [--style-worker-sha256 HASH] [--default] [--config sites.json]
   mirasai-mcp set-default site_id [--config sites.json]
   mirasai-mcp test-site [site_id] [--config sites.json]
   mirasai-mcp serve [--config sites.json]

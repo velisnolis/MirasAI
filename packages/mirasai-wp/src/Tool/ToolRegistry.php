@@ -54,6 +54,8 @@ class ToolRegistry
         $registry->register(new TemplateWidgetTranslateTool());
         $registry->register(new TemplateStyleReadTool());
         $registry->register(new TemplateStyleSourcesTool());
+        $registry->register(new TemplateStyleCreateTool());
+        $registry->register(new TemplateStyleUpdateTool());
         $registry->register(new AcfStatusTool());
         $registry->register(new AcfFieldGroupsListTool());
         $registry->register(new AcfFieldGroupReadTool());

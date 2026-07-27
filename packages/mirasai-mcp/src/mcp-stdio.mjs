@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
 import { MirasaiHostClient } from './site-client.mjs';
-import { previewStyle, verifyCompiledStyle } from './style-preview.mjs';
+import { previewStyle, updateStyle, verifyCompiledStyle } from './style-preview.mjs';
 
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -119,6 +119,11 @@ export function routerTools() {
             type: 'object',
             description: 'Less variable overrides to preview, for example {"@global-primary-background": "#e85039"}.',
           },
+          unset_vars: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Stored variable overrides to remove in the candidate.',
+          },
           custom_less: { type: 'string', description: 'Replaces the stored custom Less for this preview.' },
           include_css: { type: 'boolean', description: 'Return the compiled CSS. Defaults to false; only sizes and hashes are reported.' },
         },
@@ -128,13 +133,47 @@ export function routerTools() {
         risk_level: 'read',
         workflow_hint: 'direct',
         surface: 'essential',
-        platforms: ['wordpress'],
+        platforms: ['joomla', 'wordpress'],
+      },
+    },
+    {
+      name: 'mirasai/style-update',
+      description:
+        'Compiles and applies a guarded patch to the active YOOtheme Style. The host rechecks the ETag, snapshots config/CSS privately, replaces LTR/RTL CSS atomically, and rolls back on failure. Run dry_run=true first.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          style_id: { type: 'string', description: 'Active style id. Switching style families is not supported by this first guarded writer.' },
+          variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
+          vars: {
+            type: 'object',
+            description: 'Less variable overrides to set. Unmentioned stored overrides are preserved.',
+          },
+          unset_vars: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Stored variable overrides to remove.',
+          },
+          custom_less: { type: 'string', description: 'Replaces the stored custom Less. Omit to preserve it.' },
+          if_match: { type: 'string', description: 'Fresh Style etag from style-read or style-preview.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true. Compiles and validates without writing.' },
+          confirm_guarded_write: { type: 'boolean', description: 'Required with dry_run=false after reviewing the preview.' },
+        },
+        required: ['if_match'],
+      },
+      annotations: guardedWriteAnnotations(),
+      metadata: {
+        risk_level: 'guarded_write',
+        workflow_hint: 'dry_run_confirm_if_match',
+        surface: 'essential',
+        platforms: ['joomla', 'wordpress'],
       },
     },
     {
       name: 'mirasai/style-verify',
       description:
-        'Recompiles the active YOOtheme style exactly as configured and compares it with the CSS the site is serving. Detects compiled CSS that has silently fallen behind its own Less sources. Writes nothing.',
+        'Recompiles the active YOOtheme style exactly as configured and reports host freshness signals for the served CSS. The CSS bytes are not directly compared because YOOtheme post-processes headers and fonts after compilation. Writes nothing.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -147,7 +186,7 @@ export function routerTools() {
         risk_level: 'read',
         workflow_hint: 'direct',
         surface: 'essential',
-        platforms: ['wordpress'],
+        platforms: ['joomla', 'wordpress'],
       },
     },
     {
@@ -181,6 +220,15 @@ async function callRouterTool(registry, clientFactory, params) {
     return callToolResult({ error: 'Tool arguments must be an object.', code: 'invalid_arguments' }, true);
   }
 
+  // Router-owned tools validate here; remote tools are checked by the host,
+  // which sees the authoritative schema. Either way an argument a tool does
+  // not declare stops the call instead of being quietly dropped.
+  const rejection = rejectUndeclaredArguments(name, args);
+
+  if (rejection !== null) {
+    return callToolResult(rejection, true);
+  }
+
   if (name === 'mirasai/sites-list') {
     return callToolResult({
       default_site_id: registry.default_site_id,
@@ -192,6 +240,7 @@ async function callRouterTool(registry, clientFactory, params) {
         url: site.url,
         default: site.default === true,
         token_source: tokenSourceForSite(site),
+        style_worker_pinned: typeof site.style_worker_sha256 === 'string',
       })),
     });
   }
@@ -202,32 +251,53 @@ async function callRouterTool(registry, clientFactory, params) {
     return callToolResult(result, result.ok !== true);
   }
 
-  if (name === 'mirasai/style-preview' || name === 'mirasai/style-verify') {
+  if (
+    name === 'mirasai/style-preview'
+    || name === 'mirasai/style-verify'
+    || name === 'mirasai/style-update'
+  ) {
     const site = findSite(registry, args.site_id);
-
-    if (site.platform !== 'wordpress') {
-      return callToolResult({
-        error: `Style tools require a WordPress host; site ${site.site_id} is ${site.platform}.`,
-        code: 'tool_not_supported_on_platform',
-        site_id: site.site_id,
-      }, true);
-    }
 
     const siteUrl = new URL(site.url).origin;
     const client = clientFactory(site);
 
     try {
-      const result = name === 'mirasai/style-preview'
-        ? await previewStyle({
+      let result;
+
+      if (name === 'mirasai/style-preview') {
+        result = await previewStyle({
             client,
             siteUrl,
             styleId: typeof args.style_id === 'string' ? args.style_id : null,
             variation: typeof args.variation === 'string' ? args.variation : undefined,
             vars: args.vars && typeof args.vars === 'object' && !Array.isArray(args.vars) ? args.vars : {},
+            unsetVars: Array.isArray(args.unset_vars) ? args.unset_vars : [],
             customLess: typeof args.custom_less === 'string' ? args.custom_less : undefined,
             includeCss: args.include_css === true,
-          })
-        : await verifyCompiledStyle({ client, siteUrl, includeCss: args.include_css === true });
+            expectedWorkerSha256: site.style_worker_sha256,
+          });
+      } else if (name === 'mirasai/style-update') {
+        result = await updateStyle({
+          client,
+          siteUrl,
+          styleId: typeof args.style_id === 'string' ? args.style_id : null,
+          variation: typeof args.variation === 'string' ? args.variation : undefined,
+          vars: args.vars && typeof args.vars === 'object' && !Array.isArray(args.vars) ? args.vars : {},
+          unsetVars: Array.isArray(args.unset_vars) ? args.unset_vars : [],
+          customLess: typeof args.custom_less === 'string' ? args.custom_less : undefined,
+          ifMatch: args.if_match,
+          dryRun: args.dry_run !== false,
+          confirmGuardedWrite: args.confirm_guarded_write === true,
+          expectedWorkerSha256: site.style_worker_sha256,
+        });
+      } else {
+        result = await verifyCompiledStyle({
+            client,
+            siteUrl,
+            includeCss: args.include_css === true,
+            expectedWorkerSha256: site.style_worker_sha256,
+          });
+      }
 
       return callToolResult(result, result.ok === false);
     } catch (caught) {
@@ -235,6 +305,8 @@ async function callRouterTool(registry, clientFactory, params) {
         error: caught instanceof Error ? caught.message : String(caught),
         code: caught?.code ?? 'style_tool_failed',
         site_id: site.site_id,
+        ...(typeof caught?.expected_sha256 === 'string' ? { expected_sha256: caught.expected_sha256 } : {}),
+        ...(typeof caught?.observed_sha256 === 'string' ? { observed_sha256: caught.observed_sha256 } : {}),
       }, true);
     }
   }
@@ -530,6 +602,112 @@ function tokenSourceForSite(site) {
   return 'none';
 }
 
+/**
+ * Reject arguments a router tool does not declare.
+ *
+ * Returns null when the tool is not router-owned, or when the arguments are
+ * acceptable. Only the top level is checked: the router's own schemas declare
+ * free-form objects (`vars`) whose keys are Less variable names.
+ */
+function rejectUndeclaredArguments(name, args) {
+  const tool = routerTools().find((entry) => entry.name === name);
+  const properties = tool?.inputSchema?.properties;
+
+  if (!properties || typeof properties !== 'object') return null;
+
+  const accepted = Object.keys(properties);
+  const issues = [];
+
+  for (const key of Object.keys(args)) {
+    if (!Object.hasOwn(properties, key)) {
+      const suggestion = closestName(key, accepted);
+      issues.push({
+        code: 'unknown_argument',
+        argument: key,
+        message: suggestion
+          ? `${key} is not an argument of this tool. Did you mean ${suggestion}?`
+          : `${key} is not an argument of this tool.`,
+        ...(suggestion ? { did_you_mean: suggestion } : {}),
+      });
+      continue;
+    }
+
+    const enumValues = properties[key]?.enum;
+
+    if (Array.isArray(enumValues) && !enumValues.includes(args[key])) {
+      issues.push({
+        code: 'invalid_argument_value',
+        argument: key,
+        message: `${key} must be one of: ${enumValues.join(', ')}.`,
+        accepted_values: enumValues,
+      });
+    }
+  }
+
+  if (issues.length === 0) return null;
+
+  return {
+    error: `${name} rejected the call: ${issues.map((issue) => issue.message).join(' ')}`,
+    code: issues.some((issue) => issue.code === 'unknown_argument')
+      ? 'unknown_argument'
+      : 'invalid_argument_value',
+    tool: name,
+    issues,
+    accepted_arguments: accepted,
+    action_required: 'Nothing was applied. Fix the arguments and call the tool again.',
+  };
+}
+
+function closestName(name, candidates) {
+  let best = null;
+  let bestDistance = Infinity;
+  const budget = Math.max(2, Math.floor(name.length / 3));
+
+  for (const candidate of candidates) {
+    let distance = editDistance(name, candidate);
+
+    // A shared prefix is a strong signal even when the tails diverge.
+    if (sharedPrefixLength(name, candidate) >= 4) distance = Math.min(distance, budget);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+
+  return bestDistance <= budget ? best : null;
+}
+
+function editDistance(left, right) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+
+    for (let j = 1; j <= right.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+      );
+    }
+
+    previous = current;
+  }
+
+  return previous[right.length];
+}
+
+function sharedPrefixLength(left, right) {
+  const limit = Math.min(left.length, right.length);
+
+  for (let index = 0; index < limit; index += 1) {
+    if (left[index] !== right[index]) return index;
+  }
+
+  return limit;
+}
+
 function callToolResult(payload, isError = false) {
   return {
     content: [
@@ -548,6 +726,15 @@ function readOnlyAnnotations() {
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,
+    openWorldHint: true,
+  };
+}
+
+function guardedWriteAnnotations() {
+  return {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: true,
   };
 }

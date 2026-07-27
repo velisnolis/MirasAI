@@ -4,7 +4,7 @@
 
 It keeps the client-facing MCP surface in one place and routes calls to Joomla or WordPress host endpoints by `site_id`.
 
-Current internal version: `0.6.2`.
+Current internal version: `0.7.0`.
 
 This release implements the registry, secret resolution with in-memory TTL,
 host probing, remote tool discovery, and a stdio MCP server that can expose
@@ -32,8 +32,8 @@ Example:
       "site_id": "autovigatana",
       "label": "Autovigatana",
       "platform": "joomla",
-      "url": "https://www.autovigatana.cat/api/v1/mirasai/mcp",
-      "token_ref": "op://feina/autovigatana-mirasai/token",
+      "url": "https://www.autovigatana.com/api/v1/mirasai/mcp",
+      "token_ref": "op://YOUR_VAULT/Auto Vigatana/mirasai_token",
       "secret_ttl_seconds": 3600
     },
     {
@@ -41,7 +41,8 @@ Example:
       "label": "Demo WordPress",
       "platform": "wordpress",
       "url": "https://demo.test/wp-json/mirasai/v1/mcp",
-      "token_env": "DEMO_WP_MIRASAI_TOKEN"
+      "token_env": "DEMO_WP_MIRASAI_TOKEN",
+      "style_worker_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     },
     {
       "site_id": "demo-wp-adapter",
@@ -79,6 +80,16 @@ Supported token sources:
 - `basic_env`: environment variable containing `username:application-password`
 - `basic_plain_dev`: development-only clear Basic credentials
 
+YOOtheme Style preview/verification additionally requires
+`style_worker_sha256`: the SHA-256 of that site's
+`assets/admin/js/worker.js`. The router reads the remote file first and returns
+`style_worker_hash_required` with the observed hash when no pin exists. Review
+that hash against a trusted installation or vendor package before storing it.
+If the remote hash later changes, the router returns
+`style_worker_hash_mismatch` and refuses to execute the bundle. This is
+deliberate: the bundle runs in a separate permission-restricted process, but
+Node's Permission Model is defense in depth rather than a complete sandbox.
+
 1Password references are cached in memory by the running router process for
 `secret_ttl_seconds`. The default is 3600 seconds. Set `secret_ttl_seconds: 0`
 on a site, or `MIRASAI_MCP_SECRET_TTL_SECONDS=0` globally, to disable this cache.
@@ -88,7 +99,7 @@ The cache is never written to disk and is cleared when the router process exits.
 
 ```bash
 mirasai-mcp list-sites
-mirasai-mcp add-site --site-id jordifont-wp --label "Jordi Font WordPress" --platform wordpress --url https://www.jordifont.com/wp-json/mirasai/v1/mcp --basic-ref op://vault/item/field --secret-ttl-seconds 3600 --default
+mirasai-mcp add-site --site-id jordifont-wp --label "Jordi Font WordPress" --platform wordpress --url https://www.jordifont.com/wp-json/mirasai/v1/mcp --basic-ref op://vault/item/field --secret-ttl-seconds 3600 --style-worker-sha256 HASH --default
 mirasai-mcp add-site --site-id demo-wp-adapter --label "Demo WP (MCP Adapter)" --platform wordpress --protocol mcp --url https://demo.test/wp-json/mcp/mcp-adapter-default-server --basic-ref op://vault/item/field
 mirasai-mcp set-default jordifont-wp
 mirasai-mcp test-site autovigatana
@@ -116,7 +127,27 @@ Implemented now:
   - `mirasai/sites-list`
   - `mirasai/sites-test`
   - `mirasai/host-diagnose`
+  - `mirasai/style-preview`
+  - `mirasai/style-update`
+  - `mirasai/style-verify`
+- isolated, timeout-bounded YOOtheme worker execution with a per-site SHA-256 pin
+- guarded Style writes with explicit `if_match`, dry-run by default, compiled
+  CSS hash binding, private host snapshots, rollback, and post-write verification
 - CLI commands for `list-sites`, `add-site`, `set-default`, `test-site`, and `serve`
+
+The Style tools consume a platform-neutral host contract (`worker`, `base_url`,
+imports, and overrides). Both the WordPress and Joomla hosts expose the same
+read and guarded-write contract while keeping CMS-specific storage, snapshots,
+compiled CSS targets, and worker paths inside the host adapter. A real update
+requires `dry_run: false`, `confirm_guarded_write: true`, and the fresh Style ETag returned by
+`template/style-read` or `mirasai/style-preview`.
+
+The WordPress host additionally exposes guarded `template/style-create`. It
+scaffolds a YOOtheme child theme when needed and writes a versionable
+`less/theme.<id>.less` source after `dry_run` + `if_match` + confirmation. It
+does not activate the child theme, select the new Style, or compile live CSS;
+those remain explicit follow-up operations. Joomla supports the shared
+read/sources/update contract, but not child-template creation.
 
 Next steps:
 

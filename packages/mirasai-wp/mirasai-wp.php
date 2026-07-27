@@ -4,7 +4,7 @@
  * Plugin Name: MirasAI
  * Plugin URI: https://miras.pro
  * Description: MirasAI host endpoint for WordPress. Exposes a small MCP-compatible HTTP surface for the local MirasAI router.
- * Version: 0.6.2
+ * Version: 0.7.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: Miras
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MIRASAI_WP_VERSION', '0.6.2');
+define('MIRASAI_WP_VERSION', '0.7.0');
 define('MIRASAI_WP_CONTRACT_VERSION', '1');
 define('MIRASAI_WP_PLUGIN_FILE', __FILE__);
 define('MIRASAI_WP_PLUGIN_DIR', __DIR__);
@@ -25,6 +25,7 @@ define('MIRASAI_WP_UPDATE_FEED_URL', 'https://raw.githubusercontent.com/velisnol
 
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolInterface.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolArgumentValidator.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/WordPressTranslationHelper.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfHelper.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeWpHelper.php';
@@ -77,6 +78,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateWidgetTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleSourcesTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleCreateTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleUpdateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfStatusTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfFieldGroupsListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfFieldGroupReadTool.php';

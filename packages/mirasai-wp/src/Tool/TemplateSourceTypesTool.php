@@ -240,8 +240,17 @@ class TemplateSourceTypesTool extends AbstractTool
             return ['error' => 'Unable to bootstrap YOOtheme Builder Source runtime: ' . $exception->getMessage()];
         }
 
-        if (!function_exists('YOOtheme\\app') || !class_exists('YOOtheme\\Builder\\Source')) {
+        if (!function_exists('YOOtheme\\app')) {
             return ['error' => 'YOOtheme Builder Source runtime is not loaded in this request.'];
+        }
+
+        try {
+            $source = \YOOtheme\app(\YOOtheme\Builder\Source::class);
+            if (!is_object($source) || !method_exists($source, 'queryIntrospection')) {
+                return ['error' => 'YOOtheme Builder Source service is unavailable in the runtime container.'];
+            }
+        } catch (\Throwable $exception) {
+            return ['error' => 'Unable to resolve YOOtheme Builder Source service: ' . $exception->getMessage()];
         }
 
         return [

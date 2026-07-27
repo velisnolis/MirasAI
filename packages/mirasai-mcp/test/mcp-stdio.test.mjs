@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createRouterHandler } from '../src/mcp-stdio.mjs';
+import { sha256 } from '../src/style-preview.mjs';
 
 const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -137,15 +138,72 @@ test('router exposes local tools', async () => {
       'mirasai/sites-list',
       'mirasai/sites-test',
       'mirasai/style-preview',
+      'mirasai/style-update',
       'mirasai/style-verify',
     ]
   );
 
-  // Every router-local tool must be annotated read-only: none of them writes.
+  // Style update is the only router-local write and must expose the guarded
+  // workflow. Every other local tool stays read-only.
   for (const tool of response.result.tools) {
-    assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} must be read-only`);
-    assert.equal(tool.metadata.risk_level, 'read', `${tool.name} must declare read risk`);
+    if (tool.name === 'mirasai/style-update') {
+      assert.equal(tool.annotations.readOnlyHint, false);
+      assert.equal(tool.annotations.destructiveHint, true);
+      assert.equal(tool.metadata.risk_level, 'guarded_write');
+      assert.equal(tool.metadata.workflow_hint, 'dry_run_confirm_if_match');
+    } else {
+      assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} must be read-only`);
+      assert.equal(tool.metadata.risk_level, 'read', `${tool.name} must declare read risk`);
+    }
   }
+});
+
+test('router surfaces the observed hash without executing an unpinned style worker', async () => {
+  const worker = `self.addEventListener('message', function () {});`;
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => ({
+      callTool: async (name) => {
+        if (name === 'template/style-sources') {
+          return {
+            structuredContent: {
+              filename: 'entry.less',
+              filepath: '/less/',
+              desturl: '/css',
+              imports: { 'entry.less': '' },
+              vars: {},
+              overrides: {},
+              compile_contract: {
+                platform: 'joomla',
+                worker: 'templates/yootheme/assets/admin/js/worker.js',
+                base_url: 'https://example.test/administrator/index.php',
+              },
+            },
+          };
+        }
+
+        if (name === 'file/read') {
+          return { structuredContent: { content: worker } };
+        }
+
+        throw new Error(`Unexpected tool: ${name}`);
+      },
+    }),
+  });
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      name: 'mirasai/style-preview',
+      arguments: { site_id: 'joomla-demo' },
+    },
+    id: 20,
+  });
+
+  assert.equal(response.result.isError, true);
+  assert.equal(response.result.structuredContent.code, 'style_worker_hash_required');
+  assert.equal(response.result.structuredContent.observed_sha256, sha256(worker));
+  assert.equal(response.result.structuredContent.site_id, 'joomla-demo');
 });
 
 test('router sites-list does not expose token values', async () => {
@@ -430,4 +488,45 @@ test('serveStdio still speaks Content-Length framing when the client does', asyn
 
   assert.equal(written.length, 1);
   assert.match(written[0], /^Content-Length: \d+\r\n\r\n/);
+});
+
+test('router rejects an argument its own tool does not declare', async () => {
+  const handler = createRouterHandler(registry);
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    id: 90,
+    params: {
+      name: 'mirasai/style-preview',
+      arguments: { site_id: 'joomla-demo', style_variation: 'white-blue' },
+    },
+  });
+
+  const payload = response.result.structuredContent;
+
+  assert.equal(response.result.isError, true);
+  assert.equal(payload.code, 'unknown_argument');
+  assert.equal(payload.issues[0].argument, 'style_variation');
+  assert.equal(payload.issues[0].did_you_mean, 'style_id');
+  assert.ok(payload.accepted_arguments.includes('variation'));
+});
+
+test('router rejects a bad argument before it reaches a host', async () => {
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => {
+      throw new Error('the router must not reach a host for an invalid argument');
+    },
+  });
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    id: 91,
+    params: {
+      name: 'mirasai/host-diagnose',
+      arguments: { site_id: 'joomla-demo', include: 'everything' },
+    },
+  });
+
+  assert.equal(response.result.isError, true);
+  assert.equal(response.result.structuredContent.code, 'unknown_argument');
 });

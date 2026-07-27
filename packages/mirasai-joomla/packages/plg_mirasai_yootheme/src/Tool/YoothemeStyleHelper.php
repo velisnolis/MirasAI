@@ -2,95 +2,139 @@
 
 declare(strict_types=1);
 
-namespace Mirasai\WordPress\Tool;
+namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
+
+use Joomla\CMS\Factory;
+use Joomla\Database\DatabaseInterface;
+use Joomla\Database\ParameterType;
 
 /**
- * Read access to the YOOtheme Pro 5 Style layer.
+ * Read access to the YOOtheme Pro 5 Style layer on Joomla.
  *
- * Three facts about the native system drive this class:
- *
- * 1. Style configuration does NOT live in the `yootheme` option. That option
- *    holds Builder templates. The Style lives in `theme_mods_yootheme` under
- *    the `config` key, itself a JSON string.
- * 2. That JSON also carries `yootheme_apikey`. It must never be returned to a
- *    caller, and must be preserved byte for byte by any future writer.
- * 3. YOOtheme Pro 5 has NO server-side Less compiler. `GET /theme/style` hands
- *    the browser the whole import tree and a web worker compiles it; the server
- *    only stores the CSS that comes back. So the compiled CSS can silently fall
- *    behind its own sources, and detecting that is part of reading the state.
+ * Joomla stores the YOOtheme config JSON in #__template_styles.params.config.
+ * The active template-style row id is also the suffix of theme.<id>.css.
+ * Compilation itself is shared with WordPress: YOOtheme resolves the Less
+ * import tree through Styler and sends it to the browser worker.js.
  */
 class YoothemeStyleHelper
 {
-    private const REDACTED_KEYS = ['yootheme_apikey'];
+    private ?DatabaseInterface $db;
+    private string $siteRoot;
 
-    /**
-     * Style config keys that are read-only context rather than style input.
-     */
-    private const STYLE_KEYS = ['style', 'less', 'custom_less'];
+    public function __construct(?DatabaseInterface $db = null, ?string $siteRoot = null)
+    {
+        $resolvedRoot = $siteRoot ?? (defined('JPATH_ROOT') ? (string) JPATH_ROOT : null);
+
+        if (!is_string($resolvedRoot) || trim($resolvedRoot) === '') {
+            throw new \InvalidArgumentException(
+                'A Joomla site root is required when JPATH_ROOT is unavailable.'
+            );
+        }
+
+        $this->db = $db;
+        $this->siteRoot = rtrim($resolvedRoot, '/');
+    }
 
     /**
      * @return array<string, mixed>
      */
     public function status(): array
     {
-        $theme = wp_get_theme('yootheme');
+        $activeId = $this->resolveActiveTemplateStyleId();
+        $installed = is_dir($this->themeDir());
+        $runtime = $installed ? $this->ensureRuntime() : [];
 
         return [
-            'active' => get_template() === 'yootheme',
-            'installed' => $theme->exists(),
-            'version' => $theme->exists() ? (string) $theme->get('Version') : null,
+            'active' => $activeId !== null,
+            'installed' => $installed,
+            'version' => $this->themeVersion(),
             'container_available' => $this->containerAvailable(),
+            'template_style_id' => $activeId,
             'read_tool' => 'template/style-read',
             'sources_tool' => 'template/style-sources',
-            'create_tool' => 'template/style-create',
+            ...(isset($runtime['error']) ? ['runtime_error' => $runtime['error']] : []),
         ];
     }
 
+    public function resolveActiveTemplateStyleId(): ?int
+    {
+        $db = $this->database();
+        $query = $db->getQuery(true)
+            ->select($db->quoteName('id'))
+            ->from($db->quoteName('#__template_styles'))
+            ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
+            ->where($db->quoteName('client_id') . ' = 0')
+            ->where($db->quoteName('home') . ' = 1');
+
+        $result = $db->setQuery($query)->loadResult();
+
+        return $result ? (int) $result : null;
+    }
+
     /**
-     * Decoded `theme_mods_yootheme.config`, secrets included.
-     * Never return this to a caller without running it through redact().
+     * Decodes #__template_styles.params for one YOOtheme site style.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function loadStyleParams(int $templateStyleId): ?array
+    {
+        $db = $this->database();
+        $query = $db->getQuery(true)
+            ->select($db->quoteName('params'))
+            ->from($db->quoteName('#__template_styles'))
+            ->where($db->quoteName('id') . ' = :id')
+            ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
+            ->where($db->quoteName('client_id') . ' = 0')
+            ->bind(':id', $templateStyleId, ParameterType::INTEGER);
+
+        $encoded = $db->setQuery($query)->loadResult();
+
+        if (!is_string($encoded) || $encoded === '') {
+            return null;
+        }
+
+        $params = json_decode($encoded, true);
+
+        return is_array($params) ? $params : null;
+    }
+
+    public function loadStyleParamsEncoded(int $templateStyleId): ?string
+    {
+        $db = $this->database();
+        $query = $db->getQuery(true)
+            ->select($db->quoteName('params'))
+            ->from($db->quoteName('#__template_styles'))
+            ->where($db->quoteName('id') . ' = :id')
+            ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
+            ->where($db->quoteName('client_id') . ' = 0')
+            ->bind(':id', $templateStyleId, ParameterType::INTEGER);
+
+        $encoded = $db->setQuery($query)->loadResult();
+
+        return is_string($encoded) && $encoded !== '' ? $encoded : null;
+    }
+
+    /**
+     * Decoded params.config payload. It may contain yootheme_apikey, so callers
+     * must return only the dedicated summaries exposed by this helper.
      *
      * @return array<string, mixed>
      */
-    public function loadConfig(): array
+    public function loadConfig(int $templateStyleId): array
     {
-        $mods = get_theme_mod('config', null);
+        $params = $this->loadStyleParams($templateStyleId);
+        $encoded = is_array($params) ? ($params['config'] ?? null) : null;
 
-        if (!is_string($mods) || $mods === '') {
-            $raw = get_option('theme_mods_yootheme', []);
-            $mods = is_array($raw) && is_string($raw['config'] ?? null) ? $raw['config'] : '';
-        }
-
-        if ($mods === '') {
+        if (!is_string($encoded) || $encoded === '') {
             return [];
         }
 
-        $decoded = json_decode($mods, true);
+        $config = json_decode($encoded, true);
 
-        return is_array($decoded) ? $decoded : [];
+        return is_array($config) ? $config : [];
     }
 
     /**
-     * @param array<string, mixed> $config
-     * @return array<string, mixed>
-     */
-    public function redact(array $config): array
-    {
-        foreach (self::REDACTED_KEYS as $key) {
-            if (array_key_exists($key, $config)) {
-                $config[$key] = $config[$key] === '' || $config[$key] === null
-                    ? null
-                    : '__redacted__';
-            }
-        }
-
-        return $config;
-    }
-
-    /**
-     * The active style id and variation. `flow:white-pink` means style `flow`,
-     * variation `white-pink`; a bare `flow` means the style's own defaults.
-     *
      * @param array<string, mixed> $config
      * @return array{raw: string, style_id: string, variation: ?string}
      */
@@ -112,8 +156,6 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Variable overrides and custom Less currently applied on top of the style.
-     *
      * @param array<string, mixed> $config
      * @return array<string, mixed>
      */
@@ -127,19 +169,12 @@ class YoothemeStyleHelper
             'less_count' => is_array($less) ? count($less) : 0,
             'custom_less' => is_string($custom) ? $custom : '',
             'custom_less_bytes' => is_string($custom) ? strlen($custom) : 0,
-            'customised' => (is_array($less) && $less !== []) || (is_string($custom) && $custom !== ''),
+            'customised' => (is_array($less) && $less !== [])
+                || (is_string($custom) && $custom !== ''),
         ];
     }
 
     /**
-     * Selects the stored overrides which belong in one compilation.
-     *
-     * The active config belongs to the active style. Applying its variation to
-     * a different style can resolve an unrelated optional import, while its
-     * variable overrides can make a candidate style look unlike its defaults.
-     * Non-active styles therefore start clean unless the caller explicitly asks
-     * to carry the active customizations across.
-     *
      * @param array<string, mixed> $config
      * @param array{style_id: string, variation: ?string} $active
      * @return array{internal_style: ?string, less: array<mixed>, custom_less: string, source: string}
@@ -154,7 +189,9 @@ class YoothemeStyleHelper
 
         return [
             'internal_style' => $useActive ? $active['variation'] : null,
-            'less' => $useActive && is_array($config['less'] ?? null) ? $config['less'] : [],
+            'less' => $useActive && is_array($config['less'] ?? null)
+                ? $config['less']
+                : [],
             'custom_less' => $useActive && is_string($config['custom_less'] ?? null)
                 ? $config['custom_less']
                 : '',
@@ -163,10 +200,6 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Styles available to the Style library: every `less/theme.*.less` in the
-     * parent theme and, when present, the child theme. A child theme dropping a
-     * file there is the native way to add a style.
-     *
      * @return list<array<string, mixed>>
      */
     public function availableStyles(): array
@@ -183,11 +216,10 @@ class YoothemeStyleHelper
             foreach ($files as $file) {
                 $id = substr(basename($file, '.less'), 6);
 
-                if ($id === '') {
-                    continue;
+                if ($id !== '') {
+                    $styles[$id] = ['id' => $id, 'source' => $source]
+                        + $this->parseStyleMeta($file);
                 }
-
-                $styles[$id] = ['id' => $id, 'source' => $source] + $this->parseStyleMeta($file);
             }
         }
 
@@ -197,10 +229,6 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Parses the leading block comment of a style file the same way
-     * Styler::getMeta() does: Name/Background/Color/Type/Preview, plus one
-     * `Style:` block per variation.
-     *
      * @return array<string, mixed>
      */
     public function parseStyleMeta(string $file): array
@@ -225,13 +253,16 @@ class YoothemeStyleHelper
 
         $current = null;
 
-        foreach ($matches[1] as $i => $rawKey) {
+        foreach ($matches[1] as $index => $rawKey) {
             $key = strtolower(trim($rawKey));
-            $value = trim($matches[2][$i]);
+            $value = trim($matches[2][$index]);
 
             if ($key === 'style') {
                 $current = $value;
-                $meta['variations'][$current] = ['id' => $current, 'name' => $this->namify($current)];
+                $meta['variations'][$current] = [
+                    'id' => $current,
+                    'name' => $this->namify($current),
+                ];
                 continue;
             }
 
@@ -240,7 +271,9 @@ class YoothemeStyleHelper
                 continue;
             }
 
-            $meta['variations'][$current][$key] = $key === 'name' ? $value : $this->splitList($value);
+            $meta['variations'][$current][$key] = $key === 'name'
+                ? $value
+                : $this->splitList($value);
         }
 
         $meta['variations'] = array_values($meta['variations']);
@@ -249,24 +282,17 @@ class YoothemeStyleHelper
     }
 
     /**
-     * State of the compiled CSS, including whether it has fallen behind.
-     *
-     * `stale_version` is what YOOtheme's own StylerConfig checks: the version
-     * stamped in the CSS header against the running theme version.
-     *
-     * `stale_sources` is ours, and it is the one that catches the common case:
-     * a plugin that contributes Less to the Style updates, nobody reopens the
-     * customizer, and the site keeps serving CSS compiled before the change.
-     *
      * @return array<string, mixed>
      */
-    public function compiledState(): array
+    public function compiledState(?int $templateStyleId = null): array
     {
-        $themeId = $this->themeConfigId();
+        $templateStyleId ??= $this->resolveActiveTemplateStyleId();
         $dir = $this->themeDir() . '/css';
-        $file = $dir . '/theme.' . $themeId . '.css';
+        $file = $templateStyleId !== null
+            ? $dir . '/theme.' . $templateStyleId . '.css'
+            : '';
 
-        if (!is_file($file)) {
+        if ($file === '' || !is_file($file)) {
             $file = $dir . '/theme.css';
         }
 
@@ -280,11 +306,14 @@ class YoothemeStyleHelper
             ];
         }
 
-        $header = (string) file_get_contents($file, false, null, 0, 128);
-        $compiledVersion = preg_match('/YOOtheme Pro v([\w\d.\-]+)/', $header, $m) ? $m[1] : null;
-        $compiledAt = preg_match('/compiled on ([0-9T:+\-]+)/', $header, $m) ? $m[1] : null;
+        $header = (string) file_get_contents($file, false, null, 0, 160);
+        $compiledVersion = preg_match('/YOOtheme Pro v([\w\d.\-]+)/', $header, $match)
+            ? $match[1]
+            : null;
+        $compiledAt = preg_match('/compiled on ([0-9T:+\-]+)/', $header, $match)
+            ? $match[1]
+            : null;
         $mtime = (int) filemtime($file);
-
         $newest = $this->newestSourceMtime();
 
         return [
@@ -295,29 +324,24 @@ class YoothemeStyleHelper
             'compiled_at' => $compiledAt,
             'compiled_version' => $compiledVersion,
             'theme_version' => $this->themeVersion(),
-            'stale_version' => $compiledVersion !== null && $compiledVersion !== $this->themeVersion(),
+            'stale_version' => $compiledVersion !== null
+                && $compiledVersion !== $this->themeVersion(),
             'stale_sources' => $newest['mtime'] !== null && $newest['mtime'] > $mtime,
             'freshness_method' => 'broad_less_mtime_heuristic',
             'newest_source' => $newest['file'],
-            'newest_source_mtime' => $newest['mtime'] !== null ? gmdate('c', $newest['mtime']) : null,
+            'newest_source_mtime' => $newest['mtime'] !== null
+                ? gmdate('c', $newest['mtime'])
+                : null,
         ];
     }
 
     /**
-     * Newest modification time across everything that feeds the compiled CSS:
-     * the theme's own Less, the child theme's Less, and any Less contributed by
-     * plugins through `theme.styles.components`.
-     *
      * @return array{file: ?string, mtime: ?int}
      */
     public function newestSourceMtime(): array
     {
         $newest = ['file' => null, 'mtime' => null];
-
-        $roots = [];
-        foreach ($this->styleDirectories() as $dir) {
-            $roots[] = $dir;
-        }
+        $roots = array_values($this->styleDirectories());
         $roots[] = $this->themeDir() . '/vendor/assets';
 
         foreach ($roots as $root) {
@@ -339,7 +363,10 @@ class YoothemeStyleHelper
                 $mtime = (int) $item->getMTime();
 
                 if ($newest['mtime'] === null || $mtime > $newest['mtime']) {
-                    $newest = ['file' => $this->relativeToRoot($item->getPathname()), 'mtime' => $mtime];
+                    $newest = [
+                        'file' => $this->relativeToRoot($item->getPathname()),
+                        'mtime' => $mtime,
+                    ];
                 }
             }
         }
@@ -360,10 +387,6 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Less files injected into the Style by plugins, declared through the
-     * `theme.styles.components` config. This is how third-party plugins add
-     * their own Less, and the usual reason compiled CSS goes stale.
-     *
      * @return list<string>
      */
     public function componentLessFiles(): array
@@ -387,12 +410,8 @@ class YoothemeStyleHelper
                 continue;
             }
 
-            $matches = glob($pattern);
-
-            if (is_array($matches)) {
-                foreach ($matches as $match) {
-                    $files[] = $match;
-                }
+            foreach (glob($pattern) ?: [] as $match) {
+                $files[] = $match;
             }
         }
 
@@ -400,10 +419,6 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Locally stored web fonts. YOOtheme downloads the Google Fonts referenced
-     * by the compiled CSS into the theme's fonts directory and rewrites the
-     * import, so this reflects the fonts the site actually serves.
-     *
      * @return array<string, mixed>
      */
     public function fonts(): array
@@ -431,36 +446,25 @@ class YoothemeStyleHelper
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    public function childTheme(): array
-    {
-        $stylesheet = get_stylesheet();
-        $present = $stylesheet !== get_template();
-
-        return [
-            'present' => $present,
-            'stylesheet' => $stylesheet,
-            'dir' => $present ? $this->relativeToRoot(get_stylesheet_directory()) : null,
-            'less_dir_present' => $present && is_dir(get_stylesheet_directory() . '/less'),
-        ];
-    }
-
-    /**
-     * Identifies the state a writer must match. Covers both the stored config
-     * and the compiled artefact, because a style write has to keep them in step.
-     *
      * @param array<string, mixed> $config
+     * @param array<string, mixed> $compiled
      */
     public function etag(array $config, array $compiled): string
     {
-        return substr(hash('sha256', (string) wp_json_encode([
+        return substr(hash('sha256', (string) json_encode([
             'config' => $config,
-            'css' => [$compiled['file'] ?? null, $compiled['bytes'] ?? null, $compiled['mtime'] ?? null],
-        ])), 0, 32);
+            'css' => [
+                $compiled['file'] ?? null,
+                $compiled['bytes'] ?? null,
+                $compiled['mtime'] ?? null,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), 0, 32);
     }
 
     /**
+     * Apply only the requested Style keys while preserving every other config
+     * entry, including yootheme_apikey.
+     *
      * @param array<string, mixed> $config
      * @param array<string, mixed> $vars
      * @param list<string> $unsetVars
@@ -498,17 +502,24 @@ class YoothemeStyleHelper
     }
 
     /**
+     * Persist config and compiled CSS as one guarded operation.
+     *
+     * The CSS is staged before the database transaction. If a filesystem or
+     * database step fails, the transaction is rolled back and every affected
+     * CSS file is restored from the private snapshot.
+     *
      * @param array<string, mixed> $candidateConfig
      * @return array<string, mixed>
      */
     public function commitStyleUpdate(
+        int $templateStyleId,
         array $candidateConfig,
         string $compiledCss,
         string $compiledRtl,
         string $ifMatch
     ): array {
-        $freshConfig = $this->loadConfig();
-        $freshCompiled = $this->compiledState();
+        $freshConfig = $this->loadConfig($templateStyleId);
+        $freshCompiled = $this->compiledState($templateStyleId);
         $freshEtag = $this->etag($freshConfig, $freshCompiled);
 
         if (!hash_equals($freshEtag, $ifMatch)) {
@@ -527,17 +538,6 @@ class YoothemeStyleHelper
             ];
         }
 
-        $encodedConfig = wp_json_encode(
-            $candidateConfig,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        );
-        if (!is_string($encodedConfig)) {
-            return [
-                'error' => 'Unable to encode the candidate Style config.',
-                'code' => 'style_config_encode_failed',
-            ];
-        }
-
         $targets = $this->styleCssTargets();
 
         try {
@@ -553,8 +553,11 @@ class YoothemeStyleHelper
             ];
         }
 
-        $writeConfig = $this->loadConfig();
-        $writeCompiled = $this->compiledState();
+        // This is the second optimistic-lock check, intentionally after any
+        // potentially slow font processing and immediately before snapshot +
+        // write. The first check above rejects stale callers cheaply.
+        $writeConfig = $this->loadConfig($templateStyleId);
+        $writeCompiled = $this->compiledState($templateStyleId);
         $writeEtag = $this->etag($writeConfig, $writeCompiled);
 
         if (!hash_equals($writeEtag, $ifMatch)) {
@@ -570,25 +573,24 @@ class YoothemeStyleHelper
             ];
         }
 
-        // Re-read the full option at the write gate so unrelated theme mods
-        // changed concurrently are preserved even though the Style ETag
-        // intentionally covers config + CSS only.
-        $mods = get_option('theme_mods_yootheme', []);
-        if (!is_array($mods)) {
+        $encodedParams = $this->loadStyleParamsEncoded($templateStyleId);
+        $params = is_string($encodedParams) ? json_decode($encodedParams, true) : null;
+
+        if (!is_array($params)) {
             foreach ($staged as $temporary) {
                 @unlink($temporary);
             }
 
             return [
-                'error' => 'theme_mods_yootheme is not an array.',
+                'error' => 'The Joomla template style params are missing or invalid JSON.',
                 'code' => 'invalid_style_params',
             ];
         }
 
-        $modsConfig = is_string($mods['config'] ?? null)
-            ? json_decode($mods['config'], true)
+        $paramsConfig = is_string($params['config'] ?? null)
+            ? json_decode($params['config'], true)
             : null;
-        if (!is_array($modsConfig) || $modsConfig !== $writeConfig) {
+        if (!is_array($paramsConfig) || $paramsConfig !== $writeConfig) {
             foreach ($staged as $temporary) {
                 @unlink($temporary);
             }
@@ -599,9 +601,31 @@ class YoothemeStyleHelper
             ];
         }
 
-        $candidateMods = $mods;
-        $candidateMods['config'] = $encodedConfig;
-        $snapshot = $this->createStyleSnapshot($mods, array_keys($targets));
+        try {
+            $params['config'] = json_encode(
+                $candidateConfig,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            );
+            $candidateParams = json_encode(
+                $params,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            );
+        } catch (\JsonException $exception) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return [
+                'error' => 'Unable to encode the candidate Style config: ' . $exception->getMessage(),
+                'code' => 'style_config_encode_failed',
+            ];
+        }
+
+        $snapshot = $this->createStyleSnapshot(
+            $templateStyleId,
+            $encodedParams,
+            array_keys($targets)
+        );
 
         if (isset($snapshot['error'])) {
             foreach ($staged as $temporary) {
@@ -611,16 +635,37 @@ class YoothemeStyleHelper
             return $snapshot;
         }
 
+        $db = $this->database();
         $renamed = [];
-        $configWritten = false;
+        $transactionStarted = false;
+        $databaseWritten = false;
+        $concurrentWrite = false;
 
         try {
-            $configWrite = $this->compareAndSwapThemeMods($mods, $candidateMods);
-            $configWritten = ($configWrite['changed'] ?? false) === true;
-            if (($configWrite['ok'] ?? false) !== true) {
-                throw new \RuntimeException(
-                    (string) ($configWrite['error'] ?? 'theme_mods_yootheme changed concurrently.')
-                );
+            $db->transactionStart();
+            $transactionStarted = true;
+
+            if ($candidateParams !== $encodedParams) {
+                $query = $db->getQuery(true)
+                    ->update($db->quoteName('#__template_styles'))
+                    ->set($db->quoteName('params') . ' = :params')
+                    ->where($db->quoteName('id') . ' = :id')
+                    ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
+                    ->where($db->quoteName('client_id') . ' = 0')
+                    ->where($db->quoteName('params') . ' = :expected_params')
+                    ->bind(':params', $candidateParams)
+                    ->bind(':expected_params', $encodedParams)
+                    ->bind(':id', $templateStyleId, ParameterType::INTEGER);
+                $db->setQuery($query)->execute();
+
+                if ($db->getAffectedRows() !== 1) {
+                    $concurrentWrite = true;
+                    throw new \RuntimeException(
+                        'Joomla Style params changed concurrently at the write gate.'
+                    );
+                }
+
+                $databaseWritten = true;
             }
 
             foreach ($staged as $target => $temporary) {
@@ -629,20 +674,29 @@ class YoothemeStyleHelper
                 }
                 $renamed[] = $target;
             }
+
+            $db->transactionCommit();
+            $transactionStarted = false;
         } catch (\Throwable $exception) {
-            $configRollback = [
-                'attempted' => $configWritten,
-                'restored' => true,
+            $databaseRollback = [
+                'attempted' => $transactionStarted,
+                'restored' => !$transactionStarted,
             ];
-            if ($configWritten) {
-                $rollbackWrite = $this->compareAndSwapThemeMods($candidateMods, $mods);
-                $configRollback = [
-                    'attempted' => true,
-                    'restored' => ($rollbackWrite['ok'] ?? false) === true,
-                    ...(($rollbackWrite['ok'] ?? false) === true
-                        ? []
-                        : ['error' => (string) ($rollbackWrite['error'] ?? 'Unknown config rollback failure.')]),
-                ];
+
+            try {
+                if ($transactionStarted) {
+                    $db->transactionRollback();
+                    $databaseRollback['restored'] = true;
+
+                    if ($databaseWritten
+                        && $this->loadStyleParamsEncoded($templateStyleId) !== $encodedParams) {
+                        $databaseRollback['restored'] = false;
+                        $databaseRollback['error'] = 'Joomla Style params do not match the snapshot after transaction rollback.';
+                    }
+                }
+            } catch (\Throwable $rollbackException) {
+                $databaseRollback['restored'] = false;
+                $databaseRollback['error'] = $rollbackException->getMessage();
             }
 
             foreach ($staged ?? [] as $temporary) {
@@ -653,13 +707,13 @@ class YoothemeStyleHelper
 
             $fileRollback = $this->restoreSnapshotFiles($snapshot);
             $rollbackFailures = $fileRollback['failures'];
-            if (($configRollback['restored'] ?? false) !== true) {
-                $rollbackFailures[] = 'Unable to restore theme_mods_yootheme without overwriting a concurrent change.';
+            if (($databaseRollback['restored'] ?? false) !== true) {
+                $rollbackFailures[] = 'Unable to verify restoration of Joomla Style params.';
             }
             $rollback = [
-                'restored' => ($configRollback['restored'] ?? false) === true
+                'restored' => ($databaseRollback['restored'] ?? false) === true
                     && ($fileRollback['restored'] ?? false) === true,
-                'config' => $configRollback,
+                'database' => $databaseRollback,
                 'files' => $fileRollback,
                 'failures' => $rollbackFailures,
             ];
@@ -669,7 +723,7 @@ class YoothemeStyleHelper
                     ? 'Style write failed and rollback completed: '
                     : 'Style write failed and rollback is incomplete; restore from the private snapshot before retrying: ')
                     . $exception->getMessage(),
-                'code' => 'style_write_failed',
+                'code' => $concurrentWrite ? 'stale_etag' : 'style_write_failed',
                 'snapshot_id' => $snapshot['snapshot_id'],
                 'rollback' => $rollback,
                 'renamed_before_failure' => array_map([$this, 'relativeToRoot'], $renamed),
@@ -677,17 +731,15 @@ class YoothemeStyleHelper
         }
 
         clearstatcache(true);
-        $updatedConfig = $this->loadConfig();
-        $updatedCompiled = $this->compiledState();
-        $paths = array_keys($staged);
-        $relativePaths = array_map([$this, 'relativeToRoot'], $paths);
+        $updatedConfig = $this->loadConfig($templateStyleId);
+        $updatedCompiled = $this->compiledState($templateStyleId);
 
         return [
             'snapshot_id' => $snapshot['snapshot_id'],
-            'written_files' => $relativePaths,
+            'written_files' => array_map([$this, 'relativeToRoot'], array_keys($staged)),
             'written_sha256' => array_combine(
-                $relativePaths,
-                array_map(static fn (string $path): string => (string) hash_file('sha256', $path), $paths)
+                array_map([$this, 'relativeToRoot'], array_keys($staged)),
+                array_map(static fn (string $path): string => (string) hash_file('sha256', $path), array_keys($staged))
             ),
             'cache' => $this->invalidateStyleCache(),
             'new_etag' => $this->etag($updatedConfig, $updatedCompiled),
@@ -696,45 +748,44 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Everything a headless compiler needs, mirroring what
-     * `GET /theme/style` hands the browser: the entry file, the fully resolved
-     * import tree, and the forced style vars.
-     *
-     * Requires the YOOtheme container, because `Styler::resolveImports()` and
-     * the `styler.imports` event are the only faithful way to build the tree.
-     * Reimplementing them here would drift from the installed version.
-     *
      * @return array<string, mixed>|array{error: string, code: string}
      */
     public function sources(string $styleId): array
     {
         if (!preg_match('/^[A-Za-z0-9_-]+$/', $styleId)) {
-            return ['error' => 'style_id may only contain letters, numbers, underscores, and hyphens.', 'code' => 'invalid_style_id'];
+            return [
+                'error' => 'style_id may only contain letters, numbers, underscores, and hyphens.',
+                'code' => 'invalid_style_id',
+            ];
         }
 
-        if (!$this->containerAvailable()) {
+        $bootstrap = $this->ensureRuntime();
+
+        if (isset($bootstrap['error'])) {
             return [
-                'error' => 'The YOOtheme container is not available in this request, so the import tree cannot be resolved faithfully.',
+                'error' => $bootstrap['error'],
                 'code' => 'container_unavailable',
             ];
         }
 
-        $app = \YOOtheme\app();
-
         try {
+            $app = \YOOtheme\app();
             $styler = $app(\YOOtheme\Theme\Styler\Styler::class);
             $config = $app(\YOOtheme\Config::class);
             $theme = $styler->getTheme($styleId);
 
             if (!is_array($theme)) {
-                return ['error' => sprintf('Style "%s" not found.', $styleId), 'code' => 'style_not_found'];
+                return [
+                    'error' => sprintf('Style "%s" not found.', $styleId),
+                    'code' => 'style_not_found',
+                ];
             }
 
             $imports = \YOOtheme\Event::emit('styler.imports|filter', [], $styleId);
             $filename = \YOOtheme\Url::to($theme['file']);
-        } catch (\Throwable $e) {
+        } catch (\Throwable $exception) {
             return [
-                'error' => 'Failed to resolve the style import tree: ' . $e->getMessage(),
+                'error' => 'Failed to resolve the style import tree: ' . $exception->getMessage(),
                 'code' => 'resolve_failed',
             ];
         }
@@ -762,44 +813,56 @@ class YoothemeStyleHelper
             'import_bytes' => $bytes,
             'theme_version' => $this->themeVersion(),
             'theme_config_id' => $this->themeConfigId(),
+            'runtime_bootstrap' => $bootstrap,
         ];
     }
 
-    /**
-     * Only the entry point can be probed cheaply.
-     *
-     * Do NOT extend this with class_exists() on Styler or Config: those are
-     * resolved by YOOtheme's own container from its bootstrap files, not by a
-     * PHP autoloader, so class_exists() reports false even when the container
-     * resolves them perfectly well. Callers must attempt resolution and catch.
-     */
     public function containerAvailable(): bool
     {
         return function_exists('YOOtheme\\app');
     }
 
     /**
-     * The YOOtheme Config service, or null when the container is unavailable.
+     * @return array<string, mixed>|array{error: string}
      */
-    private function themeConfig(): ?object
+    public function ensureRuntime(): array
     {
-        if (!$this->containerAvailable()) {
-            return null;
-        }
+        $root = $this->themeDir();
 
         try {
-            $config = \YOOtheme\app()(\YOOtheme\Config::class);
+            if (!function_exists('YOOtheme\\app')) {
+                if (!is_file($root . '/bootstrap.php')) {
+                    return ['error' => 'YOOtheme bootstrap.php was not found.'];
+                }
 
-            return is_object($config) ? $config : null;
-        } catch (\Throwable) {
-            return null;
+                require $root . '/bootstrap.php';
+            }
+
+            $app = \YOOtheme\app();
+
+            if (!is_object($app) || !method_exists($app, 'load')) {
+                return ['error' => 'The YOOtheme application loader is unavailable.'];
+            }
+
+            $app->load(
+                $root
+                . '/{packages/{platform-joomla,'
+                . 'theme{,-consent,-highlight,-settings},'
+                . 'builder{,-source*,-templates,-newsletter},'
+                . 'styler,theme-joomla*,builder-joomla*}'
+                . '/bootstrap.php,config.php}'
+            );
+        } catch (\Throwable $exception) {
+            return ['error' => 'Unable to bootstrap the YOOtheme Style runtime: ' . $exception->getMessage()];
         }
+
+        return [
+            'attempted' => true,
+            'root' => $this->relativeToRoot($root),
+            'platform' => 'joomla',
+        ];
     }
 
-    /**
-     * Compiled CSS is keyed by the theme config id, not by style name:
-     * `theme.1.css`, plus `theme.css` as the default fallback.
-     */
     public function themeConfigId(): string
     {
         $config = $this->themeConfig();
@@ -812,18 +875,27 @@ class YoothemeStyleHelper
             }
         }
 
-        return '1';
+        $activeId = $this->resolveActiveTemplateStyleId();
+
+        return $activeId !== null ? (string) $activeId : '1';
     }
 
     public function themeVersion(): ?string
     {
-        $theme = wp_get_theme('yootheme');
+        $manifest = $this->themeDir() . '/templateDetails.xml';
 
-        return $theme->exists() ? (string) $theme->get('Version') : null;
+        if (!is_file($manifest)) {
+            return null;
+        }
+
+        $xml = @simplexml_load_file($manifest);
+        $version = $xml !== false ? trim((string) ($xml->version ?? '')) : '';
+
+        return $version !== '' ? $version : null;
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string> absolute target => ltr|rtl
      */
     private function styleCssTargets(): array
     {
@@ -846,8 +918,9 @@ class YoothemeStyleHelper
     private function prepareCompiledCss(string $css): string
     {
         $data = $css;
+        $bootstrap = $this->ensureRuntime();
 
-        if ($this->containerAvailable()) {
+        if (!isset($bootstrap['error'])) {
             try {
                 $font = \YOOtheme\app()(\YOOtheme\Theme\Styler\StyleFontLoader::class);
                 if (is_object($font) && method_exists($font, 'parse') && method_exists($font, 'css')) {
@@ -935,7 +1008,7 @@ class YoothemeStyleHelper
     /**
      * @param array<string, string> $targets
      * @param array{ltr: string, rtl: string} $processed
-     * @return array<string, string>
+     * @return array<string, string> absolute target => temporary file
      */
     private function stageCssFiles(array $targets, array $processed): array
     {
@@ -944,16 +1017,19 @@ class YoothemeStyleHelper
         try {
             foreach ($targets as $target => $direction) {
                 $dir = dirname($target);
+
                 if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
                     throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
                 }
 
                 $temporary = tempnam($dir, '.mirasai-style-');
+
                 if (!is_string($temporary)) {
                     throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
                 }
 
                 $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
+
                 if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
                     @unlink($temporary);
                     throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
@@ -976,36 +1052,41 @@ class YoothemeStyleHelper
     }
 
     /**
-     * @param array<string, mixed> $mods
      * @param list<string> $files
      * @return array<string, mixed>
      */
-    private function createStyleSnapshot(array $mods, array $files): array
+    private function createStyleSnapshot(int $templateStyleId, string $encodedParams, array $files): array
     {
-        $root = defined('ABSPATH') ? rtrim((string) ABSPATH, '/') : $this->themeDir();
-        $base = dirname($root) . '/mirasai-backups/style';
-        $snapshotId = sprintf('wordpress-style-%s-%s', gmdate('Ymd-His'), bin2hex(random_bytes(4)));
+        $base = dirname($this->siteRoot) . '/mirasai-backups/style';
+        $snapshotId = sprintf(
+            'joomla-style-%d-%s-%s',
+            $templateStyleId,
+            gmdate('Ymd-His'),
+            bin2hex(random_bytes(4))
+        );
         $dir = $base . '/' . $snapshotId;
 
         if (!is_dir($base) && !mkdir($base, 0700, true) && !is_dir($base)) {
             return ['error' => 'Unable to create the private Style backup directory.', 'code' => 'snapshot_failed'];
         }
+
         @chmod($base, 0700);
 
         if (!mkdir($dir, 0700) || !is_dir($dir)) {
             return ['error' => 'Unable to create the Style snapshot.', 'code' => 'snapshot_failed'];
         }
-        @chmod($dir, 0700);
 
-        $serializedMods = serialize($mods);
-        $modsPath = $dir . '/theme_mods_yootheme.serialized';
-        if (file_put_contents($modsPath, $serializedMods, LOCK_EX) !== strlen($serializedMods)) {
-            return ['error' => 'Unable to snapshot theme_mods_yootheme.', 'code' => 'snapshot_failed'];
+        @chmod($dir, 0700);
+        $paramsPath = $dir . '/params.raw.json';
+
+        if (file_put_contents($paramsPath, $encodedParams, LOCK_EX) !== strlen($encodedParams)) {
+            return ['error' => 'Unable to snapshot Joomla Style params.', 'code' => 'snapshot_failed'];
         }
-        @chmod($modsPath, 0600);
+        @chmod($paramsPath, 0600);
 
         $manifestFiles = [];
         $originalFiles = [];
+
         foreach ($files as $file) {
             $name = basename($file);
             $present = is_file($file);
@@ -1016,7 +1097,7 @@ class YoothemeStyleHelper
             }
 
             $originalFiles[$file] = $content;
-            $manifestFiles[] = [
+            $manifestFiles[$file] = [
                 'name' => $name,
                 'present' => $present,
                 'bytes' => is_string($content) ? strlen($content) : 0,
@@ -1034,21 +1115,28 @@ class YoothemeStyleHelper
 
         $manifest = [
             'snapshot_id' => $snapshotId,
-            'platform' => 'wordpress',
+            'platform' => 'joomla',
+            'template_style_id' => $templateStyleId,
             'created_at' => gmdate('c'),
-            'theme_mods_sha256' => hash('sha256', $serializedMods),
-            'files' => $manifestFiles,
+            'params_sha256' => hash('sha256', $encodedParams),
+            'files' => array_values($manifestFiles),
         ];
-        $encodedManifest = wp_json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         $manifestPath = $dir . '/manifest.json';
+        $encodedManifest = json_encode(
+            $manifest,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        );
 
-        if (!is_string($encodedManifest)
-            || file_put_contents($manifestPath, $encodedManifest, LOCK_EX) !== strlen($encodedManifest)) {
+        if (file_put_contents($manifestPath, $encodedManifest, LOCK_EX) !== strlen($encodedManifest)) {
             return ['error' => 'Unable to write the Style snapshot manifest.', 'code' => 'snapshot_failed'];
         }
         @chmod($manifestPath, 0600);
 
-        return $manifest + ['original_files' => $originalFiles];
+        return $manifest + [
+            'dir' => $dir,
+            'encoded_params' => $encodedParams,
+            'original_files' => $originalFiles,
+        ];
     }
 
     /**
@@ -1063,7 +1151,9 @@ class YoothemeStyleHelper
             : [];
 
         foreach ($originalFiles as $file => $content) {
-            if (!is_string($file)) continue;
+            if (!is_string($file)) {
+                continue;
+            }
 
             if ($content === null) {
                 if (is_file($file) && !@unlink($file)) {
@@ -1081,125 +1171,76 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Replace the whole theme-mods option only when its raw serialized value
-     * still matches the value read at the write gate. WordPress' option API has
-     * no compare-and-swap primitive, so the guarded writer performs the
-     * conditional UPDATE directly and clears the option caches afterwards.
-     *
-     * @param array<string, mixed> $expected
-     * @param array<string, mixed> $candidate
-     * @return array{ok: bool, changed: bool, error?: string}
-     */
-    private function compareAndSwapThemeMods(array $expected, array $candidate): array
-    {
-        if ($expected === $candidate) {
-            return ['ok' => true, 'changed' => false];
-        }
-
-        global $wpdb;
-
-        if (!is_object($wpdb)
-            || !isset($wpdb->options)
-            || !method_exists($wpdb, 'prepare')
-            || !method_exists($wpdb, 'query')) {
-            return [
-                'ok' => false,
-                'changed' => false,
-                'error' => 'WordPress database compare-and-swap is unavailable.',
-            ];
-        }
-
-        $serialize = static fn (array $value): string => function_exists('maybe_serialize')
-            ? (string) maybe_serialize($value)
-            : serialize($value);
-        $expectedSerialized = $serialize($expected);
-        $candidateSerialized = $serialize($candidate);
-        $query = $wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
-            $candidateSerialized,
-            'theme_mods_yootheme',
-            $expectedSerialized
-        );
-        $affected = $wpdb->query($query);
-
-        if ($affected !== 1) {
-            return [
-                'ok' => false,
-                'changed' => false,
-                'error' => 'theme_mods_yootheme changed concurrently at the write gate.',
-            ];
-        }
-
-        if (function_exists('wp_cache_delete')) {
-            wp_cache_delete('theme_mods_yootheme', 'options');
-            wp_cache_delete('alloptions', 'options');
-        }
-
-        $readback = get_option('theme_mods_yootheme', []);
-        if ($readback !== $candidate) {
-            return [
-                'ok' => false,
-                'changed' => true,
-                'error' => 'theme_mods_yootheme compare-and-swap could not be verified.',
-            ];
-        }
-
-        return ['ok' => true, 'changed' => true];
-    }
-
-    /**
-     * @return array<string, mixed>
+     * @return array{cleared: bool, groups: list<string>, failures: list<array{group: string, error: string}>}
      */
     private function invalidateStyleCache(): array
     {
-        $cleared = [];
+        $groups = ['com_templates', 'plg_system_yootheme', 'yootheme', 'page', '_system'];
+        $cleaned = [];
+        $failures = [];
 
-        if (function_exists('wp_cache_delete')) {
-            wp_cache_delete('theme_mods_yootheme', 'options');
-            $cleared[] = 'theme_mods_yootheme';
-        }
-
-        if (function_exists('wp_clean_themes_cache')) {
-            wp_clean_themes_cache();
-            $cleared[] = 'themes';
+        foreach ($groups as $group) {
+            try {
+                Factory::getCache($group)->clean();
+                $cleaned[] = $group;
+            } catch (\Throwable $exception) {
+                $failures[] = ['group' => $group, 'error' => $exception->getMessage()];
+            }
         }
 
         return [
-            'cleared' => $cleared !== [],
-            'groups' => $cleared,
-            'failures' => [],
+            'cleared' => $cleaned !== [] && $failures === [],
+            'groups' => $cleaned,
+            'failures' => $failures,
         ];
     }
 
+    private function database(): DatabaseInterface
+    {
+        if ($this->db === null) {
+            $this->db = Factory::getContainer()->get(DatabaseInterface::class);
+        }
+
+        return $this->db;
+    }
+
+    private function themeConfig(): ?object
+    {
+        $bootstrap = $this->ensureRuntime();
+
+        if (isset($bootstrap['error'])) {
+            return null;
+        }
+
+        try {
+            $config = \YOOtheme\app()(\YOOtheme\Config::class);
+
+            return is_object($config) ? $config : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /**
-     * @return array<string, string> source label => directory
+     * @return array<string, string>
      */
     private function styleDirectories(): array
     {
-        $dirs = ['theme' => $this->themeDir() . '/less'];
-        $child = get_stylesheet_directory();
-
-        if ($child !== get_template_directory() && is_dir($child . '/less')) {
-            $dirs['child'] = $child . '/less';
-        }
-
-        return $dirs;
+        return ['theme' => $this->themeDir() . '/less'];
     }
 
     private function themeDir(): string
     {
-        return rtrim(get_template_directory(), '/');
+        return $this->siteRoot . '/templates/yootheme';
     }
 
     private function relativeToRoot(string $path): string
     {
-        $root = defined('ABSPATH') ? rtrim((string) ABSPATH, '/') . '/' : '';
+        $root = $this->siteRoot . '/';
 
-        if ($root !== '' && str_starts_with($path, $root)) {
-            return ltrim(substr($path, strlen($root)), '/');
-        }
-
-        return $path;
+        return str_starts_with($path, $root)
+            ? ltrim(substr($path, strlen($root)), '/')
+            : $path;
     }
 
     /**
@@ -1207,7 +1248,10 @@ class YoothemeStyleHelper
      */
     private function splitList(string $value): array
     {
-        return array_values(array_filter(array_map('trim', explode(',', $value)), static fn($v) => $v !== ''));
+        return array_values(array_filter(
+            array_map('trim', explode(',', $value)),
+            static fn (string $item): bool => $item !== ''
+        ));
     }
 
     private function namify(string $id): string

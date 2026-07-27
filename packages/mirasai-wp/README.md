@@ -2,7 +2,7 @@
 
 This package is the WordPress host plugin for the MirasAI multi-platform architecture.
 
-Current internal version: `0.6.2`.
+Current internal version: `0.7.0`.
 
 It is not a wrapper around Novamira or the WordPress MCP Adapter. It implements the MirasAI Host MCP Contract directly so the local `@miras/mirasai-mcp` router can treat WordPress and Joomla hosts consistently.
 
@@ -22,7 +22,7 @@ npm run build:zip
 The ZIP is written to:
 
 ```text
-dist/mirasai-wp-0.6.2.zip
+dist/mirasai-wp-0.7.0.zip
 ```
 
 Authenticate with:
@@ -183,6 +183,20 @@ the same target model (`key`, `post_id`, or `widget_id`) and the same
 `if_match` + `dry_run` + `confirm_guarded_write` workflow as the Dynamic Source
 tools, so they can operate on templates, page/post Builder layouts, and
 YOOtheme Builder widgets without changing unrelated layout storage.
+
+`template/element-move` takes exactly one placement. `target_parent_path`
+appends or prepends under a parent; `before_path` and `after_path` place the
+element next to a reference sibling and derive the parent from it. Composing a
+page needs the second form, because inserting between two existing elements
+cannot be expressed with append and prepend alone. A sibling path was chosen
+over a numeric index because it survives structural change and reads
+unambiguously in a log.
+
+Every tool rejects arguments it does not declare, with a `unknown_argument`
+code and a suggestion when the name is close to a real one. Silently dropping
+an unknown argument and still answering `action: updated` is the worst failure
+mode this surface has: the response says the write happened, so debugging
+starts everywhere except the argument list.
 
 `template/translate` creates or updates a target-language copy of a YOOtheme
 template (`key` storage only). It does not auto-translate: call `template/read`
