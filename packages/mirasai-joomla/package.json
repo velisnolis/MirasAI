@@ -1,6 +1,6 @@
 {
   "name": "@miras/mirasai-joomla",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "description": "MirasAI Joomla host package source.",
   "scripts": {
