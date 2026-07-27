@@ -137,7 +137,7 @@ echo "\n=== Joomla YOOtheme element write schemas ===\n";
 $joomlaElementWriteSchemas = [
     'element-add' => [TemplateElementAddTool::class, ['parent_path', 'if_match', 'element']],
     'element-update-props' => [TemplateElementUpdatePropsTool::class, ['path', 'if_match', 'props']],
-    'element-move' => [TemplateElementMoveTool::class, ['path', 'target_parent_path', 'if_match']],
+    'element-move' => [TemplateElementMoveTool::class, ['path', 'if_match']],
     'element-clone' => [TemplateElementCloneTool::class, ['path', 'if_match']],
     'element-delete' => [TemplateElementDeleteTool::class, ['path', 'if_match']],
 ];
@@ -151,6 +151,16 @@ foreach ($joomlaElementWriteSchemas as $name => [$class, $required]) {
     expect("joomla {$name} schema exposes module_id selector", array_key_exists('module_id', $properties), true);
     expect("joomla {$name} schema does not require key", in_array('key', $schema['required'] ?? [], true), false);
     expect("joomla {$name} schema required fields", $schema['required'] ?? [], $required);
+}
+
+$joomlaElementMoveSchema = schemaForToolWithoutConstructor(TemplateElementMoveTool::class);
+$joomlaElementMoveProperties = $joomlaElementMoveSchema['properties'] ?? [];
+foreach (['target_parent_path', 'before_path', 'after_path'] as $placement) {
+    expect(
+        "joomla element-move schema exposes {$placement} placement",
+        array_key_exists($placement, $joomlaElementMoveProperties),
+        true,
+    );
 }
 
 expect(
