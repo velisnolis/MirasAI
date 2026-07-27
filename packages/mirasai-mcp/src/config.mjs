@@ -77,7 +77,7 @@ export function serializeSite(site) {
     url: site.url,
   };
 
-  for (const key of ['protocol', 'token_ref', 'token_env', 'token_plain_dev', 'basic_ref', 'basic_env', 'basic_plain_dev', 'secret_ttl_seconds']) {
+  for (const key of ['protocol', 'token_ref', 'token_env', 'token_plain_dev', 'basic_ref', 'basic_env', 'basic_plain_dev', 'secret_ttl_seconds', 'style_worker_sha256']) {
     if (site[key] !== undefined) {
       serialized[key] = site[key];
     }
@@ -154,6 +154,12 @@ export function validateRegistry(registry) {
         errors.push(`${prefix}.secret_ttl_seconds must be a non-negative number when present`);
       }
     }
+
+    if (site.style_worker_sha256 !== undefined) {
+      if (typeof site.style_worker_sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(site.style_worker_sha256)) {
+        errors.push(`${prefix}.style_worker_sha256 must be a 64-character hexadecimal SHA-256 when present`);
+      }
+    }
   });
 
   if (registry.default_site_id !== undefined && registry.default_site_id !== null) {
@@ -186,6 +192,9 @@ export function normalizeRegistry(registry, configPath = null) {
       basic_env: site.basic_env,
       basic_plain_dev: site.basic_plain_dev,
       secret_ttl_seconds: site.secret_ttl_seconds,
+      style_worker_sha256: typeof site.style_worker_sha256 === 'string'
+        ? site.style_worker_sha256.toLowerCase()
+        : undefined,
       default: site.site_id === (registry.default_site_id ?? registry.sites[0]?.site_id),
     })),
   };
