@@ -26,6 +26,10 @@ import { fileURLToPath } from 'node:url';
 
 const CALL_TIMEOUT_MS = 120_000;
 const BOOT_TIMEOUT_MS = 10_000;
+const MAX_WORKER_SOURCE_BYTES = 4 * 1024 * 1024;
+const MAX_RUNNER_REQUEST_BYTES = 32 * 1024 * 1024;
+const MAX_STDOUT_BUFFER_CHARS = 64 * 1024 * 1024;
+const RUNNER_HEAP_MB = 256;
 const RUNNER_FILE = fileURLToPath(new URL('./style-worker-runner.mjs', import.meta.url));
 const PERMISSION_FLAG = process.allowedNodeEnvironmentFlags.has('--permission')
   ? '--permission'
@@ -48,6 +52,17 @@ const PERMISSION_FLAG = process.allowedNodeEnvironmentFlags.has('--permission')
  * @param {number} [options.bootTimeoutMs]
  */
 export function bootStyleWorker(workerSource, baseUrl, options = {}) {
+  if (typeof workerSource !== 'string' || workerSource === '') {
+    throw new TypeError('workerSource must be a non-empty string.');
+  }
+
+  const workerBytes = Buffer.byteLength(workerSource, 'utf8');
+  if (workerBytes > MAX_WORKER_SOURCE_BYTES) {
+    throw new RangeError(
+      `Style worker source exceeds the ${MAX_WORKER_SOURCE_BYTES}-byte safety limit.`,
+    );
+  }
+
   const callTimeoutMs = positiveTimeout(options.callTimeoutMs, CALL_TIMEOUT_MS);
   const bootTimeoutMs = positiveTimeout(options.bootTimeoutMs, BOOT_TIMEOUT_MS);
   const pending = new Map();
@@ -71,6 +86,7 @@ export function bootStyleWorker(workerSource, baseUrl, options = {}) {
   const child = spawn(
     process.execPath,
     [
+      `--max-old-space-size=${RUNNER_HEAP_MB}`,
       PERMISSION_FLAG,
       `--allow-fs-read=${RUNNER_FILE}`,
       '--no-warnings',
@@ -94,6 +110,15 @@ export function bootStyleWorker(workerSource, baseUrl, options = {}) {
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
     stdoutBuffer += chunk;
+
+    if (stdoutBuffer.length > MAX_STDOUT_BUFFER_CHARS) {
+      const error = new Error('Style worker runner exceeded the stdout safety limit.');
+      clearTimeout(bootTimer);
+      readyReject(error);
+      rejectAll(error);
+      stopChild();
+      return;
+    }
 
     for (;;) {
       const newline = stdoutBuffer.indexOf('\n');
@@ -169,13 +194,18 @@ export function bootStyleWorker(workerSource, baseUrl, options = {}) {
     rejectAll(error);
   });
 
-  child.stdin.write(`${JSON.stringify({
+  const initRequest = JSON.stringify({
     type: 'init',
     worker_source: workerSource,
     base_url: baseUrl,
     call_timeout_ms: callTimeoutMs,
     boot_timeout_ms: bootTimeoutMs,
-  })}\n`);
+  });
+  if (Buffer.byteLength(initRequest, 'utf8') > MAX_RUNNER_REQUEST_BYTES) {
+    stopChild();
+    throw new RangeError('Style worker initialization exceeds the runner request safety limit.');
+  }
+  child.stdin.write(`${initRequest}\n`);
 
   function rejectAll(error) {
     for (const entry of pending.values()) {
@@ -199,6 +229,13 @@ export function bootStyleWorker(workerSource, baseUrl, options = {}) {
     }
 
     const id = ++nextId;
+    const request = JSON.stringify({ type: 'call', id, cmd, data });
+
+    if (Buffer.byteLength(request, 'utf8') > MAX_RUNNER_REQUEST_BYTES) {
+      throw new RangeError(
+        `Style worker request exceeds the ${MAX_RUNNER_REQUEST_BYTES}-byte safety limit.`,
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -210,7 +247,7 @@ export function bootStyleWorker(workerSource, baseUrl, options = {}) {
       }, callTimeoutMs);
 
       pending.set(id, { resolve, reject, timer });
-      child.stdin.write(`${JSON.stringify({ type: 'call', id, cmd, data })}\n`);
+      child.stdin.write(`${request}\n`);
     });
   }
 

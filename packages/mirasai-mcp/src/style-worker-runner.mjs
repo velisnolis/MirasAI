@@ -16,7 +16,11 @@ import vm from 'node:vm';
 
 const DEFAULT_BOOT_TIMEOUT_MS = 10_000;
 const DEFAULT_CALL_TIMEOUT_MS = 120_000;
-const MAX_TIMER_ROUNDS = 10_000;
+const MAX_TIMER_ROUNDS = 256;
+const MAX_TIMER_QUEUE = 1_024;
+const MAX_OUTBOX_ENTRY_CHARS = 32 * 1024 * 1024;
+const MAX_REQUEST_LINE_CHARS = 32 * 1024 * 1024;
+const MAX_IDLE_ROUNDS = 2;
 
 let workerContext = null;
 let callTimeoutMs = DEFAULT_CALL_TIMEOUT_MS;
@@ -43,6 +47,9 @@ const SHIM_SOURCE = `
   globalThis.importScripts = noop;
 
   globalThis.setTimeout = (fn, _delay, ...args) => {
+    if (timerQueue.length >= ${MAX_TIMER_QUEUE}) {
+      throw new Error('Style worker timer queue exceeded its safety limit.');
+    }
     const id = ++timerId;
     if (typeof fn === 'function') timerQueue.push({ id, fn, args });
     return id;
@@ -113,7 +120,11 @@ const SHIM_SOURCE = `
     if (index >= 0) listeners.splice(index, 1);
   };
   globalThis.postMessage = (message) => {
-    globalThis.__outbox.push(JSON.stringify(message));
+    const serialized = JSON.stringify(message);
+    if (serialized.length > ${MAX_OUTBOX_ENTRY_CHARS}) {
+      throw new Error('Style worker response exceeded its safety limit.');
+    }
+    globalThis.__outbox.push(serialized);
   };
 
   globalThis.__listeners = listeners;
@@ -199,6 +210,8 @@ function dispatch(message) {
     timeout: callTimeoutMs,
   });
 
+  let idleRounds = 0;
+
   for (let round = 0; round <= MAX_TIMER_ROUNDS; round++) {
     const state = vm.runInContext(
       `JSON.stringify({
@@ -232,6 +245,7 @@ function dispatch(message) {
     }
 
     if (parsed.timer_count > 0) {
+      idleRounds = 0;
       vm.runInContext(RUN_TIMERS_SOURCE, workerContext, {
         filename: 'mirasai-style-worker-timers.js',
         timeout: callTimeoutMs,
@@ -242,13 +256,28 @@ function dispatch(message) {
     // A blank evaluation drains promise jobs because the context uses
     // microtaskMode: "afterEvaluate".
     vm.runInContext('', workerContext, { timeout: callTimeoutMs });
+    idleRounds++;
+
+    if (idleRounds >= MAX_IDLE_ROUNDS) {
+      break;
+    }
   }
 
   throw new Error(`Style worker returned no response for "${message.cmd}".`);
 }
 
 function send(payload) {
-  process.stdout.write(`${JSON.stringify(payload)}\n`);
+  const serialized = JSON.stringify(payload);
+
+  if (serialized.length > MAX_OUTBOX_ENTRY_CHARS) {
+    process.stdout.write(`${JSON.stringify({
+      id: payload?.id ?? null,
+      error: 'Style worker runner response exceeded its safety limit.',
+    })}\n`);
+    return;
+  }
+
+  process.stdout.write(`${serialized}\n`);
 }
 
 const input = readline.createInterface({
@@ -258,6 +287,11 @@ const input = readline.createInterface({
 
 input.on('line', async (line) => {
   let message;
+
+  if (line.length > MAX_REQUEST_LINE_CHARS) {
+    send({ error: 'Style worker runner request exceeded its safety limit.' });
+    return;
+  }
 
   try {
     message = JSON.parse(line);

@@ -172,6 +172,57 @@ test('a synchronous infinite loop is terminated by the isolated runner timeout',
   await call.close();
 });
 
+test('an oversized remote worker is rejected before spawning a runner', () => {
+  assert.throws(
+    () => bootStyleWorker('x'.repeat(4 * 1024 * 1024 + 1), 'https://example.test/'),
+    /worker source exceeds/
+  );
+});
+
+test('the isolated worker bounds its timer queue', async () => {
+  const TIMER_WORKER = `
+    self.addEventListener('message', function () {
+      for (var i = 0; i < 2000; i++) {
+        setTimeout(function () {}, 0);
+      }
+    });
+  `;
+  const call = bootStyleWorker(TIMER_WORKER, 'https://example.test/');
+
+  await assert.rejects(
+    () => call('css', {}),
+    /timer queue exceeded/
+  );
+  await call.close();
+});
+
+test('a listener that never responds fails without a long busy loop', async () => {
+  const SILENT_WORKER = `
+    self.addEventListener('message', function () {});
+  `;
+  const started = Date.now();
+  const call = bootStyleWorker(SILENT_WORKER, 'https://example.test/', {
+    callTimeoutMs: 5_000,
+  });
+
+  await assert.rejects(
+    () => call('css', {}),
+    /returned no response/
+  );
+  await call.close();
+  assert.ok(Date.now() - started < 2_000);
+});
+
+test('an oversized call payload is rejected before it reaches the runner', async () => {
+  const call = bootStyleWorker(FAKE_WORKER, 'https://example.test/');
+
+  await assert.rejects(
+    () => call('css', { input: 'x'.repeat(32 * 1024 * 1024 + 1) }),
+    /request exceeds/
+  );
+  await call.close();
+});
+
 test('diffVariables reports only variables whose resolved value moved', () => {
   const before = {
     '@a': { value: '#fff', file: 'variables' },
