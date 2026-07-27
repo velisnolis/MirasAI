@@ -1,6 +1,6 @@
 # Handoff — MirasAI: estils YOOtheme segurs i versió 0.7.0
 
-Actualitzat: 27 de juliol de 2026  
+Actualitzat: 27 de juliol de 2026
 Objectiu de la sessió següent: publicar la 0.7.0 i, si s'aprova, desplegar-la a
 Indústria Viva i Auto Vigatana.
 
@@ -143,14 +143,18 @@ Estat comprovat el 27 de juliol de 2026:
 
 - Joomla `6.1.2`
 - YOOtheme Pro `5.0.37`
-- MirasAI `0.6.3` (build preliminar, no serà mai una release)
+- MirasAI `0.7.0`, instal·lat com a canària reversible sobre el build
+  preliminar `0.6.3`
 - `template/source-types`: `live_introspection`, 27 tipus;
   `Article` amb 23 camps
+- el validador 0.7.0 rebutja arguments desconeguts i suggereix el nom correcte
 - estil actiu: `nioh-studio:white-blue`, style id `12`
 - 18 overrides Less i 84 bytes de Less personalitzat
 - ETag final: `18e774e192c245b46663079767d64a62`
-- portada i CSS: HTTP 200
-- els nou fonts Poppins realment referenciats pel CSS: HTTP 200
+- compilació pinada: 272 imports, zero errors, LTR i RTL generats
+- `style-update` normal i amb `variation: ""`: només `dry_run`, cap escriptura
+- portada i CSS amb cache-busting: HTTP 200 i cos no buit
+- els 18 assets relatius del CSS (9 fonts Poppins i 9 SVG): HTTP 200 i cos no buit
 - cap avís final de l'eina d'estil
 
 La canària va conservar el cos normalitzat del CSS. El canvi funcional va
@@ -162,9 +166,12 @@ Backups conservats:
 - JetBackup complet del compte.
 - Arxiu privat pre-canària:
   `/home/autovigatana/mirasai-backups/deploy-20260726-151308/mirasai-0.6.2-pre-canary.tar.gz`
+- Backup privat fresc pre-0.7.0:
+  `/home/autovigatana/mirasai-backups/deploy-20260727-183900-pre-0.7.0`
+  (fitxers exactes 0.6.3, dump SQL complet, inventaris, checksums i ZIP desplegat).
 
-No es va crear cap backup Akeeba. Els ZIP temporals i el proxy RPC privat de
-la canària es van eliminar.
+No es va crear cap backup Akeeba. El paquet 0.7.0 desplegat es conserva amb
+SHA-256 verificat dins el directori privat del rollback.
 
 ### Indústria Viva — WordPress
 
@@ -184,9 +191,9 @@ Directori: `.release/v0.7.0/`
 
 | Artefacte | SHA-256 |
 | --- | --- |
-| `pkg_mirasai-0.7.0.zip` | `0498c3d8ce7718017df9a4401f212cf1a8ae862b393be4d8bbcc1fa8e98cefd9` |
-| `mirasai-wp-0.7.0.zip` | `b31aafd478b578ae730ecca1d6c9858dc27bb5764c21ef26dccdaa73707ea326` |
-| `miras-mirasai-mcp-0.7.0.tgz` | `f8415753f206a08e5adaa9149ee54f47b495c320ffc2443eb84554585f17d6d4` |
+| `pkg_mirasai-0.7.0.zip` | `cd78734531ca787af3fb942d72e61bdc64fe03b9672787d93d88b7016d9274b5` |
+| `mirasai-wp-0.7.0.zip` | `7036a0e0bb9cbd5c5c5e4ad0bc5a39fcc845ee70b394e7536a6b914419648096` |
+| `miras-mirasai-mcp-0.7.0.tgz` | `ec503bff930bc86bc2a87735e1a678c35b21ab175869c2dbb9d92c2cad81b29f` |
 
 `install-urls.md` i `release-notes.md` del mateix directori són generats per
 `scripts/prepare-release.mjs`.
@@ -218,9 +225,10 @@ Directori: `.release/v0.7.0/`
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
 3. **Publicació pendent.** Merge a `main`, tag `v0.7.0`, push i GitHub Release
    amb els tres artefactes. Verificar els feeds després de publicar.
-4. **Indústria Viva i Auto Vigatana pendents.** Instal·lar 0.7.0 només amb
-   autorització i flux reversible. Auto Vigatana porta un build `0.6.3` que no
-   arribarà a ser release: cal substituir-lo, no deixar-lo com a estat final.
+4. **Indústria Viva pendent.** Auto Vigatana ja executa la canària 0.7.0 i té
+   rollback privat verificat. Conservar-lo fins que la versió estigui
+   consolidada. Instal·lar 0.7.0 a Indústria Viva només amb autorització i flux
+   reversible.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
 
@@ -246,4 +254,3 @@ Directori: `.release/v0.7.0/`
   GitHub Release.
 - `handoff`: actualitzar aquest document quan canviï l'estat de publicació o
   desplegament.
-
