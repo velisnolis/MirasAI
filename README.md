@@ -134,7 +134,7 @@ Example:
       "site_id": "autovigatana",
       "label": "Autovigatana",
       "platform": "joomla",
-      "url": "https://www.autovigatana.cat/api/v1/mirasai/mcp",
+      "url": "https://www.autovigatana.com/api/v1/mirasai/mcp",
       "token_ref": "op://vault/item/field",
       "secret_ttl_seconds": 3600
     }

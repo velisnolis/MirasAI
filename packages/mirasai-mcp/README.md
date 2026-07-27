@@ -32,8 +32,8 @@ Example:
       "site_id": "autovigatana",
       "label": "Autovigatana",
       "platform": "joomla",
-      "url": "https://www.autovigatana.cat/api/v1/mirasai/mcp",
-      "token_ref": "op://feina/autovigatana-mirasai/token",
+      "url": "https://www.autovigatana.com/api/v1/mirasai/mcp",
+      "token_ref": "op://YOUR_VAULT/Auto Vigatana/mirasai_token",
       "secret_ttl_seconds": 3600
     },
     {
