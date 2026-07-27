@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
 import { MirasaiHostClient } from './site-client.mjs';
-import { previewStyle, verifyCompiledStyle } from './style-preview.mjs';
+import { previewStyle, updateStyle, verifyCompiledStyle } from './style-preview.mjs';
 
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -119,6 +119,11 @@ export function routerTools() {
             type: 'object',
             description: 'Less variable overrides to preview, for example {"@global-primary-background": "#e85039"}.',
           },
+          unset_vars: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Stored variable overrides to remove in the candidate.',
+          },
           custom_less: { type: 'string', description: 'Replaces the stored custom Less for this preview.' },
           include_css: { type: 'boolean', description: 'Return the compiled CSS. Defaults to false; only sizes and hashes are reported.' },
         },
@@ -128,13 +133,47 @@ export function routerTools() {
         risk_level: 'read',
         workflow_hint: 'direct',
         surface: 'essential',
-        platforms: ['wordpress'],
+        platforms: ['joomla', 'wordpress'],
+      },
+    },
+    {
+      name: 'mirasai/style-update',
+      description:
+        'Compiles and applies a guarded patch to the active YOOtheme Style. The host rechecks the ETag, snapshots config/CSS privately, replaces LTR/RTL CSS atomically, and rolls back on failure. Run dry_run=true first.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          style_id: { type: 'string', description: 'Active style id. Switching style families is not supported by this first guarded writer.' },
+          variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
+          vars: {
+            type: 'object',
+            description: 'Less variable overrides to set. Unmentioned stored overrides are preserved.',
+          },
+          unset_vars: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Stored variable overrides to remove.',
+          },
+          custom_less: { type: 'string', description: 'Replaces the stored custom Less. Omit to preserve it.' },
+          if_match: { type: 'string', description: 'Fresh Style etag from style-read or style-preview.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true. Compiles and validates without writing.' },
+          confirm_guarded_write: { type: 'boolean', description: 'Required with dry_run=false after reviewing the preview.' },
+        },
+        required: ['if_match'],
+      },
+      annotations: guardedWriteAnnotations(),
+      metadata: {
+        risk_level: 'guarded_write',
+        workflow_hint: 'dry_run_confirm_if_match',
+        surface: 'essential',
+        platforms: ['joomla', 'wordpress'],
       },
     },
     {
       name: 'mirasai/style-verify',
       description:
-        'Recompiles the active YOOtheme style exactly as configured and compares it with the CSS the site is serving. Detects compiled CSS that has silently fallen behind its own Less sources. Writes nothing.',
+        'Recompiles the active YOOtheme style exactly as configured and reports host freshness signals for the served CSS. The CSS bytes are not directly compared because YOOtheme post-processes headers and fonts after compilation. Writes nothing.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -147,7 +186,7 @@ export function routerTools() {
         risk_level: 'read',
         workflow_hint: 'direct',
         surface: 'essential',
-        platforms: ['wordpress'],
+        platforms: ['joomla', 'wordpress'],
       },
     },
     {
@@ -192,6 +231,7 @@ async function callRouterTool(registry, clientFactory, params) {
         url: site.url,
         default: site.default === true,
         token_source: tokenSourceForSite(site),
+        style_worker_pinned: typeof site.style_worker_sha256 === 'string',
       })),
     });
   }
@@ -202,32 +242,53 @@ async function callRouterTool(registry, clientFactory, params) {
     return callToolResult(result, result.ok !== true);
   }
 
-  if (name === 'mirasai/style-preview' || name === 'mirasai/style-verify') {
+  if (
+    name === 'mirasai/style-preview'
+    || name === 'mirasai/style-verify'
+    || name === 'mirasai/style-update'
+  ) {
     const site = findSite(registry, args.site_id);
-
-    if (site.platform !== 'wordpress') {
-      return callToolResult({
-        error: `Style tools require a WordPress host; site ${site.site_id} is ${site.platform}.`,
-        code: 'tool_not_supported_on_platform',
-        site_id: site.site_id,
-      }, true);
-    }
 
     const siteUrl = new URL(site.url).origin;
     const client = clientFactory(site);
 
     try {
-      const result = name === 'mirasai/style-preview'
-        ? await previewStyle({
+      let result;
+
+      if (name === 'mirasai/style-preview') {
+        result = await previewStyle({
             client,
             siteUrl,
             styleId: typeof args.style_id === 'string' ? args.style_id : null,
             variation: typeof args.variation === 'string' ? args.variation : undefined,
             vars: args.vars && typeof args.vars === 'object' && !Array.isArray(args.vars) ? args.vars : {},
+            unsetVars: Array.isArray(args.unset_vars) ? args.unset_vars : [],
             customLess: typeof args.custom_less === 'string' ? args.custom_less : undefined,
             includeCss: args.include_css === true,
-          })
-        : await verifyCompiledStyle({ client, siteUrl, includeCss: args.include_css === true });
+            expectedWorkerSha256: site.style_worker_sha256,
+          });
+      } else if (name === 'mirasai/style-update') {
+        result = await updateStyle({
+          client,
+          siteUrl,
+          styleId: typeof args.style_id === 'string' ? args.style_id : null,
+          variation: typeof args.variation === 'string' ? args.variation : undefined,
+          vars: args.vars && typeof args.vars === 'object' && !Array.isArray(args.vars) ? args.vars : {},
+          unsetVars: Array.isArray(args.unset_vars) ? args.unset_vars : [],
+          customLess: typeof args.custom_less === 'string' ? args.custom_less : undefined,
+          ifMatch: args.if_match,
+          dryRun: args.dry_run !== false,
+          confirmGuardedWrite: args.confirm_guarded_write === true,
+          expectedWorkerSha256: site.style_worker_sha256,
+        });
+      } else {
+        result = await verifyCompiledStyle({
+            client,
+            siteUrl,
+            includeCss: args.include_css === true,
+            expectedWorkerSha256: site.style_worker_sha256,
+          });
+      }
 
       return callToolResult(result, result.ok === false);
     } catch (caught) {
@@ -235,6 +296,8 @@ async function callRouterTool(registry, clientFactory, params) {
         error: caught instanceof Error ? caught.message : String(caught),
         code: caught?.code ?? 'style_tool_failed',
         site_id: site.site_id,
+        ...(typeof caught?.expected_sha256 === 'string' ? { expected_sha256: caught.expected_sha256 } : {}),
+        ...(typeof caught?.observed_sha256 === 'string' ? { observed_sha256: caught.observed_sha256 } : {}),
       }, true);
     }
   }
@@ -548,6 +611,15 @@ function readOnlyAnnotations() {
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,
+    openWorldHint: true,
+  };
+}
+
+function guardedWriteAnnotations() {
+  return {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: true,
   };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createRouterHandler } from '../src/mcp-stdio.mjs';
+import { sha256 } from '../src/style-preview.mjs';
 
 const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -137,15 +138,72 @@ test('router exposes local tools', async () => {
       'mirasai/sites-list',
       'mirasai/sites-test',
       'mirasai/style-preview',
+      'mirasai/style-update',
       'mirasai/style-verify',
     ]
   );
 
-  // Every router-local tool must be annotated read-only: none of them writes.
+  // Style update is the only router-local write and must expose the guarded
+  // workflow. Every other local tool stays read-only.
   for (const tool of response.result.tools) {
-    assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} must be read-only`);
-    assert.equal(tool.metadata.risk_level, 'read', `${tool.name} must declare read risk`);
+    if (tool.name === 'mirasai/style-update') {
+      assert.equal(tool.annotations.readOnlyHint, false);
+      assert.equal(tool.annotations.destructiveHint, true);
+      assert.equal(tool.metadata.risk_level, 'guarded_write');
+      assert.equal(tool.metadata.workflow_hint, 'dry_run_confirm_if_match');
+    } else {
+      assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} must be read-only`);
+      assert.equal(tool.metadata.risk_level, 'read', `${tool.name} must declare read risk`);
+    }
   }
+});
+
+test('router surfaces the observed hash without executing an unpinned style worker', async () => {
+  const worker = `self.addEventListener('message', function () {});`;
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => ({
+      callTool: async (name) => {
+        if (name === 'template/style-sources') {
+          return {
+            structuredContent: {
+              filename: 'entry.less',
+              filepath: '/less/',
+              desturl: '/css',
+              imports: { 'entry.less': '' },
+              vars: {},
+              overrides: {},
+              compile_contract: {
+                platform: 'joomla',
+                worker: 'templates/yootheme/assets/admin/js/worker.js',
+                base_url: 'https://example.test/administrator/index.php',
+              },
+            },
+          };
+        }
+
+        if (name === 'file/read') {
+          return { structuredContent: { content: worker } };
+        }
+
+        throw new Error(`Unexpected tool: ${name}`);
+      },
+    }),
+  });
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      name: 'mirasai/style-preview',
+      arguments: { site_id: 'joomla-demo' },
+    },
+    id: 20,
+  });
+
+  assert.equal(response.result.isError, true);
+  assert.equal(response.result.structuredContent.code, 'style_worker_hash_required');
+  assert.equal(response.result.structuredContent.observed_sha256, sha256(worker));
+  assert.equal(response.result.structuredContent.site_id, 'joomla-demo');
 });
 
 test('router sites-list does not expose token values', async () => {
