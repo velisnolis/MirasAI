@@ -637,18 +637,36 @@ class YoothemeStyleHelper
 
         $db = $this->database();
         $renamed = [];
+        $transactionStarted = false;
+        $databaseWritten = false;
+        $concurrentWrite = false;
 
         try {
             $db->transactionStart();
-            $query = $db->getQuery(true)
-                ->update($db->quoteName('#__template_styles'))
-                ->set($db->quoteName('params') . ' = :params')
-                ->where($db->quoteName('id') . ' = :id')
-                ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
-                ->where($db->quoteName('client_id') . ' = 0')
-                ->bind(':params', $candidateParams)
-                ->bind(':id', $templateStyleId, ParameterType::INTEGER);
-            $db->setQuery($query)->execute();
+            $transactionStarted = true;
+
+            if ($candidateParams !== $encodedParams) {
+                $query = $db->getQuery(true)
+                    ->update($db->quoteName('#__template_styles'))
+                    ->set($db->quoteName('params') . ' = :params')
+                    ->where($db->quoteName('id') . ' = :id')
+                    ->where($db->quoteName('template') . ' = ' . $db->quote('yootheme'))
+                    ->where($db->quoteName('client_id') . ' = 0')
+                    ->where($db->quoteName('params') . ' = :expected_params')
+                    ->bind(':params', $candidateParams)
+                    ->bind(':expected_params', $encodedParams)
+                    ->bind(':id', $templateStyleId, ParameterType::INTEGER);
+                $db->setQuery($query)->execute();
+
+                if ($db->getAffectedRows() !== 1) {
+                    $concurrentWrite = true;
+                    throw new \RuntimeException(
+                        'Joomla Style params changed concurrently at the write gate.'
+                    );
+                }
+
+                $databaseWritten = true;
+            }
 
             foreach ($staged as $target => $temporary) {
                 if (!@rename($temporary, $target)) {
@@ -658,10 +676,27 @@ class YoothemeStyleHelper
             }
 
             $db->transactionCommit();
+            $transactionStarted = false;
         } catch (\Throwable $exception) {
+            $databaseRollback = [
+                'attempted' => $transactionStarted,
+                'restored' => !$transactionStarted,
+            ];
+
             try {
-                $db->transactionRollback();
-            } catch (\Throwable) {
+                if ($transactionStarted) {
+                    $db->transactionRollback();
+                    $databaseRollback['restored'] = true;
+
+                    if ($databaseWritten
+                        && $this->loadStyleParamsEncoded($templateStyleId) !== $encodedParams) {
+                        $databaseRollback['restored'] = false;
+                        $databaseRollback['error'] = 'Joomla Style params do not match the snapshot after transaction rollback.';
+                    }
+                }
+            } catch (\Throwable $rollbackException) {
+                $databaseRollback['restored'] = false;
+                $databaseRollback['error'] = $rollbackException->getMessage();
             }
 
             foreach ($staged ?? [] as $temporary) {
@@ -670,11 +705,25 @@ class YoothemeStyleHelper
                 }
             }
 
-            $rollback = $this->restoreSnapshotFiles($snapshot);
+            $fileRollback = $this->restoreSnapshotFiles($snapshot);
+            $rollbackFailures = $fileRollback['failures'];
+            if (($databaseRollback['restored'] ?? false) !== true) {
+                $rollbackFailures[] = 'Unable to verify restoration of Joomla Style params.';
+            }
+            $rollback = [
+                'restored' => ($databaseRollback['restored'] ?? false) === true
+                    && ($fileRollback['restored'] ?? false) === true,
+                'database' => $databaseRollback,
+                'files' => $fileRollback,
+                'failures' => $rollbackFailures,
+            ];
 
             return [
-                'error' => 'Style write failed and rollback was attempted: ' . $exception->getMessage(),
-                'code' => 'style_write_failed',
+                'error' => ($rollback['restored']
+                    ? 'Style write failed and rollback completed: '
+                    : 'Style write failed and rollback is incomplete; restore from the private snapshot before retrying: ')
+                    . $exception->getMessage(),
+                'code' => $concurrentWrite ? 'stale_etag' : 'style_write_failed',
                 'snapshot_id' => $snapshot['snapshot_id'],
                 'rollback' => $rollback,
                 'renamed_before_failure' => array_map([$this, 'relativeToRoot'], $renamed),
@@ -965,28 +1014,38 @@ class YoothemeStyleHelper
     {
         $staged = [];
 
-        foreach ($targets as $target => $direction) {
-            $dir = dirname($target);
+        try {
+            foreach ($targets as $target => $direction) {
+                $dir = dirname($target);
 
-            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-                throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
+                if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                    throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
+                }
+
+                $temporary = tempnam($dir, '.mirasai-style-');
+
+                if (!is_string($temporary)) {
+                    throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
+                }
+
+                $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
+
+                if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
+                    @unlink($temporary);
+                    throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
+                }
+
+                @chmod($temporary, 0644);
+                $staged[$target] = $temporary;
+            }
+        } catch (\Throwable $exception) {
+            foreach ($staged as $temporary) {
+                if (is_file($temporary)) {
+                    @unlink($temporary);
+                }
             }
 
-            $temporary = tempnam($dir, '.mirasai-style-');
-
-            if (!is_string($temporary)) {
-                throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
-            }
-
-            $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
-
-            if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
-                @unlink($temporary);
-                throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
-            }
-
-            @chmod($temporary, 0644);
-            $staged[$target] = $temporary;
+            throw $exception;
         }
 
         return $staged;

@@ -612,15 +612,15 @@ class YoothemeStyleHelper
         }
 
         $renamed = [];
+        $configWritten = false;
 
         try {
-            // Preserve the option's existing autoload policy, matching
-            // WordPress' native set_theme_mod() write path.
-            if (!update_option('theme_mods_yootheme', $candidateMods)) {
-                $readback = get_option('theme_mods_yootheme', []);
-                if ($readback !== $candidateMods) {
-                    throw new \RuntimeException('WordPress did not persist theme_mods_yootheme.');
-                }
+            $configWrite = $this->compareAndSwapThemeMods($mods, $candidateMods);
+            $configWritten = ($configWrite['changed'] ?? false) === true;
+            if (($configWrite['ok'] ?? false) !== true) {
+                throw new \RuntimeException(
+                    (string) ($configWrite['error'] ?? 'theme_mods_yootheme changed concurrently.')
+                );
             }
 
             foreach ($staged as $target => $temporary) {
@@ -630,7 +630,20 @@ class YoothemeStyleHelper
                 $renamed[] = $target;
             }
         } catch (\Throwable $exception) {
-            update_option('theme_mods_yootheme', $mods);
+            $configRollback = [
+                'attempted' => $configWritten,
+                'restored' => true,
+            ];
+            if ($configWritten) {
+                $rollbackWrite = $this->compareAndSwapThemeMods($candidateMods, $mods);
+                $configRollback = [
+                    'attempted' => true,
+                    'restored' => ($rollbackWrite['ok'] ?? false) === true,
+                    ...(($rollbackWrite['ok'] ?? false) === true
+                        ? []
+                        : ['error' => (string) ($rollbackWrite['error'] ?? 'Unknown config rollback failure.')]),
+                ];
+            }
 
             foreach ($staged ?? [] as $temporary) {
                 if (is_file($temporary)) {
@@ -638,10 +651,24 @@ class YoothemeStyleHelper
                 }
             }
 
-            $rollback = $this->restoreSnapshotFiles($snapshot);
+            $fileRollback = $this->restoreSnapshotFiles($snapshot);
+            $rollbackFailures = $fileRollback['failures'];
+            if (($configRollback['restored'] ?? false) !== true) {
+                $rollbackFailures[] = 'Unable to restore theme_mods_yootheme without overwriting a concurrent change.';
+            }
+            $rollback = [
+                'restored' => ($configRollback['restored'] ?? false) === true
+                    && ($fileRollback['restored'] ?? false) === true,
+                'config' => $configRollback,
+                'files' => $fileRollback,
+                'failures' => $rollbackFailures,
+            ];
 
             return [
-                'error' => 'Style write failed and rollback was attempted: ' . $exception->getMessage(),
+                'error' => ($rollback['restored']
+                    ? 'Style write failed and rollback completed: '
+                    : 'Style write failed and rollback is incomplete; restore from the private snapshot before retrying: ')
+                    . $exception->getMessage(),
                 'code' => 'style_write_failed',
                 'snapshot_id' => $snapshot['snapshot_id'],
                 'rollback' => $rollback,
@@ -914,25 +941,35 @@ class YoothemeStyleHelper
     {
         $staged = [];
 
-        foreach ($targets as $target => $direction) {
-            $dir = dirname($target);
-            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-                throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
+        try {
+            foreach ($targets as $target => $direction) {
+                $dir = dirname($target);
+                if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                    throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
+                }
+
+                $temporary = tempnam($dir, '.mirasai-style-');
+                if (!is_string($temporary)) {
+                    throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
+                }
+
+                $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
+                if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
+                    @unlink($temporary);
+                    throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
+                }
+
+                @chmod($temporary, 0644);
+                $staged[$target] = $temporary;
+            }
+        } catch (\Throwable $exception) {
+            foreach ($staged as $temporary) {
+                if (is_file($temporary)) {
+                    @unlink($temporary);
+                }
             }
 
-            $temporary = tempnam($dir, '.mirasai-style-');
-            if (!is_string($temporary)) {
-                throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
-            }
-
-            $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
-            if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
-                @unlink($temporary);
-                throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
-            }
-
-            @chmod($temporary, 0644);
-            $staged[$target] = $temporary;
+            throw $exception;
         }
 
         return $staged;
@@ -1041,6 +1078,73 @@ class YoothemeStyleHelper
         }
 
         return ['restored' => $failures === [], 'failures' => $failures];
+    }
+
+    /**
+     * Replace the whole theme-mods option only when its raw serialized value
+     * still matches the value read at the write gate. WordPress' option API has
+     * no compare-and-swap primitive, so the guarded writer performs the
+     * conditional UPDATE directly and clears the option caches afterwards.
+     *
+     * @param array<string, mixed> $expected
+     * @param array<string, mixed> $candidate
+     * @return array{ok: bool, changed: bool, error?: string}
+     */
+    private function compareAndSwapThemeMods(array $expected, array $candidate): array
+    {
+        if ($expected === $candidate) {
+            return ['ok' => true, 'changed' => false];
+        }
+
+        global $wpdb;
+
+        if (!is_object($wpdb)
+            || !isset($wpdb->options)
+            || !method_exists($wpdb, 'prepare')
+            || !method_exists($wpdb, 'query')) {
+            return [
+                'ok' => false,
+                'changed' => false,
+                'error' => 'WordPress database compare-and-swap is unavailable.',
+            ];
+        }
+
+        $serialize = static fn (array $value): string => function_exists('maybe_serialize')
+            ? (string) maybe_serialize($value)
+            : serialize($value);
+        $expectedSerialized = $serialize($expected);
+        $candidateSerialized = $serialize($candidate);
+        $query = $wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
+            $candidateSerialized,
+            'theme_mods_yootheme',
+            $expectedSerialized
+        );
+        $affected = $wpdb->query($query);
+
+        if ($affected !== 1) {
+            return [
+                'ok' => false,
+                'changed' => false,
+                'error' => 'theme_mods_yootheme changed concurrently at the write gate.',
+            ];
+        }
+
+        if (function_exists('wp_cache_delete')) {
+            wp_cache_delete('theme_mods_yootheme', 'options');
+            wp_cache_delete('alloptions', 'options');
+        }
+
+        $readback = get_option('theme_mods_yootheme', []);
+        if ($readback !== $candidate) {
+            return [
+                'ok' => false,
+                'changed' => true,
+                'error' => 'theme_mods_yootheme compare-and-swap could not be verified.',
+            ];
+        }
+
+        return ['ok' => true, 'changed' => true];
     }
 
     /**

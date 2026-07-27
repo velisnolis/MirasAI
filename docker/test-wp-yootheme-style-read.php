@@ -91,6 +91,10 @@ $GLOBALS['test_config'] = [
 $GLOBALS['test_stylesheet'] = 'yootheme';
 $GLOBALS['test_update_option_calls'] = 0;
 $GLOBALS['test_clean_themes_cache_calls'] = 0;
+$GLOBALS['test_theme_mod_extras'] = ['nav_menu_locations' => ['primary' => 17]];
+$GLOBALS['test_force_cas_conflict'] = false;
+$GLOBALS['test_force_cas_conflict_on_query'] = null;
+$GLOBALS['test_cas_query_calls'] = 0;
 
 // ------------------------------------------------------------- WP stubs ----
 
@@ -111,7 +115,7 @@ function get_theme_mod(string $key, mixed $default = null): mixed
 function get_option(string $key, mixed $default = false): mixed
 {
     return $key === 'theme_mods_yootheme'
-        ? ['config' => (string) json_encode($GLOBALS['test_config'])]
+        ? ['config' => (string) json_encode($GLOBALS['test_config'])] + $GLOBALS['test_theme_mod_extras']
         : $default;
 }
 function update_option(string $key, mixed $value, mixed $autoload = null): bool
@@ -122,9 +126,57 @@ function update_option(string $key, mixed $value, mixed $autoload = null): bool
         if (is_array($decoded)) {
             $GLOBALS['test_config'] = $decoded;
         }
+        $extras = $value;
+        unset($extras['config']);
+        $GLOBALS['test_theme_mod_extras'] = $extras;
     }
     return true;
 }
+function maybe_serialize(mixed $value): string
+{
+    return is_array($value) || is_object($value) ? serialize($value) : (string) $value;
+}
+
+final class TestStyleWpdb
+{
+    public string $options = 'wp_options';
+
+    public function prepare(string $query, mixed ...$arguments): array
+    {
+        return ['query' => $query, 'arguments' => $arguments];
+    }
+
+    public function query(mixed $prepared): int
+    {
+        $GLOBALS['test_cas_query_calls']++;
+
+        if ($GLOBALS['test_force_cas_conflict']
+            || $GLOBALS['test_force_cas_conflict_on_query'] === $GLOBALS['test_cas_query_calls']) {
+            return 0;
+        }
+
+        $arguments = is_array($prepared) ? ($prepared['arguments'] ?? []) : [];
+        [$candidate, $optionName, $expected] = $arguments + [null, null, null];
+
+        if ($optionName !== 'theme_mods_yootheme'
+            || !is_string($candidate)
+            || !is_string($expected)
+            || maybe_serialize(get_option($optionName, [])) !== $expected) {
+            return 0;
+        }
+
+        $value = unserialize($candidate, ['allowed_classes' => false]);
+        if (!is_array($value)) {
+            return 0;
+        }
+
+        update_option($optionName, $value);
+
+        return 1;
+    }
+}
+
+$GLOBALS['wpdb'] = new TestStyleWpdb();
 function wp_get_theme(string $slug = ''): object
 {
     return new class {
@@ -301,6 +353,73 @@ check('style-create does not make an inactive child Style runtime-visible', ($cr
 
 $unchanged = (new TemplateStyleCreateTool())->handle($createArguments + ['confirm_guarded_write' => true]);
 check('style-create is idempotent when the source already matches', ($unchanged['action'] ?? null) === 'unchanged');
+
+$beforeCommitConfig = $helper->loadConfig();
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+$commitCandidate = $helper->patchConfig(
+    $beforeCommitConfig,
+    'flow',
+    '',
+    ['@global-primary-background' => '#654321'],
+    [],
+    null,
+    false
+);
+$ltrTarget = $themeDir . '/css/theme.1.css';
+$rtlTarget = $themeDir . '/css/theme.1.rtl.css';
+$originalLtr = (string) file_get_contents($ltrTarget);
+
+mkdir($rtlTarget);
+$failedCommit = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+check('style-update reports a write failure after a partial file replacement', ($failedCommit['code'] ?? null) === 'style_write_failed');
+check('style-update verifies config and file rollback separately', ($failedCommit['rollback']['restored'] ?? false) === true);
+check('style-update restores config after a partial file replacement', $helper->loadConfig() === $beforeCommitConfig);
+check('style-update restores the first CSS file after the second rename fails', (string) file_get_contents($ltrTarget) === $originalLtr);
+rmdir($rtlTarget);
+
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+mkdir($rtlTarget);
+$GLOBALS['test_force_cas_conflict_on_query'] = $GLOBALS['test_cas_query_calls'] + 2;
+$incompleteRollback = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+$GLOBALS['test_force_cas_conflict_on_query'] = null;
+check('style-update exposes an incomplete rollback instead of claiming recovery', ($incompleteRollback['rollback']['restored'] ?? true) === false);
+check('style-update incomplete rollback message requires snapshot recovery', str_contains((string) ($incompleteRollback['error'] ?? ''), 'rollback is incomplete'));
+
+update_option('theme_mods_yootheme', [
+    'config' => (string) json_encode($beforeCommitConfig),
+] + $GLOBALS['test_theme_mod_extras']);
+file_put_contents($ltrTarget, $originalLtr);
+rmdir($rtlTarget);
+
+$beforeCommitEtag = $helper->etag($beforeCommitConfig, $helper->compiledState());
+$committed = $helper->commitStyleUpdate(
+    $commitCandidate,
+    '.x{color:#654321}',
+    '.x{color:#654321;direction:rtl}',
+    $beforeCommitEtag
+);
+check('style-update commits config and CSS through compare-and-swap', !isset($committed['error']) && is_string($committed['new_etag'] ?? null));
+check('style-update compare-and-swap preserves unrelated theme mods', ($GLOBALS['test_theme_mod_extras']['nav_menu_locations']['primary'] ?? null) === 17);
+
+$cas = new ReflectionMethod(YoothemeStyleHelper::class, 'compareAndSwapThemeMods');
+$currentMods = get_option('theme_mods_yootheme', []);
+$conflictingMods = $currentMods;
+$conflictingMods['config'] = (string) json_encode($beforeCommitConfig);
+$GLOBALS['test_force_cas_conflict'] = true;
+$conflict = $cas->invoke($helper, $currentMods, $conflictingMods);
+$GLOBALS['test_force_cas_conflict'] = false;
+check('style-update rejects a lost-update race at the database gate', ($conflict['ok'] ?? true) === false);
+check('a rejected compare-and-swap leaves the current config untouched', $helper->loadConfig() === $commitCandidate);
 
 // YOOtheme's StyleFontLoader stores downloaded files in its own fonts cache,
 // then makes their URLs relative to the CSS destination directory passed to
