@@ -30,6 +30,7 @@ self.addEventListener('message', function (event) {
 test('the worker shim speaks the documented message contract', async () => {
   const call = bootStyleWorker(FAKE_WORKER, 'https://example.test/wp-admin/customize.php');
   const result = await call('css', { style: {}, input: '', vars: {} });
+  await call.close();
 
   assert.equal(result.css, '.x{color:red}');
   // bootStyleWorker is the low-level primitive: results come straight from the
@@ -71,6 +72,7 @@ test('compileStyle refuses an import tree without its entry file', async () => {
 test('worker errors reject rather than hanging', async () => {
   const call = bootStyleWorker(FAKE_WORKER, 'https://example.test/');
   await assert.rejects(() => call('boom', {}), /exploded/);
+  await call.close();
 });
 
 test('concurrent calls resolve against their own ids', async () => {
@@ -79,14 +81,16 @@ test('concurrent calls resolve against their own ids', async () => {
     call('minify', { style: {}, css: 'FIRST' }),
     call('minify', { style: {}, css: 'SECOND' }),
   ]);
+  await call.close();
 
   assert.equal(a.css, 'FIRST');
   assert.equal(b.css, 'SECOND');
 });
 
-test('a bundle that registers no listener is rejected outright', () => {
-  assert.throws(
-    () => bootStyleWorker('var x = 1;', 'https://example.test/'),
+test('a bundle that registers no listener is rejected outright', async () => {
+  const call = bootStyleWorker('var x = 1;', 'https://example.test/');
+  await assert.rejects(
+    () => call('css', {}),
     /did not register a message listener/
   );
 });
@@ -105,8 +109,67 @@ test('the worker cannot reach the network', async () => {
   `;
   const call = bootStyleWorker(NET_WORKER, 'https://example.test/');
   const result = await call('css', {});
+  await call.close();
 
   assert.match(result.blocked, /Blocked network access/);
+});
+
+test('the worker cannot escape through host timer constructors', async () => {
+  const ESCAPE_WORKER = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      try {
+        var version = setTimeout.constructor('return process')().versions.node;
+        self.postMessage({ id: id, result: { escaped: true, version: version } });
+      } catch (e) {
+        self.postMessage({ id: id, result: { escaped: false, error: String(e.message || e) } });
+      }
+    });
+  `;
+  const call = bootStyleWorker(ESCAPE_WORKER, 'https://example.test/');
+  const result = await call('probe', {});
+  await call.close();
+
+  assert.equal(result.escaped, false);
+  assert.match(result.error, /process is not defined/);
+});
+
+test('the worker global has no host Object constructor escape', async () => {
+  const ESCAPE_WORKER = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      try {
+        var version = globalThis.constructor.constructor('return process')().versions.node;
+        self.postMessage({ id: id, result: { escaped: true, version: version } });
+      } catch (e) {
+        self.postMessage({ id: id, result: { escaped: false, error: String(e.message || e) } });
+      }
+    });
+  `;
+  const call = bootStyleWorker(ESCAPE_WORKER, 'https://example.test/');
+  const result = await call('probe', {});
+  await call.close();
+
+  assert.equal(result.escaped, false);
+  assert.match(result.error, /process is not defined/);
+});
+
+test('a synchronous infinite loop is terminated by the isolated runner timeout', async () => {
+  const LOOP_WORKER = `
+    self.addEventListener('message', function () {
+      while (true) {}
+    });
+  `;
+  const call = bootStyleWorker(LOOP_WORKER, 'https://example.test/', {
+    bootTimeoutMs: 1_000,
+    callTimeoutMs: 100,
+  });
+
+  await assert.rejects(
+    () => call('css', {}),
+    /timed out|Script execution timed out/
+  );
+  await call.close();
 });
 
 test('diffVariables reports only variables whose resolved value moved', () => {
