@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The current release is `0.6.2`. It includes:
+The current release is [`0.7.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.7.0). It includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -28,6 +28,17 @@ Latest install/update endpoints:
 | Local MCP router | `miras-mirasai-mcp-<version>.tgz` from the matching GitHub release | No feed; install the release tarball or use the repo checkout. |
 
 Joomla reads its XML feed through the package update server. WordPress reads its JSON feed through the bundled MirasAI updater.
+
+## Requirements
+
+- Joomla host: Joomla 5 or 6 and a PHP version supported by that Joomla release.
+- WordPress host: WordPress 6.0 or newer and PHP 8.0 or newer.
+- Local MCP router and repository tooling: Node.js 20 or newer.
+- YOOtheme Pro, multilingual extensions, ReReplacer, ACF, and the WordPress
+  Abilities API are optional; their tools appear only when the matching runtime
+  or extension is available.
+- 1Password CLI is optional and required only when the router registry uses
+  `op://` secret references.
 
 ## Architecture
 
@@ -57,13 +68,15 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.6.2` | `0.6.2` | `0.6.2` |
+| Version | `0.7.0` | `0.7.0` | `0.7.0` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
-| Auth | Joomla API token, Super User gated | WordPress Application Password, `manage_options` gated | 1Password/env/dev secret refs |
+| Auth | Joomla API token, Super User gated | WordPress Application Password + `manage_options`; MirasAI token fallback | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
-| Automatic updates | XML feed verified on `autovigatana` and `gibaix` | JSON feed verified on `jordifont` and `crisalide` | No feed; install release tarball |
+| Automatic updates | XML feed and release SHA-256 verified for `0.7.0` | JSON feed and release SHA-256 verified for `0.7.0` | No feed; install the release tarball |
+| `0.7.0` canary | Joomla 6.1.2 + YOOtheme Pro 5.0.37 | WordPress 7.0.2 + PHP 8.4 + YOOtheme child theme | Style preview/verification exercised against both hosts |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
+| YOOtheme Styles | Read, sources, guarded update | Read, sources, guarded create/update | Pinned-worker preview, update, and verification |
 | Dynamic Sources | Read, preview, set, delete bindings | Read, preview, set, delete bindings | Routes host tools |
 | Runtime schema | YOOtheme element schema | YOOtheme element schema | Host discovery |
 | ReReplacer | Supported via addon | Not applicable | Routes host tools |
@@ -120,22 +133,22 @@ Example:
 ```json
 {
   "schema_version": 1,
-  "default_site_id": "jordifont-wp",
+  "default_site_id": "wp-example",
   "sites": [
     {
-      "site_id": "jordifont-wp",
-      "label": "Jordi Font WordPress",
+      "site_id": "wp-example",
+      "label": "Example WordPress",
       "platform": "wordpress",
-      "url": "https://www.jordifont.com/wp-json/mirasai/v1/mcp",
-      "basic_ref": "op://vault/item/field",
+      "url": "https://wp.example.com/wp-json/mirasai/v1/mcp",
+      "basic_ref": "op://YOUR_VAULT/Example WordPress/application_password",
       "secret_ttl_seconds": 3600
     },
     {
-      "site_id": "autovigatana",
-      "label": "Autovigatana",
+      "site_id": "joomla-example",
+      "label": "Example Joomla",
       "platform": "joomla",
-      "url": "https://www.autovigatana.com/api/v1/mirasai/mcp",
-      "token_ref": "op://vault/item/field",
+      "url": "https://joomla.example.com/api/v1/mirasai/mcp",
+      "token_ref": "op://YOUR_VAULT/Example Joomla/api_token",
       "secret_ttl_seconds": 3600
     }
   ]
@@ -159,7 +172,7 @@ Common commands:
 npm run test:mcp
 
 node packages/mirasai-mcp/bin/mirasai-mcp.mjs list-sites
-node packages/mirasai-mcp/bin/mirasai-mcp.mjs test-site jordifont-wp
+node packages/mirasai-mcp/bin/mirasai-mcp.mjs test-site wp-example
 node packages/mirasai-mcp/bin/mirasai-mcp.mjs serve
 ```
 
@@ -192,7 +205,9 @@ Build output:
 
 - `.docker-build/pkg_mirasai-<version>.zip`
 - `.docker-build/pkg_mirasai-lab.zip`
-- `updates/pkg_mirasai.xml`
+
+`npm run release:prepare` updates `updates/pkg_mirasai.xml`; the package build
+alone does not alter the feed.
 
 Install in Joomla:
 
@@ -243,7 +258,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.6.2.zip
+packages/mirasai-wp/dist/mirasai-wp-0.7.0.zip
 ```
 
 The WordPress admin dashboard includes:
@@ -303,6 +318,34 @@ Common workflow:
 
 Element tools include add, update props, move, clone, delete, Dynamic Source preview/set/delete, and translation-oriented reads.
 
+### YOOtheme Styles
+
+Both hosts expose:
+
+- `template/style-read`
+- `template/style-sources`
+- `template/style-update`
+
+WordPress also exposes guarded `template/style-create`; Joomla deliberately
+does not, because creating and registering a Joomla template needs a different
+installation workflow.
+
+The router adds `mirasai/style-preview`, `mirasai/style-update`, and
+`mirasai/style-verify`. Before executing a site's YOOtheme compiler worker, the
+router requires its reviewed SHA-256 in `style_worker_sha256`. The worker runs
+in a separate, timeout-bounded, permission-restricted process. The pin,
+subprocess, and Node Permission Model are defense in depth, not a security
+boundary for arbitrary untrusted JavaScript.
+
+A real Style update follows:
+
+1. read sources and the current Style ETag;
+2. preview and compile LTR/RTL;
+3. review the variable and component diff;
+4. run the host dry-run bound to the compiled CSS hashes;
+5. confirm with a fresh ETag;
+6. snapshot, write, clear caches, read back, and verify the served result.
+
 ### ReReplacer
 
 Joomla can expose ReReplacer and Regular Labs Conditions through `plg_mirasai_rereplacer`.
@@ -343,6 +386,8 @@ Important safeguards:
 - `file/read` blocks common secret-bearing paths such as CMS config variants, `.env`, private keys, certificates, and SQL dumps;
 - Joomla `dangerous_exec` tools require elevation in production;
 - WordPress `sandbox/execute-php` is hidden unless dangerous execution is enabled for the current domain.
+- YOOtheme worker execution requires an explicit SHA-256 pin and remains
+  isolated in a killable subprocess.
 
 `sandbox/execute-php` on Joomla and WordPress is transaction-wrapped PHP execution, not an isolated security sandbox. It runs in the CMS PHP worker process and must pass `confirm_execute_php=true`.
 
@@ -386,6 +431,10 @@ npm run release:prepare
 
 The script builds the Joomla ZIP, WordPress ZIP, local MCP router tarball, updates both feeds, and writes release helper notes under `.release/v<version>/`.
 
+The ZIP files are not currently byte-for-byte reproducible because archive
+timestamps vary between builds. Treat each feed's SHA-256 as the identity of
+the concrete GitHub release asset, not as a source-tree fingerprint.
+
 ## Docker Integration Lab
 
 The repo includes a Docker-based Joomla integration lab for reproducible bring-up and smoke testing.
@@ -420,6 +469,7 @@ npm test
 npm run build:joomla
 npm run build:wp
 npm run check:packages
+npm run release:prepare
 ```
 
 If you are extending MirasAI with a Joomla addon, start with:

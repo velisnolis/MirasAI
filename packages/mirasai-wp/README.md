@@ -87,6 +87,10 @@ The WordPress admin dashboard includes a compact onboarding surface for:
 - `template/element-move`
 - `template/element-clone`
 - `template/element-delete`
+- `template/style-read`
+- `template/style-sources`
+- `template/style-create`
+- `template/style-update`
 - `template/translate`
 - `template/widget-translate`
 - `acf/status`
@@ -198,6 +202,18 @@ an unknown argument and still answering `action: updated` is the worst failure
 mode this surface has: the response says the write happened, so debugging
 starts everywhere except the argument list.
 
+`template/style-read` and `template/style-sources` inspect the active Style,
+available styles, Less inputs, overrides, compiled CSS freshness, and relative
+assets without exposing the YOOtheme API key. `template/style-update` is a
+guarded write: the router compiles LTR/RTL first, binds the dry-run to those CSS
+hashes, and the host snapshots state, validates relative assets, writes through
+compare-and-swap, clears caches, and verifies readback.
+
+`template/style-create` is WordPress-only. It can scaffold a YOOtheme child
+theme and create a versionable `less/theme.<id>.less` source after dry-run,
+fresh `if_match`, and confirmation. It does not activate the child theme,
+select the new Style, or compile live CSS.
+
 `template/translate` creates or updates a target-language copy of a YOOtheme
 template (`key` storage only). It does not auto-translate: call `template/read`
 first, use its `translatable_nodes[].replacement_key` values to provide
@@ -219,7 +235,6 @@ in the WordPress Abilities API.
 ## Next Steps
 
 - Extend YOOtheme parity with save transforms and stronger cache invalidation.
-- Add a separate guarded ability execution path only after mapping WordPress
-  ability permissions into the MirasAI risk model.
-- Add sandbox/dangerous execution tools only after the audit model and Smart Sudo
-  style elevation workflow are specified for WordPress.
+- Extend the abilities policy only after mapping broader WordPress ability
+  permissions into the MirasAI risk model.
+- Add higher-level onboarding around router registration and worker-hash pinning.

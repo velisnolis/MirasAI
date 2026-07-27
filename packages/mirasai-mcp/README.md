@@ -26,14 +26,14 @@ Example:
 ```json
 {
   "schema_version": 1,
-  "default_site_id": "autovigatana",
+  "default_site_id": "joomla-example",
   "sites": [
     {
-      "site_id": "autovigatana",
-      "label": "Autovigatana",
+      "site_id": "joomla-example",
+      "label": "Example Joomla",
       "platform": "joomla",
-      "url": "https://www.autovigatana.com/api/v1/mirasai/mcp",
-      "token_ref": "op://YOUR_VAULT/Auto Vigatana/mirasai_token",
+      "url": "https://joomla.example.com/api/v1/mirasai/mcp",
+      "token_ref": "op://YOUR_VAULT/Example Joomla/api_token",
       "secret_ttl_seconds": 3600
     },
     {
@@ -99,10 +99,10 @@ The cache is never written to disk and is cleared when the router process exits.
 
 ```bash
 mirasai-mcp list-sites
-mirasai-mcp add-site --site-id jordifont-wp --label "Jordi Font WordPress" --platform wordpress --url https://www.jordifont.com/wp-json/mirasai/v1/mcp --basic-ref op://vault/item/field --secret-ttl-seconds 3600 --style-worker-sha256 HASH --default
+mirasai-mcp add-site --site-id wp-example --label "Example WordPress" --platform wordpress --url https://wp.example.com/wp-json/mirasai/v1/mcp --basic-ref "op://YOUR_VAULT/Example WordPress/application_password" --secret-ttl-seconds 3600 --style-worker-sha256 HASH --default
 mirasai-mcp add-site --site-id demo-wp-adapter --label "Demo WP (MCP Adapter)" --platform wordpress --protocol mcp --url https://demo.test/wp-json/mcp/mcp-adapter-default-server --basic-ref op://vault/item/field
-mirasai-mcp set-default jordifont-wp
-mirasai-mcp test-site autovigatana
+mirasai-mcp set-default wp-example
+mirasai-mcp test-site joomla-example
 mirasai-mcp serve
 ```
 
@@ -153,4 +153,4 @@ Next steps:
 
 - add live contract fixtures from Joomla and WordPress hosts
 - add installer/onboarding helpers for common MCP clients
-- package the router for local installation
+- add a one-command installer for the GitHub release tarball
