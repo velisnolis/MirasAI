@@ -12,6 +12,7 @@ $libSrc = dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src'
 
 require_once $libSrc . '/Tool/ToolInterface.php';
 require_once $libSrc . '/Tool/AbstractTool.php';
+require_once $libSrc . '/Tool/ToolArgumentValidator.php';
 require_once $libSrc . '/Tool/ToolRegistry.php';
 require_once $libSrc . '/Mcp/McpHandler.php';
 

@@ -6,6 +6,7 @@ namespace Mirasai\WordPress\Mcp;
 
 use Mirasai\WordPress\Tool\AbstractTool;
 use Mirasai\WordPress\Tool\RuntimeSettings;
+use Mirasai\WordPress\Tool\ToolArgumentValidator;
 use Mirasai\WordPress\Tool\ToolRegistry;
 
 class McpHandler
@@ -108,6 +109,12 @@ class McpHandler
         $tool = $this->registry->get($toolName);
         if ($tool === null) {
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
+        }
+
+        $rejection = ToolArgumentValidator::validate($toolName, $tool->getInputSchema(), $arguments);
+
+        if ($rejection !== null) {
+            return $this->wrapToolResult($rejection, true);
         }
 
         $permissions = AbstractTool::normalizePermissions($tool->getPermissions());

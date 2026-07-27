@@ -61,6 +61,7 @@ function wp_get_environment_type(): string
 
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolInterface.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AbstractTool.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolArgumentValidator.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/RuntimeSettings.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolRegistry.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpHandler.php';

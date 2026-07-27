@@ -220,6 +220,15 @@ async function callRouterTool(registry, clientFactory, params) {
     return callToolResult({ error: 'Tool arguments must be an object.', code: 'invalid_arguments' }, true);
   }
 
+  // Router-owned tools validate here; remote tools are checked by the host,
+  // which sees the authoritative schema. Either way an argument a tool does
+  // not declare stops the call instead of being quietly dropped.
+  const rejection = rejectUndeclaredArguments(name, args);
+
+  if (rejection !== null) {
+    return callToolResult(rejection, true);
+  }
+
   if (name === 'mirasai/sites-list') {
     return callToolResult({
       default_site_id: registry.default_site_id,
@@ -591,6 +600,112 @@ function tokenSourceForSite(site) {
     return 'basic-plain-dev';
   }
   return 'none';
+}
+
+/**
+ * Reject arguments a router tool does not declare.
+ *
+ * Returns null when the tool is not router-owned, or when the arguments are
+ * acceptable. Only the top level is checked: the router's own schemas declare
+ * free-form objects (`vars`) whose keys are Less variable names.
+ */
+function rejectUndeclaredArguments(name, args) {
+  const tool = routerTools().find((entry) => entry.name === name);
+  const properties = tool?.inputSchema?.properties;
+
+  if (!properties || typeof properties !== 'object') return null;
+
+  const accepted = Object.keys(properties);
+  const issues = [];
+
+  for (const key of Object.keys(args)) {
+    if (!Object.hasOwn(properties, key)) {
+      const suggestion = closestName(key, accepted);
+      issues.push({
+        code: 'unknown_argument',
+        argument: key,
+        message: suggestion
+          ? `${key} is not an argument of this tool. Did you mean ${suggestion}?`
+          : `${key} is not an argument of this tool.`,
+        ...(suggestion ? { did_you_mean: suggestion } : {}),
+      });
+      continue;
+    }
+
+    const enumValues = properties[key]?.enum;
+
+    if (Array.isArray(enumValues) && !enumValues.includes(args[key])) {
+      issues.push({
+        code: 'invalid_argument_value',
+        argument: key,
+        message: `${key} must be one of: ${enumValues.join(', ')}.`,
+        accepted_values: enumValues,
+      });
+    }
+  }
+
+  if (issues.length === 0) return null;
+
+  return {
+    error: `${name} rejected the call: ${issues.map((issue) => issue.message).join(' ')}`,
+    code: issues.some((issue) => issue.code === 'unknown_argument')
+      ? 'unknown_argument'
+      : 'invalid_argument_value',
+    tool: name,
+    issues,
+    accepted_arguments: accepted,
+    action_required: 'Nothing was applied. Fix the arguments and call the tool again.',
+  };
+}
+
+function closestName(name, candidates) {
+  let best = null;
+  let bestDistance = Infinity;
+  const budget = Math.max(2, Math.floor(name.length / 3));
+
+  for (const candidate of candidates) {
+    let distance = editDistance(name, candidate);
+
+    // A shared prefix is a strong signal even when the tails diverge.
+    if (sharedPrefixLength(name, candidate) >= 4) distance = Math.min(distance, budget);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+
+  return bestDistance <= budget ? best : null;
+}
+
+function editDistance(left, right) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+
+    for (let j = 1; j <= right.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+      );
+    }
+
+    previous = current;
+  }
+
+  return previous[right.length];
+}
+
+function sharedPrefixLength(left, right) {
+  const limit = Math.min(left.length, right.length);
+
+  for (let index = 0; index < limit; index += 1) {
+    if (left[index] !== right[index]) return index;
+  }
+
+  return limit;
 }
 
 function callToolResult(payload, isError = false) {

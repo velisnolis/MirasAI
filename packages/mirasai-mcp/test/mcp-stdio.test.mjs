@@ -489,3 +489,44 @@ test('serveStdio still speaks Content-Length framing when the client does', asyn
   assert.equal(written.length, 1);
   assert.match(written[0], /^Content-Length: \d+\r\n\r\n/);
 });
+
+test('router rejects an argument its own tool does not declare', async () => {
+  const handler = createRouterHandler(registry);
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    id: 90,
+    params: {
+      name: 'mirasai/style-preview',
+      arguments: { site_id: 'joomla-demo', style_variation: 'white-blue' },
+    },
+  });
+
+  const payload = response.result.structuredContent;
+
+  assert.equal(response.result.isError, true);
+  assert.equal(payload.code, 'unknown_argument');
+  assert.equal(payload.issues[0].argument, 'style_variation');
+  assert.equal(payload.issues[0].did_you_mean, 'style_id');
+  assert.ok(payload.accepted_arguments.includes('variation'));
+});
+
+test('router rejects a bad argument before it reaches a host', async () => {
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => {
+      throw new Error('the router must not reach a host for an invalid argument');
+    },
+  });
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    id: 91,
+    params: {
+      name: 'mirasai/host-diagnose',
+      arguments: { site_id: 'joomla-demo', include: 'everything' },
+    },
+  });
+
+  assert.equal(response.result.isError, true);
+  assert.equal(response.result.structuredContent.code, 'unknown_argument');
+});

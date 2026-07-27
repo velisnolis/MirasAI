@@ -25,6 +25,7 @@ define('MIRASAI_WP_UPDATE_FEED_URL', 'https://raw.githubusercontent.com/velisnol
 
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolInterface.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolArgumentValidator.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/WordPressTranslationHelper.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfHelper.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeWpHelper.php';

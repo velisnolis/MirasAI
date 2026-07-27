@@ -279,7 +279,21 @@ class TemplateElementSourcePreviewTool extends AbstractTool
             'query_field' => ['type' => 'string', 'description' => 'Optional query field name, for example article.'],
             'query_arguments' => ['type' => 'object', 'description' => 'Optional query field arguments.'],
             'query_directives' => ['type' => 'object', 'description' => 'Optional query field directives.'],
-            'field_mappings' => ['type' => 'object', 'description' => 'Map element prop names to source field names or mapping objects.'],
+            'field_mappings' => [
+            'type' => 'object',
+            'description' => 'Map element prop names to source field names or mapping objects.',
+            'additionalProperties' => [
+                'type' => ['string', 'object'],
+                'description' => 'A field name, or a mapping object. Date and number formatting goes in filters, not in arguments or directives.',
+                'properties' => [
+                    'name' => ['type' => 'string', 'description' => 'Source field name.'],
+                    'arguments' => ['type' => 'object', 'description' => 'Field arguments passed to the source query.'],
+                    'directives' => ['type' => 'object', 'description' => 'GraphQL directives applied to the field.'],
+                    'filters' => ['type' => 'object', 'description' => 'Output filters, for example {"date": "d/m/Y"} to format a date.'],
+                ],
+                'additionalProperties' => false,
+            ],
+            ],
         ];
     }
 }

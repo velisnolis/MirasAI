@@ -35,6 +35,17 @@ trait TemplateElementSourceSupportTrait
             'field_mappings' => [
                 'type' => 'object',
                 'description' => 'Map element prop names to source field names or mapping objects.',
+                'additionalProperties' => [
+                    'type' => ['string', 'object'],
+                    'description' => 'A field name, or a mapping object. Date and number formatting goes in filters, not in arguments or directives.',
+                    'properties' => [
+                        'name' => ['type' => 'string', 'description' => 'Source field name.'],
+                        'arguments' => ['type' => 'object', 'description' => 'Field arguments passed to the source query.'],
+                        'directives' => ['type' => 'object', 'description' => 'GraphQL directives applied to the field.'],
+                        'filters' => ['type' => 'object', 'description' => 'Output filters, for example {"date": "d/m/Y"} to format a date.'],
+                    ],
+                    'additionalProperties' => false,
+                ],
             ],
         ];
     }

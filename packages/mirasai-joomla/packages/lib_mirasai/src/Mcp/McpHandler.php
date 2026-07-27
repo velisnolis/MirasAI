@@ -9,6 +9,7 @@ use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
 use Mirasai\Library\Mirasai;
 use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\ToolArgumentValidator;
 use Mirasai\Library\Tool\ToolRegistry;
 
 class McpHandler
@@ -180,6 +181,12 @@ class McpHandler
 
         if (!$tool) {
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
+        }
+
+        $rejection = ToolArgumentValidator::validate((string) $toolName, $tool->getInputSchema(), $arguments);
+
+        if ($rejection !== null) {
+            return $this->wrapToolResult($rejection, true);
         }
 
         // Environment guard: block dangerous_exec tools on production unless elevated.
