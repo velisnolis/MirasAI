@@ -138,6 +138,20 @@ foreach ($validators as $host => $validator) {
     ]);
     check("{$host}: a missing required argument is rejected", $missingRequired['issues'][0]['code'] ?? null, 'missing_required_argument');
     check("{$host}: the missing argument is named", $missingRequired['issues'][0]['argument'] ?? null, 'if_match');
+    // The envelope code is what a caller branches on, so it has to name the
+    // most specific failure rather than fall back to a generic one.
+    check("{$host}: the envelope code names the missing argument case", $missingRequired['code'] ?? null, 'missing_required_argument');
+    check("{$host}: the envelope code names the type case", $wrongBoolean['code'] ?? null, 'invalid_argument_type');
+    check("{$host}: the envelope code names the enum case", $badEnum['code'] ?? null, 'invalid_argument_value');
+
+    // An unknown argument outranks everything else: it is the one the caller
+    // most likely did not mean to send at all.
+    $mixed = $validator::validate('template/element-move', $moveSchema, [
+        'path' => 'root>section[3]',
+        'position' => 'middle',
+        'target_index' => 1,
+    ]);
+    check("{$host}: unknown outranks the other failures", $mixed['code'] ?? null, 'unknown_argument');
 
     // Nested maps: field_mappings values are mapping objects with a known shape.
     $badMapping = $validator::validate('template/element-source-set', $bindingSchema, [

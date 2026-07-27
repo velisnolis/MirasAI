@@ -33,19 +33,41 @@ final class ToolArgumentValidator
             return null;
         }
 
-        $unknown = array_values(array_filter(
-            $issues,
-            static fn (array $issue): bool => $issue['code'] === 'unknown_argument'
-        ));
-
         return [
             'error' => self::summarize($toolName, $issues),
-            'code' => $unknown !== [] ? 'unknown_argument' : 'invalid_argument_value',
+            'code' => self::dominantCode($issues),
             'tool' => $toolName,
             'issues' => $issues,
             'accepted_arguments' => self::declaredNames($schema),
             'action_required' => 'Nothing was applied. Fix the arguments and call the tool again.',
         ];
+    }
+
+    /**
+     * The envelope code a caller branches on. A call can fail several ways at
+     * once; report the one that says the most about what to change, most
+     * specific first. Reporting `invalid_argument_value` for a missing
+     * required argument is the same kind of imprecision this class exists to
+     * remove.
+     *
+     * @param list<array<string, mixed>> $issues
+     */
+    private static function dominantCode(array $issues): string
+    {
+        $codes = array_column($issues, 'code');
+
+        foreach ([
+            'unknown_argument',
+            'missing_required_argument',
+            'invalid_argument_type',
+            'invalid_argument_value',
+        ] as $candidate) {
+            if (in_array($candidate, $codes, true)) {
+                return $candidate;
+            }
+        }
+
+        return 'invalid_argument_value';
     }
 
     /**
