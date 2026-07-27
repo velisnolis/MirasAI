@@ -21,8 +21,8 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
     protected function mutateTemplateElement(array $arguments, callable $mutator): array
     {
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
-        $dryRun = !empty($arguments['dry_run']);
-        $confirmed = !empty($arguments['confirm_guarded_write']);
+        $dryRun = ($arguments['dry_run'] ?? null) === true;
+        $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
         $helper = new YoothemeWpHelper();
 
         if ($ifMatch === '') {

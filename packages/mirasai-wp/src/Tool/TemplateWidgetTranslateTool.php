@@ -90,8 +90,8 @@ class TemplateWidgetTranslateTool extends AbstractTool
         $targetLanguage = trim((string) ($arguments['target_language'] ?? ''));
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
         $overwrite = !empty($arguments['overwrite']);
-        $dryRun = !empty($arguments['dry_run']);
-        $confirmed = !empty($arguments['confirm_guarded_write']);
+        $dryRun = ($arguments['dry_run'] ?? null) === true;
+        $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
         $copySidebarPosition = array_key_exists('copy_sidebar_position', $arguments)
             ? !empty($arguments['copy_sidebar_position'])
             : true;

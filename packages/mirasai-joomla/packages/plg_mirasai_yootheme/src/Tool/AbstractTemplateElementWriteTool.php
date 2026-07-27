@@ -56,7 +56,8 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
         $articleId = (int) ($arguments['article_id'] ?? 0);
         $moduleId = (int) ($arguments['module_id'] ?? 0);
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
-        $dryRun = !empty($arguments['dry_run']);
+        $dryRun = ($arguments['dry_run'] ?? null) === true;
+        $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
         $selectorCount = ($key !== '' ? 1 : 0) + ($articleId > 0 ? 1 : 0) + ($moduleId > 0 ? 1 : 0);
 
         if ($selectorCount === 0 || $ifMatch === '') {
@@ -70,6 +71,13 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
             return [
                 'error' => 'Provide only one of key, article_id, or module_id.',
                 'code' => 'ambiguous_storage',
+            ];
+        }
+
+        if (!$dryRun && !$confirmed) {
+            return [
+                'error' => 'This is a guarded write. Retry with dry_run=true first, then confirm_guarded_write=true if the preview is correct.',
+                'code' => 'guarded_write_confirmation_required',
             ];
         }
 

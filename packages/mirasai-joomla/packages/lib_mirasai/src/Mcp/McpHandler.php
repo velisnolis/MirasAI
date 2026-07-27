@@ -194,8 +194,8 @@ class McpHandler
         $requiresElevation = $permissions['risk_level'] === AbstractTool::RISK_DANGEROUS_EXEC;
 
         if ($permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE
-            && empty($arguments['dry_run'])
-            && empty($arguments['confirm_guarded_write'])
+            && ($arguments['dry_run'] ?? null) !== true
+            && ($arguments['confirm_guarded_write'] ?? null) !== true
         ) {
             return $this->wrapToolResult([
                 'error' => 'This guarded_write tool requires explicit confirmation before applying changes.',

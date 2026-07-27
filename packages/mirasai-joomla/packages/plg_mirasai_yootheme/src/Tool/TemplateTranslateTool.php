@@ -111,13 +111,21 @@ class TemplateTranslateTool extends AbstractTool
         $key = trim((string) ($arguments['key'] ?? ''));
         $targetLanguage = trim((string) ($arguments['target_language'] ?? ''));
         $overwrite = !empty($arguments['overwrite']);
-        $dryRun = !empty($arguments['dry_run']);
+        $dryRun = ($arguments['dry_run'] ?? null) === true;
+        $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
         $ifMatch = isset($arguments['if_match']) ? trim((string) $arguments['if_match']) : '';
 
         if ($key === '' || $targetLanguage === '' || $ifMatch === '') {
             return [
                 'error' => 'key, target_language, and if_match are required.',
                 'code' => 'missing_if_match',
+            ];
+        }
+
+        if (!$dryRun && !$confirmed) {
+            return [
+                'error' => 'This is a guarded write. Retry with dry_run=true first, then confirm_guarded_write=true if the preview is correct.',
+                'code' => 'guarded_write_confirmation_required',
             ];
         }
 

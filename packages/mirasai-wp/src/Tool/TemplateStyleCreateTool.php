@@ -83,8 +83,8 @@ class TemplateStyleCreateTool extends AbstractTool
         }
 
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
-        $dryRun = !empty($arguments['dry_run']);
-        $confirmed = !empty($arguments['confirm_guarded_write']);
+        $dryRun = ($arguments['dry_run'] ?? null) === true;
+        $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
 
         if ($ifMatch === '') {
             return ['error' => 'if_match is required.', 'code' => 'missing_if_match'];
