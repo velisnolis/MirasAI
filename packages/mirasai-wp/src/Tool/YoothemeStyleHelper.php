@@ -42,6 +42,7 @@ class YoothemeStyleHelper
             'container_available' => $this->containerAvailable(),
             'read_tool' => 'template/style-read',
             'sources_tool' => 'template/style-sources',
+            'create_tool' => 'template/style-create',
         ];
     }
 
@@ -127,6 +128,37 @@ class YoothemeStyleHelper
             'custom_less' => is_string($custom) ? $custom : '',
             'custom_less_bytes' => is_string($custom) ? strlen($custom) : 0,
             'customised' => (is_array($less) && $less !== []) || (is_string($custom) && $custom !== ''),
+        ];
+    }
+
+    /**
+     * Selects the stored overrides which belong in one compilation.
+     *
+     * The active config belongs to the active style. Applying its variation to
+     * a different style can resolve an unrelated optional import, while its
+     * variable overrides can make a candidate style look unlike its defaults.
+     * Non-active styles therefore start clean unless the caller explicitly asks
+     * to carry the active customizations across.
+     *
+     * @param array<string, mixed> $config
+     * @param array{style_id: string, variation: ?string} $active
+     * @return array{internal_style: ?string, less: array<mixed>, custom_less: string, source: string}
+     */
+    public function compilationOverrides(
+        array $config,
+        array $active,
+        string $styleId,
+        bool $applyActiveOverrides = false
+    ): array {
+        $useActive = $styleId === $active['style_id'] || $applyActiveOverrides;
+
+        return [
+            'internal_style' => $useActive ? $active['variation'] : null,
+            'less' => $useActive && is_array($config['less'] ?? null) ? $config['less'] : [],
+            'custom_less' => $useActive && is_string($config['custom_less'] ?? null)
+                ? $config['custom_less']
+                : '',
+            'source' => $useActive ? 'active_config' : 'style_defaults',
         ];
     }
 
@@ -244,6 +276,7 @@ class YoothemeStyleHelper
                 'file' => null,
                 'stale_version' => null,
                 'stale_sources' => null,
+                'freshness_method' => 'broad_less_mtime_heuristic',
             ];
         }
 
@@ -264,6 +297,7 @@ class YoothemeStyleHelper
             'theme_version' => $this->themeVersion(),
             'stale_version' => $compiledVersion !== null && $compiledVersion !== $this->themeVersion(),
             'stale_sources' => $newest['mtime'] !== null && $newest['mtime'] > $mtime,
+            'freshness_method' => 'broad_less_mtime_heuristic',
             'newest_source' => $newest['file'],
             'newest_source_mtime' => $newest['mtime'] !== null ? gmdate('c', $newest['mtime']) : null,
         ];
@@ -427,6 +461,214 @@ class YoothemeStyleHelper
     }
 
     /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $vars
+     * @param list<string> $unsetVars
+     * @return array<string, mixed>
+     */
+    public function patchConfig(
+        array $config,
+        string $styleId,
+        ?string $variation,
+        array $vars,
+        array $unsetVars,
+        ?string $customLess,
+        bool $replaceCustomLess
+    ): array {
+        $less = is_array($config['less'] ?? null) ? $config['less'] : [];
+
+        foreach ($vars as $name => $value) {
+            $less[$name] = $value;
+        }
+
+        foreach ($unsetVars as $name) {
+            unset($less[$name]);
+        }
+
+        $config['style'] = $styleId . ($variation !== null && $variation !== ''
+            ? ':' . $variation
+            : '');
+        $config['less'] = $less;
+
+        if ($replaceCustomLess) {
+            $config['custom_less'] = $customLess ?? '';
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param array<string, mixed> $candidateConfig
+     * @return array<string, mixed>
+     */
+    public function commitStyleUpdate(
+        array $candidateConfig,
+        string $compiledCss,
+        string $compiledRtl,
+        string $ifMatch
+    ): array {
+        $freshConfig = $this->loadConfig();
+        $freshCompiled = $this->compiledState();
+        $freshEtag = $this->etag($freshConfig, $freshCompiled);
+
+        if (!hash_equals($freshEtag, $ifMatch)) {
+            return [
+                'error' => 'Style changed before write. Re-read it and retry with the fresh etag.',
+                'code' => 'stale_etag',
+                'expected_etag' => $freshEtag,
+                'provided_etag' => $ifMatch,
+            ];
+        }
+
+        if (($freshConfig['yootheme_apikey'] ?? null) !== ($candidateConfig['yootheme_apikey'] ?? null)) {
+            return [
+                'error' => 'The candidate config does not preserve the YOOtheme API key.',
+                'code' => 'secret_preservation_failed',
+            ];
+        }
+
+        $encodedConfig = wp_json_encode(
+            $candidateConfig,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+        if (!is_string($encodedConfig)) {
+            return [
+                'error' => 'Unable to encode the candidate Style config.',
+                'code' => 'style_config_encode_failed',
+            ];
+        }
+
+        $targets = $this->styleCssTargets();
+
+        try {
+            $processed = [
+                'ltr' => $this->prepareCompiledCss($compiledCss),
+                'rtl' => $this->prepareCompiledCss($compiledRtl),
+            ];
+            $staged = $this->stageCssFiles($targets, $processed);
+        } catch (\Throwable $exception) {
+            return [
+                'error' => 'Unable to prepare the compiled Style CSS: ' . $exception->getMessage(),
+                'code' => 'style_css_stage_failed',
+            ];
+        }
+
+        $writeConfig = $this->loadConfig();
+        $writeCompiled = $this->compiledState();
+        $writeEtag = $this->etag($writeConfig, $writeCompiled);
+
+        if (!hash_equals($writeEtag, $ifMatch)) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return [
+                'error' => 'Style changed while CSS was being prepared. Re-read it and retry with the fresh etag.',
+                'code' => 'stale_etag',
+                'expected_etag' => $writeEtag,
+                'provided_etag' => $ifMatch,
+            ];
+        }
+
+        // Re-read the full option at the write gate so unrelated theme mods
+        // changed concurrently are preserved even though the Style ETag
+        // intentionally covers config + CSS only.
+        $mods = get_option('theme_mods_yootheme', []);
+        if (!is_array($mods)) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return [
+                'error' => 'theme_mods_yootheme is not an array.',
+                'code' => 'invalid_style_params',
+            ];
+        }
+
+        $modsConfig = is_string($mods['config'] ?? null)
+            ? json_decode($mods['config'], true)
+            : null;
+        if (!is_array($modsConfig) || $modsConfig !== $writeConfig) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return [
+                'error' => 'Style config changed at the write gate. Re-read it and retry.',
+                'code' => 'stale_etag',
+            ];
+        }
+
+        $candidateMods = $mods;
+        $candidateMods['config'] = $encodedConfig;
+        $snapshot = $this->createStyleSnapshot($mods, array_keys($targets));
+
+        if (isset($snapshot['error'])) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return $snapshot;
+        }
+
+        $renamed = [];
+
+        try {
+            // Preserve the option's existing autoload policy, matching
+            // WordPress' native set_theme_mod() write path.
+            if (!update_option('theme_mods_yootheme', $candidateMods)) {
+                $readback = get_option('theme_mods_yootheme', []);
+                if ($readback !== $candidateMods) {
+                    throw new \RuntimeException('WordPress did not persist theme_mods_yootheme.');
+                }
+            }
+
+            foreach ($staged as $target => $temporary) {
+                if (!@rename($temporary, $target)) {
+                    throw new \RuntimeException(sprintf('Unable to replace %s atomically.', $target));
+                }
+                $renamed[] = $target;
+            }
+        } catch (\Throwable $exception) {
+            update_option('theme_mods_yootheme', $mods);
+
+            foreach ($staged ?? [] as $temporary) {
+                if (is_file($temporary)) {
+                    @unlink($temporary);
+                }
+            }
+
+            $rollback = $this->restoreSnapshotFiles($snapshot);
+
+            return [
+                'error' => 'Style write failed and rollback was attempted: ' . $exception->getMessage(),
+                'code' => 'style_write_failed',
+                'snapshot_id' => $snapshot['snapshot_id'],
+                'rollback' => $rollback,
+                'renamed_before_failure' => array_map([$this, 'relativeToRoot'], $renamed),
+            ];
+        }
+
+        clearstatcache(true);
+        $updatedConfig = $this->loadConfig();
+        $updatedCompiled = $this->compiledState();
+        $paths = array_keys($staged);
+        $relativePaths = array_map([$this, 'relativeToRoot'], $paths);
+
+        return [
+            'snapshot_id' => $snapshot['snapshot_id'],
+            'written_files' => $relativePaths,
+            'written_sha256' => array_combine(
+                $relativePaths,
+                array_map(static fn (string $path): string => (string) hash_file('sha256', $path), $paths)
+            ),
+            'cache' => $this->invalidateStyleCache(),
+            'new_etag' => $this->etag($updatedConfig, $updatedCompiled),
+            'compiled' => $updatedCompiled,
+        ];
+    }
+
+    /**
      * Everything a headless compiler needs, mirroring what
      * `GET /theme/style` hands the browser: the entry file, the fully resolved
      * import tree, and the forced style vars.
@@ -551,6 +793,278 @@ class YoothemeStyleHelper
         $theme = wp_get_theme('yootheme');
 
         return $theme->exists() ? (string) $theme->get('Version') : null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function styleCssTargets(): array
+    {
+        $dir = $this->themeDir() . '/css';
+        $id = $this->themeConfigId();
+        $targets = [
+            $dir . '/theme.' . $id . '.css' => 'ltr',
+            $dir . '/theme.' . $id . '.rtl.css' => 'rtl',
+        ];
+        $config = $this->themeConfig();
+
+        if ($config !== null && (bool) $config('theme.default')) {
+            $targets[$dir . '/theme.css'] = 'ltr';
+            $targets[$dir . '/theme.rtl.css'] = 'rtl';
+        }
+
+        return $targets;
+    }
+
+    private function prepareCompiledCss(string $css): string
+    {
+        $data = $css;
+
+        if ($this->containerAvailable()) {
+            try {
+                $font = \YOOtheme\app()(\YOOtheme\Theme\Styler\StyleFontLoader::class);
+                if (is_object($font) && method_exists($font, 'parse') && method_exists($font, 'css')) {
+                    $matches = $font->parse($data);
+
+                    if (is_array($matches) && count($matches) >= 2) {
+                        [$import, $url] = $matches;
+                        // Match YOOtheme's native StyleController::save(): the
+                        // second argument is the CSS destination directory.
+                        // StyleFontLoader stores files in its own fonts cache
+                        // and makes their URLs relative to this base path.
+                        $fonts = $font->css($url, $this->themeDir() . '/css');
+
+                        if (is_string($fonts) && $fonts !== '') {
+                            $data = str_replace((string) $import, $fonts, $data);
+                        }
+                    }
+                }
+            } catch (\RuntimeException) {
+                // Native YOOtheme save treats font localization as best effort.
+            }
+        }
+
+        $this->assertRelativeCssAssetsExist($data);
+
+        return sprintf(
+            "/* YOOtheme Pro v%s compiled on %s */\n%s",
+            (string) ($this->themeVersion() ?? 'unknown'),
+            date(DATE_W3C),
+            $data
+        );
+    }
+
+    /**
+     * Refuse compiled CSS whose relative url(...) values do not resolve from
+     * the destination CSS directory. Absolute/root-relative URLs, data URIs
+     * and fragments are runtime URLs and are deliberately skipped.
+     */
+    private function assertRelativeCssAssetsExist(string $css): void
+    {
+        preg_match_all(
+            '~url\(\s*(?:(["\'])(.*?)\1|([^)]*))\s*\)~i',
+            $css,
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        $missing = [];
+        $cssDir = $this->themeDir() . '/css';
+
+        foreach ($matches as $match) {
+            $url = trim((string) (($match[2] ?? '') !== '' ? $match[2] : ($match[3] ?? '')));
+
+            if (
+                $url === ''
+                || str_starts_with($url, '#')
+                || str_starts_with($url, '/')
+                || str_starts_with($url, '//')
+                || preg_match('~^[a-z][a-z0-9+.-]*:~i', $url) === 1
+            ) {
+                continue;
+            }
+
+            $path = preg_split('/[?#]/', $url, 2)[0] ?? '';
+            $path = rawurldecode(trim($path));
+            if ($path === '') {
+                continue;
+            }
+
+            $resolved = realpath($cssDir . '/' . $path);
+            if ($resolved === false || !is_file($resolved)) {
+                $missing[$url] = true;
+            }
+        }
+
+        if ($missing !== []) {
+            throw new \RuntimeException(sprintf(
+                'Compiled CSS references missing relative asset(s) from %s: %s',
+                $this->relativeToRoot($cssDir),
+                implode(', ', array_keys($missing))
+            ));
+        }
+    }
+
+    /**
+     * @param array<string, string> $targets
+     * @param array{ltr: string, rtl: string} $processed
+     * @return array<string, string>
+     */
+    private function stageCssFiles(array $targets, array $processed): array
+    {
+        $staged = [];
+
+        foreach ($targets as $target => $direction) {
+            $dir = dirname($target);
+            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                throw new \RuntimeException(sprintf('Unable to create CSS directory %s.', $dir));
+            }
+
+            $temporary = tempnam($dir, '.mirasai-style-');
+            if (!is_string($temporary)) {
+                throw new \RuntimeException(sprintf('Unable to stage CSS in %s.', $dir));
+            }
+
+            $bytes = file_put_contents($temporary, $processed[$direction], LOCK_EX);
+            if (!is_int($bytes) || $bytes !== strlen($processed[$direction])) {
+                @unlink($temporary);
+                throw new \RuntimeException(sprintf('Incomplete staged CSS write for %s.', $target));
+            }
+
+            @chmod($temporary, 0644);
+            $staged[$target] = $temporary;
+        }
+
+        return $staged;
+    }
+
+    /**
+     * @param array<string, mixed> $mods
+     * @param list<string> $files
+     * @return array<string, mixed>
+     */
+    private function createStyleSnapshot(array $mods, array $files): array
+    {
+        $root = defined('ABSPATH') ? rtrim((string) ABSPATH, '/') : $this->themeDir();
+        $base = dirname($root) . '/mirasai-backups/style';
+        $snapshotId = sprintf('wordpress-style-%s-%s', gmdate('Ymd-His'), bin2hex(random_bytes(4)));
+        $dir = $base . '/' . $snapshotId;
+
+        if (!is_dir($base) && !mkdir($base, 0700, true) && !is_dir($base)) {
+            return ['error' => 'Unable to create the private Style backup directory.', 'code' => 'snapshot_failed'];
+        }
+        @chmod($base, 0700);
+
+        if (!mkdir($dir, 0700) || !is_dir($dir)) {
+            return ['error' => 'Unable to create the Style snapshot.', 'code' => 'snapshot_failed'];
+        }
+        @chmod($dir, 0700);
+
+        $serializedMods = serialize($mods);
+        $modsPath = $dir . '/theme_mods_yootheme.serialized';
+        if (file_put_contents($modsPath, $serializedMods, LOCK_EX) !== strlen($serializedMods)) {
+            return ['error' => 'Unable to snapshot theme_mods_yootheme.', 'code' => 'snapshot_failed'];
+        }
+        @chmod($modsPath, 0600);
+
+        $manifestFiles = [];
+        $originalFiles = [];
+        foreach ($files as $file) {
+            $name = basename($file);
+            $present = is_file($file);
+            $content = $present ? file_get_contents($file) : null;
+
+            if ($present && !is_string($content)) {
+                return ['error' => sprintf('Unable to read %s for the snapshot.', $name), 'code' => 'snapshot_failed'];
+            }
+
+            $originalFiles[$file] = $content;
+            $manifestFiles[] = [
+                'name' => $name,
+                'present' => $present,
+                'bytes' => is_string($content) ? strlen($content) : 0,
+                'sha256' => is_string($content) ? hash('sha256', $content) : null,
+            ];
+
+            if (is_string($content)) {
+                $snapshotFile = $dir . '/' . $name;
+                if (file_put_contents($snapshotFile, $content, LOCK_EX) !== strlen($content)) {
+                    return ['error' => sprintf('Unable to snapshot %s.', $name), 'code' => 'snapshot_failed'];
+                }
+                @chmod($snapshotFile, 0600);
+            }
+        }
+
+        $manifest = [
+            'snapshot_id' => $snapshotId,
+            'platform' => 'wordpress',
+            'created_at' => gmdate('c'),
+            'theme_mods_sha256' => hash('sha256', $serializedMods),
+            'files' => $manifestFiles,
+        ];
+        $encodedManifest = wp_json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $manifestPath = $dir . '/manifest.json';
+
+        if (!is_string($encodedManifest)
+            || file_put_contents($manifestPath, $encodedManifest, LOCK_EX) !== strlen($encodedManifest)) {
+            return ['error' => 'Unable to write the Style snapshot manifest.', 'code' => 'snapshot_failed'];
+        }
+        @chmod($manifestPath, 0600);
+
+        return $manifest + ['original_files' => $originalFiles];
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @return array{restored: bool, failures: list<string>}
+     */
+    private function restoreSnapshotFiles(array $snapshot): array
+    {
+        $failures = [];
+        $originalFiles = is_array($snapshot['original_files'] ?? null)
+            ? $snapshot['original_files']
+            : [];
+
+        foreach ($originalFiles as $file => $content) {
+            if (!is_string($file)) continue;
+
+            if ($content === null) {
+                if (is_file($file) && !@unlink($file)) {
+                    $failures[] = sprintf('Unable to remove newly created %s.', $file);
+                }
+                continue;
+            }
+
+            if (!is_string($content) || file_put_contents($file, $content, LOCK_EX) !== strlen($content)) {
+                $failures[] = sprintf('Unable to restore %s.', $file);
+            }
+        }
+
+        return ['restored' => $failures === [], 'failures' => $failures];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function invalidateStyleCache(): array
+    {
+        $cleared = [];
+
+        if (function_exists('wp_cache_delete')) {
+            wp_cache_delete('theme_mods_yootheme', 'options');
+            $cleared[] = 'theme_mods_yootheme';
+        }
+
+        if (function_exists('wp_clean_themes_cache')) {
+            wp_clean_themes_cache();
+            $cleared[] = 'themes';
+        }
+
+        return [
+            'cleared' => $cleared !== [],
+            'groups' => $cleared,
+            'failures' => [],
+        ];
     }
 
     /**

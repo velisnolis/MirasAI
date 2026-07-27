@@ -77,6 +77,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateWidgetTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleSourcesTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleCreateTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleUpdateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfStatusTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfFieldGroupsListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfFieldGroupReadTool.php';

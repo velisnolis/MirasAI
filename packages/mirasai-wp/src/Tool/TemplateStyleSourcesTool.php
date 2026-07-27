@@ -37,6 +37,10 @@ class TemplateStyleSourcesTool extends AbstractTool
                     'type' => 'string',
                     'description' => 'Style to resolve, for example "flow". Defaults to the active style.',
                 ],
+                'apply_active_overrides' => [
+                    'type' => 'boolean',
+                    'description' => 'Apply the active style variation, Less overrides, and custom Less when previewing a different style. Defaults to false; active styles always receive their own stored overrides.',
+                ],
                 'include_imports' => [
                     'type' => 'boolean',
                     'description' => 'Include the import tree contents. Defaults to true. Set false to inspect only the shape and size.',
@@ -110,23 +114,28 @@ class TemplateStyleSourcesTool extends AbstractTool
         }
 
         $compiled = $helper->compiledState();
+        $isActiveStyle = $styleId === $active['style_id'];
+        $overrides = $helper->compilationOverrides(
+            $config,
+            $active,
+            $styleId,
+            ($arguments['apply_active_overrides'] ?? false) === true
+        );
 
         return $sources + [
             'active' => $active,
-            'is_active_style' => $styleId === $active['style_id'],
-            'overrides' => [
-                // The variation is applied as a Less variable, not as an import
-                // path: the entry file ends with
-                //   @import (optional) ".../styles/@{internal-style}.less";
-                // so a compiler must pass it through the caller-supplied vars.
-                'internal_style' => $active['variation'],
-                'less' => is_array($config['less'] ?? null) ? $config['less'] : [],
-                'custom_less' => is_string($config['custom_less'] ?? null) ? $config['custom_less'] : '',
-            ],
+            'is_active_style' => $isActiveStyle,
+            // The variation is applied as a Less variable, not as an import
+            // path: the entry file ends with
+            //   @import (optional) ".../styles/@{internal-style}.less";
+            // so a compiler must pass it through the caller-supplied vars.
+            'overrides' => $overrides,
             'compiled' => $compiled,
             'compile_contract' => [
                 'note' => 'YOOtheme Pro 5 compiles Less in a browser web worker and only stores the resulting CSS. To reproduce it, run the installed worker.js against this import tree.',
+                'platform' => 'wordpress',
                 'worker' => 'wp-content/themes/yootheme/assets/admin/js/worker.js',
+                'base_url' => admin_url('customize.php'),
                 'commands' => ['css', 'vars', 'minify', 'rtl'],
                 'css_input' => [
                     'style' => ['filename', 'filepath', 'imports', 'vars'],
