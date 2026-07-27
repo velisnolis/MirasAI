@@ -1,32 +1,30 @@
-# Handoff — MirasAI, seguretat d'estils YOOtheme i versió 0.6.3
+# Handoff — MirasAI: estils YOOtheme segurs i versió 0.7.0
 
 Actualitzat: 27 de juliol de 2026  
-Objectiu de la sessió següent: revisar i consolidar el *working tree*, decidir
-els commits, publicar la 0.6.3 i, si s'aprova, desplegar-la a Indústria Viva.
+Objectiu de la sessió següent: publicar la 0.7.0 i, si s'aprova, desplegar-la a
+Indústria Viva i Auto Vigatana.
 
 ## Estat executiu
 
 - Repo: `/Users/alexmiras/Documents/Claude Code Default/MovaMiraAI`
 - Branca activa: `codex/style-safety-platform-contract`
-- El *working tree* de la 0.6.3 ja està consolidat en set commits temàtics
-  (runner aïllat, pin del worker, contracte d'estils al router, host WordPress,
-  host Joomla, `source-types`, bump de versió). `npm run test` passa després
-  dels commits.
-- `main` i `origin/main` continuen a `477e6d1`: la branca encara no s'ha
-  fusionat ni publicat.
-- Versió declarada a tots els *workspaces* i manifests: `0.6.3`.
-- `npm run release:prepare` va passar i va generar els artefactes de
-  `.release/v0.6.3/`.
-- No hi ha cap commit, tag, push ni GitHub Release de la 0.6.3. Els *feeds*
-  locals ja apunten a `v0.6.3`, però aquestes URLs no seran consumibles fins
-  que es publiqui la release.
-- Auto Vigatana té MirasAI Joomla `0.6.3` instal·lat i verificat.
-- Indústria Viva encara declara MirasAI WP `0.6.2`; no s'hi ha instal·lat el ZIP
-  final 0.6.3.
-
-No s'ha de fer `reset`, `checkout --` ni cap neteja massiva: hi ha fitxers
-modificats i nous que formen part d'aquesta implementació. Fer servir
-`git status --short` i `git diff` com a inventari autoritatiu.
+- Tot el treball està commitejat: set commits d'estils YOOtheme (runner aïllat,
+  pin del worker, contracte d'estils al router, host WordPress, host Joomla,
+  `source-types`), dos commits de contracte d'eines (rebuig d'arguments
+  desconeguts, inserció posicional a `element-move`) i el bump de versió.
+- `main` i `origin/main` continuen a `477e6d1`: la branca no s'ha fusionat ni
+  publicat.
+- **La 0.6.3 no es publica.** Es va decidir plegar-la amb els canvis de
+  contracte d'eines i saltar directament a `0.7.0`. El rebuig d'arguments
+  desconeguts és un canvi de comportament —crides que abans passaven en silenci
+  ara fallen— i la minor ho senyala.
+- Versió declarada a tots els *workspaces* i manifests: `0.7.0`.
+- No hi ha cap tag, push ni GitHub Release. Els *feeds* locals apunten a
+  `v0.7.0`, però aquestes URLs no seran consumibles fins que es publiqui.
+- Auto Vigatana té instal·lat un build preliminar etiquetat `0.6.3`, verificat
+  en viu. Aquella versió no existirà mai com a release: cal reinstal·lar-hi la
+  0.7.0 quan es publiqui.
+- Indústria Viva encara declara MirasAI WP `0.6.2`.
 
 ## Context anterior que no cal duplicar
 
@@ -145,7 +143,7 @@ Estat comprovat el 27 de juliol de 2026:
 
 - Joomla `6.1.2`
 - YOOtheme Pro `5.0.37`
-- MirasAI `0.6.3`
+- MirasAI `0.6.3` (build preliminar, no serà mai una release)
 - `template/source-types`: `live_introspection`, 27 tipus;
   `Article` amb 23 camps
 - estil actiu: `nioh-studio:white-blue`, style id `12`
@@ -176,19 +174,19 @@ Estat comprovat el 27 de juliol de 2026:
 - MirasAI WP declara `0.6.2`
 
 La canària anterior va validar la correcció de la base de fonts i la
-compilació, però el paquet final 0.6.3 no s'hi ha instal·lat. Abans de fer-ho,
+compilació, però el paquet final no s'hi ha instal·lat. Abans de fer-ho,
 repetir preflight, JetBackup/còpia privada del plugin, instal·lació amb WP-CLI,
 lectura postinstal·lació, ETag, CSS i comprovació de tots els assets.
 
-## Artefactes 0.6.3
+## Artefactes 0.7.0
 
-Directori: `.release/v0.6.3/`
+Directori: `.release/v0.7.0/`
 
 | Artefacte | SHA-256 |
 | --- | --- |
-| `pkg_mirasai-0.6.3.zip` | `b5e222e09e7e3ab179504351eeff7ece31c2af1c8fe7b8c8972025fa612124bf` |
-| `mirasai-wp-0.6.3.zip` | `47b9e8a1173d000f136d35e119d74525191e2bacca2ccf75bd3d88d8996d1c90` |
-| `miras-mirasai-mcp-0.6.3.tgz` | `2297c66c244a265e6e73d2d9d21e9588972fd1b559965f0df1101ae04aeed9cb` |
+| `pkg_mirasai-0.7.0.zip` | `0498c3d8ce7718017df9a4401f212cf1a8ae862b393be4d8bbcc1fa8e98cefd9` |
+| `mirasai-wp-0.7.0.zip` | `b31aafd478b578ae730ecca1d6c9858dc27bb5764c21ef26dccdaa73707ea326` |
+| `miras-mirasai-mcp-0.7.0.tgz` | `f8415753f206a08e5adaa9149ee54f47b495c320ffc2443eb84554585f17d6d4` |
 
 `install-urls.md` i `release-notes.md` del mateix directori són generats per
 `scripts/prepare-release.mjs`.
@@ -217,12 +215,12 @@ Directori: `.release/v0.6.3/`
    `confirm_guarded_write: true`. No es va fer una auditoria exhaustiva línia a
    línia dels dos helpers d'estil (1.200 i 700 línies): es confia en la suite i
    en la verificació a Auto Vigatana.
-2. ~~**Working tree gran i sense commit.**~~ Resolt: set commits temàtics.
-3. **Publicació pendent.** Després dels commits: rerun de la suite, merge a
-   `main`, tag `v0.6.3`, push i GitHub Release amb els tres artefactes. Verificar
-   els feeds després de publicar.
-4. **Indústria Viva pendent.** Instal·lar 0.6.3 només amb autorització i flux
-   reversible; no confondre el codi de canària 0.6.2 amb la release final.
+2. ~~**Working tree gran i sense commit.**~~ Resolt.
+3. **Publicació pendent.** Merge a `main`, tag `v0.7.0`, push i GitHub Release
+   amb els tres artefactes. Verificar els feeds després de publicar.
+4. **Indústria Viva i Auto Vigatana pendents.** Instal·lar 0.7.0 només amb
+   autorització i flux reversible. Auto Vigatana porta un build `0.6.3` que no
+   arribarà a ser release: cal substituir-lo, no deixar-lo com a estat final.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
 
