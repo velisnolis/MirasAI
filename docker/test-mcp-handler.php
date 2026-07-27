@@ -58,11 +58,30 @@ final class ErrorResultTool extends AbstractTool
     public function handle(array $arguments): array { return ['error' => 'Missing value.', 'code' => 'missing_value']; }
 }
 
+final class GuardedResultTool extends AbstractTool
+{
+    public int $calls = 0;
+
+    public function __construct() {}
+    public function getName(): string { return 'test/guarded'; }
+    public function getDescription(): string { return 'test'; }
+    public function getInputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+    public function getPermissions(): array { return ['risk_level' => self::RISK_GUARDED_WRITE]; }
+    public function handle(array $arguments): array
+    {
+        $this->calls++;
+
+        return ['ok' => true];
+    }
+}
+
 echo "\n=== MCP tools/call result wrapping ===\n";
 
 $registry = new ToolRegistry();
+$guarded = new GuardedResultTool();
 $registry->register(new SuccessResultTool());
 $registry->register(new ErrorResultTool());
+$registry->register($guarded);
 $handler = new McpHandler($registry);
 
 $success = $handler->handleRequest([
@@ -104,6 +123,30 @@ $protocolError = $handler->handleRequest([
 ]);
 expectHandler('unknown tool is protocol error', $protocolError['error']['code'] ?? null, -32602);
 expectHandler('unknown tool has no tool result', $protocolError['result'] ?? null, null);
+
+$stringFalse = $handler->handleRequest([
+    'jsonrpc' => '2.0',
+    'method' => 'tools/call',
+    'params' => [
+        'name' => 'test/guarded',
+        'arguments' => ['confirm_guarded_write' => 'false'],
+    ],
+    'id' => 4,
+]);
+expectHandler('string false is not accepted as guarded confirmation', $stringFalse['result']['structuredContent']['code'] ?? null, 'guarded_write_confirmation_required');
+expectHandler('string false does not execute guarded write', $guarded->calls, 0);
+
+$confirmed = $handler->handleRequest([
+    'jsonrpc' => '2.0',
+    'method' => 'tools/call',
+    'params' => [
+        'name' => 'test/guarded',
+        'arguments' => ['confirm_guarded_write' => true],
+    ],
+    'id' => 5,
+]);
+expectHandler('literal true guarded confirmation reaches tool', $confirmed['result']['structuredContent']['ok'] ?? null, true);
+expectHandler('literal true executes guarded write', $guarded->calls, 1);
 
 if ($failed > 0) {
     echo "\n{$failed} MCP handler test(s) failed.\n";

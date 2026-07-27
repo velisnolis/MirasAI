@@ -62,6 +62,22 @@ final class ToolArgumentValidator
         $properties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
         $additional = $schema['additionalProperties'] ?? null;
         $issues = [];
+        $required = is_array($schema['required'] ?? null) ? $schema['required'] : [];
+
+        foreach ($required as $requiredName) {
+            $name = (string) $requiredName;
+
+            if ($name === '' || array_key_exists($name, $value)) {
+                continue;
+            }
+
+            $qualified = $prefix === '' ? $name : $prefix . '.' . $name;
+            $issues[] = [
+                'code' => 'missing_required_argument',
+                'argument' => $qualified,
+                'message' => sprintf('%s is required.', $qualified),
+            ];
+        }
 
         // An explicit `additionalProperties: true`, or a schema without any
         // declared shape, means the tool accepts keys we cannot enumerate.
@@ -96,6 +112,22 @@ final class ToolArgumentValidator
      */
     private static function inspectValue(array $schema, $value, string $qualified): array
     {
+        $types = self::declaredTypes($schema);
+
+        if ($types !== [] && !self::matchesAnyType($value, $types)) {
+            return [[
+                'code' => 'invalid_argument_type',
+                'argument' => $qualified,
+                'message' => sprintf(
+                    '%s must be of type %s.',
+                    $qualified,
+                    implode(' or ', $types)
+                ),
+                'accepted_types' => $types,
+                'actual_type' => get_debug_type($value),
+            ]];
+        }
+
         $enum = is_array($schema['enum'] ?? null) ? $schema['enum'] : null;
 
         if ($enum !== null && (is_scalar($value) || $value === null) && !in_array($value, $enum, true)) {
@@ -117,7 +149,7 @@ final class ToolArgumentValidator
             foreach ($value as $index => $item) {
                 $issues = array_merge(
                     $issues,
-                    self::inspect($schema['items'], $item, $qualified . '[' . $index . ']')
+                    self::inspectValue($schema['items'], $item, $qualified . '[' . $index . ']')
                 );
             }
 
@@ -125,6 +157,56 @@ final class ToolArgumentValidator
         }
 
         return self::inspect($schema, $value, $qualified);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return list<string>
+     */
+    private static function declaredTypes(array $schema): array
+    {
+        $type = $schema['type'] ?? null;
+
+        if (is_string($type) && $type !== '') {
+            return [$type];
+        }
+
+        if (!is_array($type)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('strval', $type),
+            static fn (string $name): bool => $name !== ''
+        ));
+    }
+
+    /**
+     * @param list<string> $types
+     */
+    private static function matchesAnyType($value, array $types): bool
+    {
+        foreach ($types as $type) {
+            $matches = match ($type) {
+                'array' => is_array($value) && ($value === [] || array_is_list($value)),
+                'boolean' => is_bool($value),
+                // JSON Schema treats 12.0 as an integer: what matters is the
+                // absence of a fractional part, not the transport's numeric
+                // type. Clients that emit 12.0 for an id are not wrong.
+                'integer' => is_int($value) || (is_float($value) && !is_nan($value) && !is_infinite($value) && floor($value) === $value),
+                'null' => $value === null,
+                'number' => is_int($value) || is_float($value),
+                'object' => is_array($value) && ($value === [] || !array_is_list($value)),
+                'string' => is_string($value),
+                default => true,
+            };
+
+            if ($matches) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

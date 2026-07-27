@@ -170,6 +170,14 @@ $dryRunGuarded = callWpMcpTool($handler, 'test/guarded', ['dry_run' => true]);
 expectWpMcpHandler('guarded write dry_run reaches tool', $dryRunGuarded['structuredContent']['ok'] ?? null, true);
 expectWpMcpHandler('guarded write dry_run executes once', $guarded->calls, 1);
 
+$stringFalseGuarded = callWpMcpTool($handler, 'test/guarded', ['confirm_guarded_write' => 'false']);
+expectWpMcpHandler('string false is not accepted as guarded confirmation', $stringFalseGuarded['structuredContent']['code'] ?? null, 'guarded_write_confirmation_required');
+expectWpMcpHandler('string false does not execute guarded write', $guarded->calls, 1);
+
+$confirmedGuarded = callWpMcpTool($handler, 'test/guarded', ['confirm_guarded_write' => true]);
+expectWpMcpHandler('literal true guarded confirmation reaches tool', $confirmedGuarded['structuredContent']['ok'] ?? null, true);
+expectWpMcpHandler('literal true executes guarded write', $guarded->calls, 2);
+
 $blockedDangerous = callWpMcpTool($handler, 'test/dangerous', ['confirm_execute_php' => true]);
 expectWpMcpHandler('dangerous exec without enabled controls is blocked centrally', $blockedDangerous['structuredContent']['code'] ?? null, 'dangerous_exec_not_enabled');
 expectWpMcpHandler('blocked dangerous exec is not executed', $dangerous->calls, 0);

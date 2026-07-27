@@ -103,11 +103,41 @@ foreach ($validators as $host => $validator) {
 
     $badEnum = $validator::validate('template/element-move', $moveSchema, [
         'path' => 'root>section[3]',
+        'if_match' => 'abc',
         'position' => 'middle',
     ]);
 
     check("{$host}: an out-of-enum value is rejected", $badEnum['code'] ?? null, 'invalid_argument_value');
     check("{$host}: the enum rejection names the argument", $badEnum['issues'][0]['argument'] ?? null, 'position');
+
+    $wrongBoolean = $validator::validate('template/element-move', $moveSchema, [
+        'path' => 'root>section[3]',
+        'if_match' => 'abc',
+        'dry_run' => 'false',
+    ]);
+    check("{$host}: a string is not accepted as a boolean", $wrongBoolean['issues'][0]['code'] ?? null, 'invalid_argument_type');
+
+    // JSON Schema counts 12.0 as an integer; a client that serializes an id as
+    // a float is not making the mistake this validator exists to catch.
+    $integerSchema = [
+        'type' => 'object',
+        'properties' => ['post_id' => ['type' => 'integer']],
+    ];
+    check(
+        "{$host}: an integral float is accepted as an integer",
+        $validator::validate('demo/ids', $integerSchema, ['post_id' => 12.0]),
+        null
+    );
+    $fractional = $validator::validate('demo/ids', $integerSchema, ['post_id' => 12.5]);
+    check("{$host}: a fractional value is not an integer", $fractional['issues'][0]['code'] ?? null, 'invalid_argument_type');
+    $stringId = $validator::validate('demo/ids', $integerSchema, ['post_id' => '12']);
+    check("{$host}: a stringified id is still rejected", $stringId['issues'][0]['code'] ?? null, 'invalid_argument_type');
+
+    $missingRequired = $validator::validate('template/element-move', $moveSchema, [
+        'path' => 'root>section[3]',
+    ]);
+    check("{$host}: a missing required argument is rejected", $missingRequired['issues'][0]['code'] ?? null, 'missing_required_argument');
+    check("{$host}: the missing argument is named", $missingRequired['issues'][0]['argument'] ?? null, 'if_match');
 
     // Nested maps: field_mappings values are mapping objects with a known shape.
     $badMapping = $validator::validate('template/element-source-set', $bindingSchema, [
@@ -164,6 +194,21 @@ foreach ($validators as $host => $validator) {
         ], ['known' => 'a', 'extra' => 'b']),
         null
     );
+
+    $arrayEnumSchema = [
+        'type' => 'object',
+        'properties' => [
+            'modes' => [
+                'type' => 'array',
+                'items' => ['type' => 'string', 'enum' => ['safe', 'strict']],
+            ],
+        ],
+    ];
+    $badArrayEnum = $validator::validate('demo/modes', $arrayEnumSchema, [
+        'modes' => ['safe', 'surprise'],
+    ]);
+    check("{$host}: enum validation reaches scalar array items", $badArrayEnum['issues'][0]['code'] ?? null, 'invalid_argument_value');
+    check("{$host}: array item rejection has an indexed path", $badArrayEnum['issues'][0]['argument'] ?? null, 'modes[1]');
 }
 
 if ($failed > 0) {
