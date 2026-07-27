@@ -359,6 +359,120 @@ final class YoothemeElementNavigator
     }
 
     /**
+     * Move an element immediately before or after a reference sibling.
+     *
+     * Composing a page by MCP needs insertion in the middle, and `append` /
+     * `prepend` alone cannot express it: placing a section between two others
+     * meant chaining prepends in reverse or cloning and deleting. A sibling
+     * path survives structural change better than a numeric index would, and
+     * reads unambiguously in a log.
+     *
+     * @param array<string, mixed> $layout
+     * @param string $mode `before` or `after`
+     * @return array{layout: array<string, mixed>, old_path: string, new_path: string, metadata: array<string, mixed>, element: array<string, mixed>}|array{error: string, code: string}
+     */
+    public function moveElementBeside(array $layout, string $path, string $referencePath, string $mode): array
+    {
+        $path = trim($path);
+        $referencePath = trim($referencePath);
+        $mode = $mode === 'before' ? 'before' : 'after';
+
+        if ($path === '' || $path === 'root') {
+            return ['error' => 'path must reference a non-root element.', 'code' => 'invalid_path'];
+        }
+
+        if ($referencePath === '' || $referencePath === 'root') {
+            return [
+                'error' => 'before_path/after_path must reference a non-root sibling.',
+                'code' => 'invalid_reference_path',
+            ];
+        }
+
+        if ($referencePath === $path) {
+            return [
+                'error' => 'An element cannot be placed relative to itself.',
+                'code' => 'invalid_reference_path',
+            ];
+        }
+
+        if ($this->pathIsDescendantOrSame($referencePath, $path)) {
+            return [
+                'error' => 'Cannot move an element next to one of its own descendants.',
+                'code' => 'invalid_reference_path',
+            ];
+        }
+
+        $source = $this->findElement($layout, $path);
+
+        if ($source === null) {
+            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+        }
+
+        if ($this->findElement($layout, $referencePath) === null) {
+            return [
+                'error' => "Reference path {$referencePath} not found.",
+                'code' => 'reference_not_found',
+            ];
+        }
+
+        $reference = $this->splitPath($referencePath);
+        $origin = $this->splitPath($path);
+
+        if ($reference === null || $origin === null) {
+            return ['error' => 'Malformed element path.', 'code' => 'invalid_path'];
+        }
+
+        [$referenceParent, $referenceIndex] = $reference;
+        [$originParent, $originIndex] = $origin;
+
+        $updated = $layout;
+
+        if (!$this->removeElementInPlace($updated, $path)) {
+            return ['error' => "Element path {$path} could not be removed.", 'code' => 'element_not_found'];
+        }
+
+        // Removing the element first shifts every later sibling of the same
+        // parent down by one, so both the reference index and the reference
+        // parent path have to follow it. The path matters when the reference
+        // lives under a later sibling of the element being moved.
+        $target = $referenceIndex;
+
+        if ($originParent === $referenceParent && $originIndex < $referenceIndex) {
+            $target--;
+        }
+
+        if ($mode === 'after') {
+            $target++;
+        }
+
+        $referenceParent = $this->adjustPathAfterRemoval($referenceParent, $originParent, $originIndex);
+
+        $newPath = $this->insertChildInPlace($updated, $referenceParent, $source['element'], $target);
+
+        if ($newPath === null) {
+            return [
+                'error' => "Reference parent path {$referenceParent} not found.",
+                'code' => 'reference_parent_not_found',
+            ];
+        }
+
+        $found = $this->findElement($updated, $newPath);
+
+        if ($found === null) {
+            return ['error' => 'Element was moved but could not be resolved.', 'code' => 'element_resolution_failed'];
+        }
+
+        return [
+            'layout' => $updated,
+            'old_path' => $path,
+            'new_path' => $newPath,
+            'reference_parent_path' => $referenceParent,
+            'metadata' => $found['metadata'],
+            'element' => $found['element'],
+        ];
+    }
+
+    /**
      * Clone an element as the next sibling.
      *
      * @param array<string, mixed> $layout
@@ -563,14 +677,14 @@ final class YoothemeElementNavigator
      * @param array<string, mixed> $layout
      * @param array<string, mixed> $element
      */
-    private function insertChildInPlace(array &$layout, string $parentPath, array $element, string $position): ?string
+    private function insertChildInPlace(array &$layout, string $parentPath, array $element, $position): ?string
     {
         if ($parentPath === 'root') {
             if (!isset($layout['children']) || !is_array($layout['children'])) {
                 $layout['children'] = [];
             }
 
-            $index = $position === 'prepend' ? 0 : count($layout['children']);
+            $index = $this->resolveInsertIndex(count($layout['children']), $position);
             array_splice($layout['children'], $index, 0, [$element]);
 
             return 'root>' . $this->nodeType($element) . '[' . $index . ']';
@@ -587,14 +701,14 @@ final class YoothemeElementNavigator
      * @param list<string> $segments
      * @param array<string, mixed> $element
      */
-    private function insertChildBySegments(array &$node, array $segments, string $parentPath, array $element, string $position): ?string
+    private function insertChildBySegments(array &$node, array $segments, string $parentPath, array $element, $position): ?string
     {
         if ($segments === []) {
             if (!isset($node['children']) || !is_array($node['children'])) {
                 $node['children'] = [];
             }
 
-            $index = $position === 'prepend' ? 0 : count($node['children']);
+            $index = $this->resolveInsertIndex(count($node['children']), $position);
             array_splice($node['children'], $index, 0, [$element]);
 
             return $parentPath . '>' . $this->nodeType($element) . '[' . $index . ']';
@@ -787,6 +901,68 @@ final class YoothemeElementNavigator
     /**
      * @return array{string, int}|null
      */
+    /**
+     * @param int|string $position `append`, `prepend`, or an explicit index
+     */
+    private function resolveInsertIndex(int $count, $position): int
+    {
+        if (is_int($position)) {
+            return max(0, min($position, $count));
+        }
+
+        return $position === 'prepend' ? 0 : $count;
+    }
+
+    /**
+     * Rewrite a path that pointed past a now-removed sibling.
+     *
+     * Only the segment directly under the removed element's parent can shift:
+     * everything above it is untouched, and everything below it keeps its own
+     * indices because its container did not change.
+     */
+    private function adjustPathAfterRemoval(string $path, string $removedParent, int $removedIndex): string
+    {
+        $prefix = $removedParent . '>';
+
+        if (!str_starts_with($path, $prefix)) {
+            return $path;
+        }
+
+        $rest = substr($path, strlen($prefix));
+        $separator = strpos($rest, '>');
+        $parsed = $this->parseSegment($separator === false ? $rest : substr($rest, 0, $separator));
+
+        if ($parsed === null || $parsed[1] <= $removedIndex) {
+            return $path;
+        }
+
+        return $prefix
+            . $parsed[0] . '[' . ($parsed[1] - 1) . ']'
+            . ($separator === false ? '' : substr($rest, $separator));
+    }
+
+    /**
+     * Split `root>section[0]>row[1]` into `root>section[0]` and `1`.
+     *
+     * @return array{0: string, 1: int, 2: string}|null parent path, child index, child type
+     */
+    private function splitPath(string $path): ?array
+    {
+        $separator = strrpos($path, '>');
+
+        if ($separator === false) {
+            return null;
+        }
+
+        $parsed = $this->parseSegment(substr($path, $separator + 1));
+
+        if ($parsed === null) {
+            return null;
+        }
+
+        return [substr($path, 0, $separator), $parsed[1], $parsed[0]];
+    }
+
     private function parseSegment(string $segment): ?array
     {
         if (!preg_match('/^(.+)\\[(\\d+)\\]$/', $segment, $matches)) {

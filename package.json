@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:joomla-yootheme-style-read && npm run test:yootheme-source-runtime && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
+    "test": "npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:tool-arguments && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:joomla-yootheme-style-read && npm run test:yootheme-source-runtime && npm run test:yootheme-elements && npm run test:yootheme-element-move && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
     "test:host-contract": "php docker/test-host-contract.php",
@@ -25,7 +25,10 @@
     "release:prepare": "node scripts/prepare-release.mjs",
     "test:wp-yootheme-style-read": "php docker/test-wp-yootheme-style-read.php",
     "test:joomla-yootheme-style-read": "php docker/test-joomla-yootheme-style-read.php",
-    "test:yootheme-source-runtime": "php docker/test-yootheme-source-runtime.php"
+    "test:yootheme-source-runtime": "php docker/test-yootheme-source-runtime.php",
+    "test:tool-arguments": "php docker/test-tool-arguments.php",
+    "test:yootheme-elements": "php docker/test-yootheme-elements.php",
+    "test:yootheme-element-move": "php docker/test-yootheme-element-move.php"
   },
   "engines": {
     "node": ">=20"
