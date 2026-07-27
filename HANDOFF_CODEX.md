@@ -216,6 +216,21 @@ Directori: `.release/v0.7.0/`
 `install-urls.md` i `release-notes.md` del mateix directori són generats per
 `scripts/prepare-release.mjs`.
 
+**Els ZIP no són reproduïbles**: reconstruir amb el mateix codi dona un SHA-256
+diferent perquè l'arxiu hi posa timestamps. Els hashes dels *feeds* identifiquen
+un artefacte concret, no el codi. Per comprovar que un site executa el codi
+d'un commit, comparar l'empremta del contingut, no la de l'arxiu:
+
+```bash
+# local, sobre el ZIP acabat de construir
+find . -type f -print0 | sort -z | xargs -0 shasum -a 256 | sed 's|\./mirasai-wp/|/|' | shasum -a 256
+# servidor, sobre el plugin instal·lat
+find ./mirasai-wp -type f -print0 | sort -z | xargs -0 sha256sum | sed 's|\./mirasai-wp/|/|' | sha256sum
+```
+
+El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
+`cc58c6762fbb4661e2c7c6596cd6ec43575793f9244b934caf6391c62b83e4fe`, 71 fitxers.
+
 ## Decisions i invariants a preservar
 
 - `vm` no és la frontera de seguretat per al worker remot.
