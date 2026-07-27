@@ -175,15 +175,33 @@ SHA-256 verificat dins el directori privat del rollback.
 
 ### Indústria Viva — WordPress
 
-Estat comprovat el 27 de juliol de 2026:
+Canària 0.7.0 feta el 27 de juliol de 2026, amb línia base capturada abans
+d'instal·lar i comparada després.
 
-- WordPress `7.0.2`
-- MirasAI WP declara `0.6.2`
+- WordPress `7.0.2`, PHP 8.4, tema actiu `yootheme-industria-viva` (child)
+- MirasAI WP `0.6.2` → `0.7.0`; eines 46 → 47 (+`template/style-create`)
+- ETag idèntic abans i després: `193f35065e75f8e9f0af6e22ecac7168`
+- `theme.1.css` i `theme.1.rtl.css` byte a byte iguals
+  (`6793fbce…`, `fe6ca513…`); cap escriptura d'estils
+- compilació pinada pel router: 276 imports, zero errors, 1.063 ms,
+  candidat idèntic a la base; worker `84d9406f…`
+- `style-verify`: `fresh: true`
+- els 8 assets relatius del CSS (7 fonts + 1 SVG) resolen a disc i HTTP 200
+- contracte d'arguments verificat en viu: `target_index` → `unknown_argument`
+  suggerint `target_parent_path`; `dry_run: "false"` → `invalid_argument_type`;
+  `position: middle` → `invalid_argument_value`; falta `if_match` →
+  `missing_required_argument`; `style-update` sense confirmar → bloquejat
+- cap error nou al log (els dos últims `Fatal` són `wp eval` mal escrits
+  d'aquesta sessió, no del plugin)
 
-La canària anterior va validar la correcció de la base de fonts i la
-compilació, però el paquet final no s'hi ha instal·lat. Abans de fer-ho,
-repetir preflight, JetBackup/còpia privada del plugin, instal·lació amb WP-CLI,
-lectura postinstal·lació, ETag, CSS i comprovació de tots els assets.
+**El front retorna 503 per disseny**, abans i després: la mu-plugin
+`industriaviva-site-lock` 1.1.0 tapa el frontend i el REST anònims i deixa
+passar l'usuari autenticat. No s'ha verificat el render visual de la portada
+per aquest motiu; els assets sí.
+
+Rollback privat:
+`/home/industriaviva/mirasai-backups/deploy-20260727-170309-pre-0.7.0`
+(plugin 0.6.2, `theme_mods_yootheme`, els dos CSS i `SHA256SUMS`).
 
 ## Artefactes 0.7.0
 
@@ -191,8 +209,8 @@ Directori: `.release/v0.7.0/`
 
 | Artefacte | SHA-256 |
 | --- | --- |
-| `pkg_mirasai-0.7.0.zip` | `cd78734531ca787af3fb942d72e61bdc64fe03b9672787d93d88b7016d9274b5` |
-| `mirasai-wp-0.7.0.zip` | `7036a0e0bb9cbd5c5c5e4ad0bc5a39fcc845ee70b394e7536a6b914419648096` |
+| `pkg_mirasai-0.7.0.zip` | `4d928b8bb0eae691b8e8d62dd32c24ad68580d1019da8fed35b7e01c19ba107a` |
+| `mirasai-wp-0.7.0.zip` | `858b83e5cf5af0d2d2c9bfa272628016604512bdf9550c6d1051845a4b5cd6d2` |
 | `miras-mirasai-mcp-0.7.0.tgz` | `ec503bff930bc86bc2a87735e1a678c35b21ab175869c2dbb9d92c2cad81b29f` |
 
 `install-urls.md` i `release-notes.md` del mateix directori són generats per
@@ -225,10 +243,10 @@ Directori: `.release/v0.7.0/`
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
 3. **Publicació pendent.** Merge a `main`, tag `v0.7.0`, push i GitHub Release
    amb els tres artefactes. Verificar els feeds després de publicar.
-4. **Indústria Viva pendent.** Auto Vigatana ja executa la canària 0.7.0 i té
-   rollback privat verificat. Conservar-lo fins que la versió estigui
-   consolidada. Instal·lar 0.7.0 a Indústria Viva només amb autorització i flux
-   reversible.
+4. ~~**Indústria Viva pendent.**~~ Fet: canària 0.7.0 verificada amb línia base
+   abans/després. Auto Vigatana i Indústria Viva executen totes dues la 0.7.0
+   amb rollback privat. Conservar els dos rollbacks fins que la versió estigui
+   publicada.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
 
