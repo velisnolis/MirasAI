@@ -25,6 +25,9 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementUpdatePropsTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateReadTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSourceTypesTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleReadTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleSourcesTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleUpdateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateTranslateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\ThemeExtractToModulesTool;
@@ -81,6 +84,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-types',
             'template/element-schema',
             'template/source-types',
+            'template/style-read',
+            'template/style-sources',
+            'template/style-update',
             'template/element-list',
             'template/element-read',
             'template/element-source-read',
@@ -107,6 +113,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-types'        => new TemplateElementTypesTool(),
             'template/element-schema'       => new TemplateElementSchemaTool(),
             'template/source-types'         => new TemplateSourceTypesTool(),
+            'template/style-read'           => new TemplateStyleReadTool(),
+            'template/style-sources'        => new TemplateStyleSourcesTool(),
+            'template/style-update'         => new TemplateStyleUpdateTool(),
             'template/element-list'         => new TemplateElementListTool(),
             'template/element-read'         => new TemplateElementReadTool(),
             'template/element-source-read'  => new TemplateElementSourceReadTool(),
