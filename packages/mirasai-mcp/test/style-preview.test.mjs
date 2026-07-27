@@ -343,3 +343,350 @@ test('style-update refuses a real write without explicit guarded confirmation', 
   assert.equal(result.code, 'guarded_write_confirmation_required');
   assert.equal(called, false);
 });
+
+test('style-update forwards an explicit empty variation so the host clears it', async () => {
+  const calls = [];
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name, args) {
+      calls.push({ name, args });
+
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: 'dark' },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-clear',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return { structuredContent: { action: 'preview', dry_run: true } };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    variation: '',
+    ifMatch: 'etag-clear',
+    dryRun: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, true);
+  const hostCall = calls.find((call) => call.name === 'template/style-update');
+  assert.equal(Object.hasOwn(hostCall.args, 'variation'), true);
+  assert.equal(hostCall.args.variation, '');
+});
+
+test('style-update reports a verified real write only after matching readback', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-before',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return {
+          structuredContent: {
+            action: 'updated',
+            dry_run: false,
+            new_etag: 'etag-after',
+          },
+        };
+      }
+
+      if (name === 'template/style-read') {
+        return {
+          structuredContent: {
+            etag: 'etag-after',
+            compiled: { stale_sources: false, stale_version: false },
+            warnings: [],
+          },
+        };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    ifMatch: 'etag-before',
+    dryRun: false,
+    confirmGuardedWrite: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.etag, 'etag-after');
+  assert.equal(result.verification.etag_matches_host_result, true);
+});
+
+test('style-update does not report success when the host only previews a real write', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-before',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return {
+          structuredContent: {
+            action: 'preview',
+            dry_run: true,
+            new_etag: 'etag-after',
+          },
+        };
+      }
+
+      if (name === 'template/style-read') {
+        return { structuredContent: { etag: 'etag-after', compiled: {}, warnings: [] } };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    ifMatch: 'etag-before',
+    dryRun: false,
+    confirmGuardedWrite: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'style_write_verification_failed');
+  assert.equal(result.stage, 'post_write_verification');
+  assert.equal(result.verification.host_action_is_updated, false);
+});
+
+test('style-update does not report success when readback has a different etag', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-before',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return {
+          structuredContent: {
+            action: 'updated',
+            dry_run: false,
+            new_etag: 'etag-after',
+          },
+        };
+      }
+
+      if (name === 'template/style-read') {
+        return { structuredContent: { etag: 'etag-other', compiled: {}, warnings: [] } };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    ifMatch: 'etag-before',
+    dryRun: false,
+    confirmGuardedWrite: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'style_write_verification_failed');
+  assert.equal(result.verification.etag_matches_host_result, false);
+});
+
+test('style-update turns a failed readback into a verification failure after write', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-before',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return {
+          structuredContent: {
+            action: 'updated',
+            dry_run: false,
+            new_etag: 'etag-after',
+          },
+        };
+      }
+
+      if (name === 'template/style-read') {
+        return {
+          structuredContent: {
+            error: 'Synthetic readback outage.',
+            code: 'readback_unavailable',
+          },
+        };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    ifMatch: 'etag-before',
+    dryRun: false,
+    confirmGuardedWrite: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'style_write_verification_failed');
+  assert.equal(result.verification.readback_succeeded, false);
+  assert.match(result.verification.readback_error, /Synthetic readback outage/);
+});

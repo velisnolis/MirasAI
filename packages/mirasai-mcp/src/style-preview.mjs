@@ -286,7 +286,9 @@ export async function updateStyle({
   const host = await hostCall(client, 'template/style-update', {
     if_match: ifMatch.trim(),
     style_id: preview.style.id,
-    ...(preview.style.variation ? { variation: preview.style.variation } : {}),
+    ...(preview.style.variation !== undefined && preview.style.variation !== null
+      ? { variation: preview.style.variation }
+      : {}),
     vars,
     unset_vars: unsetVars,
     ...(customLess !== undefined ? { custom_less: customLess } : {}),
@@ -319,21 +321,54 @@ export async function updateStyle({
     };
   }
 
-  const served = await hostCall(client, 'template/style-read', {});
+  let served = null;
+  let readbackError = null;
+
+  try {
+    served = await hostCall(client, 'template/style-read', {});
+  } catch (error) {
+    readbackError = error instanceof Error ? error.message : String(error);
+  }
+
+  const verification = {
+    host_action_is_updated: host?.action === 'updated',
+    host_confirms_real_write: host?.dry_run === false,
+    host_returned_new_etag: typeof host?.new_etag === 'string' && host.new_etag.trim() !== '',
+    readback_succeeded: readbackError === null,
+    readback_error: readbackError,
+    etag_matches_host_result: typeof host?.new_etag === 'string'
+      && typeof served?.etag === 'string'
+      && hashEquals(host.new_etag, served.etag),
+    compiled: served?.compiled ?? null,
+    warnings: served?.warnings ?? [],
+  };
+
+  if (!verification.host_action_is_updated
+    || !verification.host_confirms_real_write
+    || !verification.host_returned_new_etag
+    || !verification.readback_succeeded
+    || !verification.etag_matches_host_result
+  ) {
+    return {
+      ok: false,
+      dry_run: false,
+      error: 'The host may have written the Style, but post-write verification failed. Inspect the host result and private snapshot before retrying; do not blindly repeat the write.',
+      code: 'style_write_verification_failed',
+      stage: 'post_write_verification',
+      preview: safePreview,
+      host,
+      verification,
+      etag: served?.etag ?? host?.new_etag ?? null,
+    };
+  }
 
   return {
     ok: true,
     dry_run: false,
     preview: safePreview,
     host,
-    verification: {
-      etag_matches_host_result: typeof host?.new_etag === 'string'
-        && typeof served?.etag === 'string'
-        && hashEquals(host.new_etag, served.etag),
-      compiled: served?.compiled ?? null,
-      warnings: served?.warnings ?? [],
-    },
-    etag: served?.etag ?? host?.new_etag ?? null,
+    verification,
+    etag: served.etag,
   };
 }
 
