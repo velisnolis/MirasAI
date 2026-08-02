@@ -9,10 +9,13 @@ Objectiu de la sessió següent: publicar la 0.8.0 i decidir si es desplega.
 - Branca activa: `main`
 - La **0.7.0 està publicada** (tag i GitHub Release del 27-07-2026 amb cinc
   assets) i verificada en viu a Auto Vigatana i Indústria Viva.
-- La **0.8.0 està preparada i no publicada**. Versió declarada a tots els
-  *workspaces* i manifests; artefactes a `.release/v0.8.0/`; els *feeds* ja hi
-  apunten, però les URLs no seran consumibles fins que es publiqui.
-- Cinc commits per sobre de la 0.7.0, tots amb la suite verda.
+- La **0.8.0 està a `main` i etiquetada** (`v0.8.0`, commit `a9a1dad`), amb
+  artefactes a `.release/v0.8.0/` i els *feeds* apuntant-hi.
+- **Falta la GitHub Release.** Fins que no existeixi, les URLs de descàrrega
+  dels *feeds* donen 404 i les actualitzacions automàtiques de Joomla i
+  WordPress no trobaran el paquet. `gh` és un àlies a `op plugin run -- gh` i
+  1Password ha d'estar desbloquejat per crear-la.
+- **Indústria Viva ja executa la 0.8.0**, canària verificada el 02-08-2026.
 
 ### Què hi ha a la 0.8.0
 
@@ -216,6 +219,42 @@ Rollback privat:
 `/home/industriaviva/mirasai-backups/deploy-20260727-170309-pre-0.7.0`
 (plugin 0.6.2, `theme_mods_yootheme`, els dos CSS i `SHA256SUMS`).
 
+### Indústria Viva — canària 0.8.0
+
+Feta el 2 d'agost de 2026, amb línia base capturada abans i comparada després.
+
+- MirasAI WP `0.7.0` → `0.8.0`; 47 eines abans i després; 71 → 72 fitxers
+  (`YoothemePropsValidator.php`)
+- ETag d'estil, ETag del layout de la pàgina 65 i `theme.1.css` **idèntics**
+  abans i després; cap escriptura
+- cap `PHP Fatal` posterior a la instal·lació
+- portada 503 per disseny (mu-plugin `industriaviva-site-lock`), igual que abans
+
+El que canvia, sobre el binding real de la portada
+(`root>section[3]>row[0]>column[0]>text[1]`):
+
+| | 0.7.0 | 0.8.0 |
+| --- | --- | --- |
+| `query_arguments` | `[]` | els 5 reals, amb `iv_ambit_include_children` |
+| `query_shape` | absent | `dotted` |
+| `query_path` | absent | `ivCurss.customIvCurss` |
+| `_condition` filters | absents | `{condition: "!!", show_empty: true}` |
+
+Contracte nou verificat en viu, tot amb `dry_run`:
+
+```
+update-props padding_bottom=medium      invalid_prop_value   padding_bottom
+update-props padding_bottom=large       OK
+element-clone after_path                OK
+element-clone amb les dues col·locacions invalid_placement
+element-add before_path                 OK
+element-move + target_index             unknown_argument     target_index
+```
+
+Rollback privat:
+`/home/industriaviva/mirasai-backups/deploy-20260802-112209-pre-0.8.0`
+(plugin 0.7.0, `theme_mods_yootheme`, CSS, contingut de la pàgina 65, `SHA256SUMS`).
+
 ## Artefactes 0.8.0
 
 Directori: `.release/v0.8.0/`
@@ -271,11 +310,12 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
    línia dels dos helpers d'estil (1.200 i 700 línies): es confia en la suite i
    en la verificació a Auto Vigatana.
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
-3. **Publicació de la 0.8.0 pendent.** Push de `main`, tag `v0.8.0` i GitHub
-   Release amb els tres artefactes. Verificar els feeds després de publicar.
-4. **Desplegament de la 0.8.0 pendent.** Auto Vigatana i Indústria Viva
-   executen la 0.7.0 amb rollback privat conservat. Repetir el flux de canària
-   quan s'aprovi: línia base, còpia privada, instal·lació, comparació.
+3. **GitHub Release de la 0.8.0 pendent.** `main` i `v0.8.0` ja són a
+   `origin`. Falta la Release amb els cinc assets de `.release/v0.8.0/`.
+   Verificar els feeds just després: els seus `download_url` són 404 fins
+   llavors.
+4. **Auto Vigatana pendent.** Segueix a la 0.7.0. Indústria Viva ja porta la
+   0.8.0. Conservar els dos rollbacks fins que la versió estigui publicada.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
 
