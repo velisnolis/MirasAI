@@ -133,6 +133,38 @@ $summary = (new TestWpSourceSummarizer())->summarize([
 expectWpYoothemeSource('summarizeBinding prefers source over props.source', $summary['canonical_location'] ?? null, 'source');
 expectWpYoothemeSource('summarizeBinding reports source name', $summary['source_name'] ?? null, 'Post');
 
+// The verification tool has to tell the whole truth: a date format lives in
+// `filters`, is applied at render time, and used to read back as an unadorned
+// mapping. `other_keys` names anything YOOtheme adds that we do not model yet,
+// rather than dropping it silently the way `filters` was dropped.
+$filtered = (new TestWpSourceSummarizer())->summarize([
+    'source' => [
+        'query' => ['name' => 'Post', 'field' => ['name' => 'post']],
+        'props' => [
+            'content' => [
+                'name' => 'date',
+                'filters' => ['date' => 'd/m/Y'],
+                'future_key' => ['x' => 1],
+            ],
+        ],
+    ],
+]);
+expectWpYoothemeSource(
+    'summarizeBinding reports field filters',
+    $filtered['field_mappings'][0]['filters'] ?? null,
+    ['date' => 'd/m/Y']
+);
+expectWpYoothemeSource(
+    'summarizeBinding names keys it does not model',
+    $filtered['field_mappings'][0]['other_keys'] ?? null,
+    ['future_key']
+);
+expectWpYoothemeSource(
+    'summarizeBinding leaves absent filters empty',
+    $summary['field_mappings'][0]['filters'] ?? null,
+    []
+);
+
 $deleted = $navigator->deleteElementSource($set['layout'], $path);
 expectWpYoothemeSource('deleteElementSource removes source', isset($deleted['element']['source']), false);
 expectWpYoothemeSource('deleteElementSource reports source location first', $deleted['removed_locations'], ['source']);

@@ -43,11 +43,21 @@ trait TemplateElementSourceSupportTrait
                 continue;
             }
 
+            // `filters` carries date and number formatting and is applied at
+            // render time, so a summary without it says a binding is plain
+            // when it is not. `other_keys` keeps the same omission from
+            // happening again the next time YOOtheme adds a key: the reader
+            // may not know what it means, but it must not pretend it is absent.
             $mappings[] = [
                 'prop' => (string) $propName,
                 'field' => $fieldName,
                 'arguments' => $this->sanitizeValue($mapping['arguments'] ?? []),
                 'directives' => $this->sanitizeValue($mapping['directives'] ?? []),
+                'filters' => $this->sanitizeValue($mapping['filters'] ?? []),
+                'other_keys' => array_values(array_diff(
+                    array_map('strval', array_keys($mapping)),
+                    ['name', 'arguments', 'directives', 'filters']
+                )),
             ];
         }
 
