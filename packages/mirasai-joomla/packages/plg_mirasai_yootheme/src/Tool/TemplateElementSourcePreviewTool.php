@@ -281,7 +281,7 @@ class TemplateElementSourcePreviewTool extends AbstractTool
             'query_directives' => ['type' => 'object', 'description' => 'Optional query field directives.'],
             'field_mappings' => [
             'type' => 'object',
-            'description' => 'Map element prop names to source field names or mapping objects.',
+            'description' => 'Map element prop names to source field names or mapping objects. The native visibility condition is a mapping like any other, under the reserved prop _condition: {"_condition": {"name": "#index", "filters": {"condition": "!!", "show_empty": true}}} hides the element when the query returns nothing.',
             'additionalProperties' => [
                 'type' => ['string', 'object'],
                 'description' => 'A field name, or a mapping object. Date and number formatting goes in filters, not in arguments or directives.',

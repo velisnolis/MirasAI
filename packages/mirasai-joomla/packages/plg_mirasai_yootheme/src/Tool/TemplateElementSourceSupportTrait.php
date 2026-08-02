@@ -66,12 +66,42 @@ trait TemplateElementSourceSupportTrait
             'canonical_location' => $location,
             'source_name' => is_string($query['name'] ?? null) ? (string) $query['name'] : null,
             'query_field' => is_string($queryField['name'] ?? null) ? (string) $queryField['name'] : null,
-            'query_arguments' => $this->sanitizeValue($queryField['arguments'] ?? []),
-            'query_directives' => $this->sanitizeValue($queryField['directives'] ?? []),
+            'query_shape' => $queryField !== [] ? 'nested' : 'dotted',
+            'query_path' => $this->queryPath($query, $queryField),
+            // The Builder puts the arguments on the query itself and folds the
+            // field into a dotted name; MirasAI's own writer used to nest them
+            // under query.field. Reading only the nested carrier reported "no
+            // arguments" for every binding made in the Builder, which is all of
+            // them in practice — and those arguments are the ones that are hard
+            // to get right in the first place.
+            'query_arguments' => $this->sanitizeValue($queryField['arguments'] ?? $query['arguments'] ?? []),
+            'query_directives' => $this->sanitizeValue($queryField['directives'] ?? $query['directives'] ?? []),
             'field_mappings' => $mappings,
             'mapping_count' => count($mappings),
             'raw_source' => $this->sanitizeValue($source),
         ];
+    }
+
+    /**
+     * The full dotted path of a binding's query, whichever carrier holds it.
+     *
+     * `template/source-types` addresses a source by this path, so reporting it
+     * turns a binding straight into the call that explains it.
+     *
+     * @param array<string, mixed> $query
+     * @param array<string, mixed> $queryField
+     */
+    private function queryPath(array $query, array $queryField): ?string
+    {
+        $name = is_string($query['name'] ?? null) ? trim((string) $query['name']) : '';
+
+        if ($name === '') {
+            return null;
+        }
+
+        $field = is_string($queryField['name'] ?? null) ? trim((string) $queryField['name']) : '';
+
+        return $field === '' ? $name : $name . '.' . $field;
     }
 
     /**
@@ -180,27 +210,30 @@ trait TemplateElementSourceSupportTrait
             return ['error' => 'field_mappings must be a non-empty object when source is omitted.', 'code' => 'missing_field_mappings'];
         }
 
-        $query = ['name' => $sourceName];
+        // Write what the Builder writes: one dotted query name, arguments on the
+        // query itself. MirasAI used to keep source_name and query_field in
+        // separate keys, so the same binding looked different depending on who
+        // made it, and a page holding both was a source of surprises. Callers
+        // may still pass them separately; they get joined here.
         $queryField = trim((string) ($arguments['query_field'] ?? ''));
+        $query = [
+            'name' => $queryField !== '' ? $sourceName . '.' . $queryField : $sourceName,
+        ];
 
-        if ($queryField !== '') {
-            $query['field'] = ['name' => $queryField];
-
-            if (isset($arguments['query_arguments'])) {
-                if (!is_array($arguments['query_arguments'])) {
-                    return ['error' => 'query_arguments must be an object.', 'code' => 'invalid_query_arguments'];
-                }
-
-                $query['field']['arguments'] = $arguments['query_arguments'];
+        if (isset($arguments['query_arguments'])) {
+            if (!is_array($arguments['query_arguments'])) {
+                return ['error' => 'query_arguments must be an object.', 'code' => 'invalid_query_arguments'];
             }
 
-            if (isset($arguments['query_directives'])) {
-                if (!is_array($arguments['query_directives'])) {
-                    return ['error' => 'query_directives must be an object.', 'code' => 'invalid_query_directives'];
-                }
+            $query['arguments'] = $arguments['query_arguments'];
+        }
 
-                $query['field']['directives'] = $arguments['query_directives'];
+        if (isset($arguments['query_directives'])) {
+            if (!is_array($arguments['query_directives'])) {
+                return ['error' => 'query_directives must be an object.', 'code' => 'invalid_query_directives'];
             }
+
+            $query['directives'] = $arguments['query_directives'];
         }
 
         $props = [];
