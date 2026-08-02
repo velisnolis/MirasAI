@@ -178,24 +178,7 @@ class TemplateElementSchemaTool extends AbstractTool
 
     private function findElementsRoot(): ?string
     {
-        $siteRoot = defined('JPATH_SITE') ? JPATH_SITE : (defined('JPATH_ROOT') ? JPATH_ROOT : '');
-
-        if (!is_string($siteRoot) || $siteRoot === '') {
-            return null;
-        }
-
-        $candidates = [
-            $siteRoot . '/templates/yootheme/packages/builder/elements',
-            $siteRoot . '/media/templates/site/yootheme/packages/builder/elements',
-        ];
-
-        foreach ($candidates as $candidate) {
-            if (is_dir($candidate)) {
-                return rtrim($candidate, '/');
-            }
-        }
-
-        return null;
+        return YoothemeElementDefinitionLoader::root();
     }
 
     /**
@@ -203,23 +186,7 @@ class TemplateElementSchemaTool extends AbstractTool
      */
     private function loadDefinition(string $file): array
     {
-        try {
-            $definition = include $file;
-        } catch (\Throwable $exception) {
-            return [
-                'error' => 'Unable to load YOOtheme element definition: ' . $exception->getMessage(),
-                'code' => 'element_schema_load_failed',
-            ];
-        }
-
-        if (!is_array($definition)) {
-            return [
-                'error' => 'YOOtheme element definition did not return an array.',
-                'code' => 'element_schema_invalid',
-            ];
-        }
-
-        return $definition;
+        return YoothemeElementDefinitionLoader::loadFile($file);
     }
 
     /**

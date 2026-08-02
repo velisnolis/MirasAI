@@ -51,7 +51,20 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
         return $this->mutateTemplateElement(
             $arguments,
             function (array $layout) use ($path, $props, $merge, $includeElement): array {
-                $updated = (new YoothemeElementNavigator())->updateElementProps($layout, $path, $props, $merge);
+                $navigator = new YoothemeElementNavigator();
+                $target = $navigator->findElement($layout, $path);
+
+                if ($target === null) {
+                    return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+                }
+
+                $rejection = $this->rejectInvalidProps((string) ($target['element']['type'] ?? ''), $props);
+
+                if ($rejection !== null) {
+                    return $rejection;
+                }
+
+                $updated = $navigator->updateElementProps($layout, $path, $props, $merge);
 
                 if ($updated === null) {
                     return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];

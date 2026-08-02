@@ -47,6 +47,32 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
     }
 
     /**
+     * Refuse prop values the installed element does not offer.
+     *
+     * Silence is not an option here, but neither is guessing: when the element
+     * definition cannot be loaded — a third-party element, a type YOOtheme no
+     * longer ships — there is nothing to check against, and the write proceeds
+     * exactly as it did before.
+     *
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>|null
+     */
+    protected function rejectInvalidProps(string $elementType, array $props): ?array
+    {
+        if ($elementType === '' || $props === []) {
+            return null;
+        }
+
+        $definition = YoothemeElementDefinitionLoader::load($elementType);
+
+        if (isset($definition['error']) || !is_array($definition['fields'] ?? null)) {
+            return null;
+        }
+
+        return YoothemePropsValidator::validate($elementType, $definition['fields'], $props);
+    }
+
+    /**
      * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
      * @return array<string, mixed>
      */

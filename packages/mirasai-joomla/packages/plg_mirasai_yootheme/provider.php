@@ -22,6 +22,8 @@ require_once $pluginSrc . '/Tool/MenuMigrateThemeToModulesTool.php';
 require_once $pluginSrc . '/Tool/TemplateListTool.php';
 require_once $pluginSrc . '/Tool/TemplateSummaryTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementTypesTool.php';
+require_once $pluginSrc . '/Tool/YoothemeElementDefinitionLoader.php';
+require_once $pluginSrc . '/Tool/YoothemePropsValidator.php';
 require_once $pluginSrc . '/Tool/TemplateElementSchemaTool.php';
 require_once $pluginSrc . '/Tool/TemplateSourceTypesTool.php';
 require_once $pluginSrc . '/Tool/YoothemeStyleHelper.php';
