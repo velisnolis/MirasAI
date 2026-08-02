@@ -135,7 +135,9 @@ expect('read tool exposes annotations idempotentHint', $readOnlyDecoded['annotat
 echo "\n=== Joomla YOOtheme element write schemas ===\n";
 
 $joomlaElementWriteSchemas = [
-    'element-add' => [TemplateElementAddTool::class, ['parent_path', 'if_match', 'element']],
+    // parent_path stopped being required when before_path/after_path became
+    // able to determine the parent on their own.
+    'element-add' => [TemplateElementAddTool::class, ['if_match', 'element']],
     'element-update-props' => [TemplateElementUpdatePropsTool::class, ['path', 'if_match', 'props']],
     'element-move' => [TemplateElementMoveTool::class, ['path', 'if_match']],
     'element-clone' => [TemplateElementCloneTool::class, ['path', 'if_match']],
@@ -153,14 +155,25 @@ foreach ($joomlaElementWriteSchemas as $name => [$class, $required]) {
     expect("joomla {$name} schema required fields", $schema['required'] ?? [], $required);
 }
 
-$joomlaElementMoveSchema = schemaForToolWithoutConstructor(TemplateElementMoveTool::class);
-$joomlaElementMoveProperties = $joomlaElementMoveSchema['properties'] ?? [];
-foreach (['target_parent_path', 'before_path', 'after_path'] as $placement) {
-    expect(
-        "joomla element-move schema exposes {$placement} placement",
-        array_key_exists($placement, $joomlaElementMoveProperties),
-        true,
-    );
+// Every tool that puts an element somewhere has to offer the same placement
+// vocabulary. When only element-move had it, callers reached for after_path on
+// element-add, got a rejection, and fell back to appending plus a guessed index.
+$placementSchemas = [
+    'element-move' => [TemplateElementMoveTool::class, ['target_parent_path', 'before_path', 'after_path']],
+    'element-add' => [TemplateElementAddTool::class, ['parent_path', 'before_path', 'after_path']],
+    'element-clone' => [TemplateElementCloneTool::class, ['before_path', 'after_path']],
+];
+
+foreach ($placementSchemas as $name => [$class, $placements]) {
+    $properties = schemaForToolWithoutConstructor($class)['properties'] ?? [];
+
+    foreach ($placements as $placement) {
+        expect(
+            "joomla {$name} schema exposes {$placement} placement",
+            array_key_exists($placement, $properties),
+            true,
+        );
+    }
 }
 
 expect(

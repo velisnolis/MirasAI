@@ -303,6 +303,116 @@ final class YooThemeElementNavigator
     }
 
     /**
+     * Insert a new element immediately before or after a reference sibling.
+     *
+     * Nothing is removed here, so unlike moveElementBeside() the reference
+     * index needs no rebasing: everything at or after the insertion point
+     * shifts up by one, and the reference is one of those.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $element
+     * @param string $mode `before` or `after`
+     * @return array{layout: array<string, mixed>, metadata: array<string, mixed>, element: array<string, mixed>, reference_parent_path: string}|array{error: string, code: string}
+     */
+    public function addElementBeside(array $layout, string $referencePath, array $element, string $mode): array
+    {
+        $referencePath = trim($referencePath);
+        $mode = $mode === 'before' ? 'before' : 'after';
+        $element = $this->normalizeNewElement($element);
+
+        if ($referencePath === '' || $referencePath === 'root') {
+            return [
+                'error' => 'before_path/after_path must reference a non-root sibling.',
+                'code' => 'invalid_reference_path',
+            ];
+        }
+
+        if (!$this->validElement($element)) {
+            return ['error' => 'element must be an object with a non-empty string type.', 'code' => 'invalid_element'];
+        }
+
+        if ($this->findElement($layout, $referencePath) === null) {
+            return [
+                'error' => "Reference path {$referencePath} not found.",
+                'code' => 'reference_not_found',
+            ];
+        }
+
+        $reference = $this->splitPath($referencePath);
+
+        if ($reference === null) {
+            return ['error' => 'Malformed element path.', 'code' => 'invalid_path'];
+        }
+
+        [$referenceParent, $referenceIndex] = $reference;
+        $target = $mode === 'before' ? $referenceIndex : $referenceIndex + 1;
+
+        $updated = $layout;
+        $newPath = $this->insertChildInPlace($updated, $referenceParent, $element, $target);
+
+        if ($newPath === null) {
+            return [
+                'error' => "Reference parent path {$referenceParent} not found.",
+                'code' => 'reference_parent_not_found',
+            ];
+        }
+
+        $found = $this->findElement($updated, $newPath);
+
+        if ($found === null) {
+            return ['error' => 'Element was added but could not be resolved.', 'code' => 'element_resolution_failed'];
+        }
+
+        return [
+            'layout' => $updated,
+            'metadata' => $found['metadata'],
+            'element' => $found['element'],
+            'reference_parent_path' => $referenceParent,
+        ];
+    }
+
+    /**
+     * Clone an element and place the copy next to a reference sibling.
+     *
+     * cloneElement() always lands the copy directly after its source, which is
+     * fine for duplicating in place and useless for composing a page. This
+     * takes the same copy and puts it where the caller asked.
+     *
+     * @param array<string, mixed> $layout
+     * @param string $mode `before` or `after`
+     * @return array{layout: array<string, mixed>, source_path: string, new_path: string, metadata: array<string, mixed>, element: array<string, mixed>, reference_parent_path: string}|array{error: string, code: string}
+     */
+    public function cloneElementBeside(array $layout, string $path, string $referencePath, string $mode): array
+    {
+        $path = trim($path);
+
+        if ($path === '' || $path === 'root') {
+            return ['error' => 'path must reference a non-root element.', 'code' => 'invalid_path'];
+        }
+
+        $source = $this->findElement($layout, $path);
+
+        if ($source === null) {
+            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+        }
+
+        $result = $this->addElementBeside($layout, $referencePath, $source['element'], $mode);
+
+        if (isset($result['error'])) {
+            return $result;
+        }
+
+        return [
+            'layout' => $result['layout'],
+            'source_path' => $path,
+            'new_path' => $result['metadata']['path'],
+            'metadata' => $result['metadata'],
+            'element' => $result['element'],
+            'reference_parent_path' => $result['reference_parent_path'],
+        ];
+    }
+
+    /**
      * Move an element under a new parent.
      *
      * @param array<string, mixed> $layout

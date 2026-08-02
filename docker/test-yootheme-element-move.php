@@ -173,6 +173,69 @@ foreach ($navigators as $host => $navigator) {
         'element_not_found'
     );
 
+    // Adding and cloning must be able to land in the middle too. Composing a
+    // page with add-then-move leaves a window where the layout is wrong, and
+    // that window is where the 1 August incident happened: an index computed
+    // against an assumed position deleted the wrong section.
+    $result = $navigator->addElementBeside(
+        layoutWithSections(4),
+        'root>section[2]',
+        ['type' => 'section', 'props' => ['title' => 'Inserted']],
+        'before'
+    );
+    check("{$host}: addElementBeside inserts before its reference", sectionTitles($result['layout']), [
+        'Section 0', 'Section 1', 'Inserted', 'Section 2', 'Section 3',
+    ]);
+    check("{$host}: addElementBeside reports the settled path", $result['metadata']['path'], 'root>section[2]');
+    check("{$host}: addElementBeside reports the derived parent", $result['reference_parent_path'], 'root');
+
+    $result = $navigator->addElementBeside(
+        layoutWithSections(4),
+        'root>section[3]',
+        ['type' => 'section', 'props' => ['title' => 'Inserted']],
+        'after'
+    );
+    check("{$host}: addElementBeside after the last sibling appends", sectionTitles($result['layout']), [
+        'Section 0', 'Section 1', 'Section 2', 'Section 3', 'Inserted',
+    ]);
+
+    // The copy must land where asked, not next to its source.
+    $result = $navigator->cloneElementBeside(layoutWithSections(4), 'root>section[0]', 'root>section[2]', 'after');
+    check("{$host}: cloneElementBeside places the copy at the reference", sectionTitles($result['layout']), [
+        'Section 0', 'Section 1', 'Section 2', 'Section 0', 'Section 3',
+    ]);
+    check("{$host}: cloneElementBeside keeps the source", $result['source_path'], 'root>section[0]');
+    check("{$host}: cloneElementBeside reports where the copy landed", $result['new_path'], 'root>section[3]');
+
+    // A clone placed before its own source pushes the source along; the
+    // reported paths have to reflect the layout that actually exists now.
+    $result = $navigator->cloneElementBeside(layoutWithSections(3), 'root>section[2]', 'root>section[0]', 'before');
+    check("{$host}: a clone inserted ahead of its source", sectionTitles($result['layout']), [
+        'Section 2', 'Section 0', 'Section 1', 'Section 2',
+    ]);
+    check("{$host}: the copy path is the inserted one", $result['new_path'], 'root>section[0]');
+
+    check(
+        "{$host}: addElementBeside refuses root as a reference",
+        $navigator->addElementBeside(layoutWithSections(3), 'root', ['type' => 'section'], 'after')['code'] ?? null,
+        'invalid_reference_path'
+    );
+    check(
+        "{$host}: addElementBeside refuses a missing reference",
+        $navigator->addElementBeside(layoutWithSections(3), 'root>section[9]', ['type' => 'section'], 'after')['code'] ?? null,
+        'reference_not_found'
+    );
+    check(
+        "{$host}: addElementBeside refuses an element without a type",
+        $navigator->addElementBeside(layoutWithSections(3), 'root>section[1]', ['props' => []], 'after')['code'] ?? null,
+        'invalid_element'
+    );
+    check(
+        "{$host}: cloneElementBeside refuses a missing source",
+        $navigator->cloneElementBeside(layoutWithSections(3), 'root>section[9]', 'root>section[1]', 'after')['code'] ?? null,
+        'element_not_found'
+    );
+
     // append/prepend must keep behaving exactly as before.
     $appended = $navigator->moveElement(layoutWithSections(3), 'root>section[0]', 'root', 'append');
     check("{$host}: append still appends", sectionTitles($appended['layout']), ['Section 1', 'Section 2', 'Section 0']);
