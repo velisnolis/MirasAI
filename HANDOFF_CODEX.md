@@ -11,10 +11,8 @@ Objectiu de la sessió següent: publicar la 0.8.0 i decidir si es desplega.
   assets) i verificada en viu a Auto Vigatana i Indústria Viva.
 - La **0.8.0 està a `main` i etiquetada** (`v0.8.0`, commit `a9a1dad`), amb
   artefactes a `.release/v0.8.0/` i els *feeds* apuntant-hi.
-- **Falta la GitHub Release.** Fins que no existeixi, les URLs de descàrrega
-  dels *feeds* donen 404 i les actualitzacions automàtiques de Joomla i
-  WordPress no trobaran el paquet. `gh` és un àlies a `op plugin run -- gh` i
-  1Password ha d'estar desbloquejat per crear-la.
+- **GitHub Release publicada** el 02-08-2026 amb els cinc assets. Descàrregues
+  verificades a 200 i els SHA-256 publicats coincideixen amb els dels *feeds*.
 - **Indústria Viva ja executa la 0.8.0**, canària verificada el 02-08-2026.
 
 ### Què hi ha a la 0.8.0
@@ -310,10 +308,14 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
    línia dels dos helpers d'estil (1.200 i 700 línies): es confia en la suite i
    en la verificació a Auto Vigatana.
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
-3. **GitHub Release de la 0.8.0 pendent.** `main` i `v0.8.0` ja són a
-   `origin`. Falta la Release amb els cinc assets de `.release/v0.8.0/`.
-   Verificar els feeds just després: els seus `download_url` són 404 fins
-   llavors.
+3. ~~**Publicació de la 0.8.0.**~~ Feta: `main`, tag `v0.8.0`, Release amb cinc
+   assets i *feeds* verificats.
+
+   **Nota de procés**: entre el push del tag i la Release, els *feeds* en viu
+   van anunciar una versió amb l'asset a 404. Va durar poc perquè es va fer
+   seguit, però la propera vegada val la pena retenir el commit dels feeds fins
+   que la Release existeixi. Vegeu
+   `~/.agent-system/runbooks/agent-shell-tty-and-1password.md`.
 4. **Auto Vigatana pendent.** Segueix a la 0.7.0. Indústria Viva ja porta la
    0.8.0. Conservar els dos rollbacks fins que la versió estigui publicada.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
