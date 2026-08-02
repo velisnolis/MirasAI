@@ -29,7 +29,7 @@ class TemplateSourceTypesTool extends AbstractTool
                 ],
                 'source_name' => [
                     'type' => 'string',
-                    'description' => 'Optional YOOtheme source query path to resolve exactly, for example article, customArticles, or youtubeChannel1C7D1A.videos.',
+                    'description' => 'Full dotted source path from the query root, for example article, customArticles, or youtubeChannel1C7D1A.videos. A binding stores this as source_name plus query_field, so join them with a dot. Returns the query arguments with their GraphQL types plus every mappable result field and its own arguments. An unresolvable path fails and suggests the real one.',
                 ],
                 'include_fields' => [
                     'type' => 'boolean',
@@ -65,9 +65,12 @@ class TemplateSourceTypesTool extends AbstractTool
         $type = trim((string) ($arguments['type'] ?? ''));
         $sourceName = trim((string) ($arguments['source_name'] ?? ''));
         $kind = trim((string) ($arguments['kind'] ?? 'all'));
+        // When the caller names a source, binding_hints is the answer; expanding
+        // every field of all 47 types on top of it buries what they asked for.
+        // A `type` filter is different: there the fields are the answer.
         $includeFields = array_key_exists('include_fields', $arguments)
             ? (bool) $arguments['include_fields']
-            : $type !== '' || $sourceName !== '';
+            : $type !== '';
         $includeRaw = !empty($arguments['include_raw']);
         $includeBindingHints = array_key_exists('include_binding_hints', $arguments)
             ? (bool) $arguments['include_binding_hints']
@@ -88,6 +91,16 @@ class TemplateSourceTypesTool extends AbstractTool
         $live = $this->loadLiveSourceSchema($type, $sourceName, $kind, $includeFields, $includeRaw, $includeBindingHints);
 
         if (!isset($live['error'])) {
+            return $live;
+        }
+
+        // Only a runtime that cannot answer justifies the static package scan.
+        // A source_name the caller got wrong is answerable — with the real path
+        // — and falling back would replace that answer with a list of installed
+        // packages, which is how a precise message became an unhelpful one.
+        $runtimeFailures = ['source_runtime_unavailable', 'source_introspection_failed', 'source_schema_missing'];
+
+        if (!in_array($live['code'] ?? '', $runtimeFailures, true)) {
             return $live;
         }
 
@@ -137,6 +150,7 @@ class TemplateSourceTypesTool extends AbstractTool
             ];
         }
 
+        $segmentsForSuggestion = $sourceName !== '' ? explode('.', $sourceName) : [''];
         $queryTypeName = is_array($schema['queryType'] ?? null)
             ? (string) ($schema['queryType']['name'] ?? 'Query')
             : 'Query';
@@ -216,6 +230,35 @@ class TemplateSourceTypesTool extends AbstractTool
             $response['binding_hints'] = $sourceName !== ''
                 ? $this->resolveSourceBindingHints($sourceName, $queryTypeName, $typeMap)
                 : $this->summarizeQueryBindingHints($queryTypeName, $typeMap);
+        }
+
+        // A source_name that does not resolve is a failed call, not a footnote.
+        // It used to sit at the bottom of a successful-looking response holding
+        // every type in the schema, which is how "there is no way to discover a
+        // source's arguments" became true in practice while the arguments were
+        // in the payload all along.
+        $hints = $response['binding_hints'] ?? null;
+
+        if ($sourceName !== '' && is_array($hints) && isset($hints['error'])) {
+            $suggestions = $this->suggestSourcePaths(
+                (string) end($segmentsForSuggestion),
+                $queryTypeName,
+                $typeMap
+            );
+
+            return [
+                'error' => $hints['error'],
+                'code' => $hints['code'] ?? 'source_field_not_found',
+                'source_name' => $sourceName,
+                'resolved_path' => $hints['resolved_path'] ?? [],
+                'available_fields' => $hints['available_fields'] ?? [],
+                ...($suggestions !== [] ? ['did_you_mean' => $suggestions] : []),
+                'action_required' => $suggestions !== []
+                    ? 'A source is addressed by its full dotted path from the query root. Retry with one of did_you_mean.'
+                    : 'A source is addressed by its full dotted path from the query root, for example ivCurss.customIvCurss. Call again without source_name to list what the root offers.',
+                'query_type' => $queryTypeName,
+                'runtime_bootstrap' => $bootstrap,
+            ];
         }
 
         return $response;
@@ -564,6 +607,75 @@ class TemplateSourceTypesTool extends AbstractTool
         }
 
         return $hints;
+    }
+
+    /**
+     * Dotted paths whose last segment is the name the caller asked for.
+     *
+     * A binding stores the source as `source_name` plus `query_field`, so the
+     * name people reach for — `customIvCurss` — is a segment, not a path, and
+     * resolving it against Query fails. Rather than making them guess that the
+     * answer is `ivCurss.customIvCurss`, walk the graph and say so.
+     *
+     * @param array<string, array<string, mixed>> $typeMap
+     * @return list<string>
+     */
+    private function suggestSourcePaths(string $wanted, string $queryTypeName, array $typeMap, int $maxDepth = 3): array
+    {
+        $wanted = strtolower($wanted);
+
+        if ($wanted === '') {
+            return [];
+        }
+
+        $matches = [];
+        // Ancestors travel with each branch: a type may legitimately appear on
+        // two different routes, and deduplicating by type alone would silently
+        // drop one of the answers. Carrying them per branch stops cycles
+        // without hiding an alternative the caller may need.
+        $queue = [[$queryTypeName, [], [$queryTypeName => true]]];
+        $steps = 0;
+
+        while ($queue !== [] && count($matches) < 10 && $steps++ < 2_000) {
+            [$typeName, $prefix, $ancestors] = array_shift($queue);
+
+            if (count($prefix) >= $maxDepth) {
+                continue;
+            }
+
+            $type = $typeMap[$typeName] ?? null;
+
+            if (!is_array($type)) {
+                continue;
+            }
+
+            foreach (($type['fields'] ?? []) as $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+
+                $name = (string) ($field['name'] ?? '');
+
+                if ($name === '') {
+                    continue;
+                }
+
+                $path = [...$prefix, $name];
+
+                if (strtolower($name) === $wanted) {
+                    $matches[] = implode('.', $path);
+                    continue;
+                }
+
+                $result = $this->unwrapTypeRef($field['type'] ?? null);
+
+                if ($result['kind'] === 'OBJECT' && $result['name'] !== '' && !isset($ancestors[$result['name']])) {
+                    $queue[] = [$result['name'], $path, $ancestors + [$result['name'] => true]];
+                }
+            }
+        }
+
+        return array_values(array_unique($matches));
     }
 
     /**
