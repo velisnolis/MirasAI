@@ -1,30 +1,43 @@
-# Handoff — MirasAI: estils YOOtheme segurs i versió 0.7.0
+# Handoff — MirasAI: contracte d'eines honest i versió 0.8.0
 
-Actualitzat: 27 de juliol de 2026
-Objectiu de la sessió següent: publicar la 0.7.0 i, si s'aprova, desplegar-la a
-Indústria Viva i Auto Vigatana.
+Actualitzat: 2 d'agost de 2026
+Objectiu de la sessió següent: publicar la 0.8.0 i decidir si es desplega.
 
 ## Estat executiu
 
 - Repo: `/Users/alexmiras/Documents/Claude Code Default/MovaMiraAI`
-- Branca activa: `codex/style-safety-platform-contract`
-- Tot el treball està commitejat: set commits d'estils YOOtheme (runner aïllat,
-  pin del worker, contracte d'estils al router, host WordPress, host Joomla,
-  `source-types`), dos commits de contracte d'eines (rebuig d'arguments
-  desconeguts, inserció posicional a `element-move`) i el bump de versió.
-- `main` i `origin/main` continuen a `477e6d1`: la branca no s'ha fusionat ni
-  publicat.
-- **La 0.6.3 no es publica.** Es va decidir plegar-la amb els canvis de
-  contracte d'eines i saltar directament a `0.7.0`. El rebuig d'arguments
-  desconeguts és un canvi de comportament —crides que abans passaven en silenci
-  ara fallen— i la minor ho senyala.
-- Versió declarada a tots els *workspaces* i manifests: `0.7.0`.
-- No hi ha cap tag, push ni GitHub Release. Els *feeds* locals apunten a
-  `v0.7.0`, però aquestes URLs no seran consumibles fins que es publiqui.
-- Auto Vigatana té instal·lat un build preliminar etiquetat `0.6.3`, verificat
-  en viu. Aquella versió no existirà mai com a release: cal reinstal·lar-hi la
-  0.7.0 quan es publiqui.
-- Indústria Viva encara declara MirasAI WP `0.6.2`.
+- Branca activa: `main`
+- La **0.7.0 està publicada** (tag i GitHub Release del 27-07-2026 amb cinc
+  assets) i verificada en viu a Auto Vigatana i Indústria Viva.
+- La **0.8.0 està preparada i no publicada**. Versió declarada a tots els
+  *workspaces* i manifests; artefactes a `.release/v0.8.0/`; els *feeds* ja hi
+  apunten, però les URLs no seran consumibles fins que es publiqui.
+- Cinc commits per sobre de la 0.7.0, tots amb la suite verda.
+
+### Què hi ha a la 0.8.0
+
+Tot ve del backlog de ManlleuActiva i tot és la mateixa família de defecte: una
+eina que no diu la veritat sobre el que ha fet o el que accepta.
+
+- **Col·locació a `element-add` i `element-clone`** (`before_path`/`after_path`).
+  Abans només `element-move` en tenia, i compondre una pàgina obligava a afegir
+  al final i moure després. L'1 d'agost això va costar una secció esborrada.
+- **Validació de props contra la definició de l'element.** `padding_bottom:
+  "medium"` es desava en silenci i només es veia com a vora vermella al Builder.
+  Estreta a posta: no jutja props no declarats, opcions no enumerables, valors
+  no escalars ni elements sense definició carregable.
+- **`filters` a la lectura de bindings**, més `other_keys` per a qualsevol clau
+  que no modelem.
+- **Fonts dinàmiques adreçables pel nom.** `source-types` ja retornava tots els
+  arguments; el que fallava era arribar-hi. Ara un `source_name` que no resol és
+  el resultat i suggereix el camí bo.
+- **Forma de binding del Builder.** Llegir i escriure `query.name` puntejat amb
+  els arguments a la consulta. Abans, llegir un binding fet al Builder deia
+  `query_arguments: []` tot i que en tenia cinc.
+
+**Canvi de comportament**, i per això és minor i no un patch: la validació de
+props i el rebuig d'arguments desconeguts fan fallar crides que abans passaven
+en silenci sense aplicar res.
 
 ## Context anterior que no cal duplicar
 
@@ -203,15 +216,17 @@ Rollback privat:
 `/home/industriaviva/mirasai-backups/deploy-20260727-170309-pre-0.7.0`
 (plugin 0.6.2, `theme_mods_yootheme`, els dos CSS i `SHA256SUMS`).
 
-## Artefactes 0.7.0
+## Artefactes 0.8.0
 
-Directori: `.release/v0.7.0/`
+Directori: `.release/v0.8.0/`
 
 | Artefacte | SHA-256 |
 | --- | --- |
-| `pkg_mirasai-0.7.0.zip` | `4d928b8bb0eae691b8e8d62dd32c24ad68580d1019da8fed35b7e01c19ba107a` |
-| `mirasai-wp-0.7.0.zip` | `858b83e5cf5af0d2d2c9bfa272628016604512bdf9550c6d1051845a4b5cd6d2` |
-| `miras-mirasai-mcp-0.7.0.tgz` | `ec503bff930bc86bc2a87735e1a678c35b21ab175869c2dbb9d92c2cad81b29f` |
+| `pkg_mirasai-0.8.0.zip` | `2ff402e83ffcdbe113de67e2ae59bf33614817e9ada9b5df5511a37e27a897bf` |
+| `mirasai-wp-0.8.0.zip` | `41a83bd08d01775ae3de7659da8fcfa83a4977a21e12dc82e6db0b8f53580c98` |
+| `miras-mirasai-mcp-0.8.0.tgz` | `27ad55a1706adba1fbcfd79f9abb3c2b6bd7486497a8425d358304bda86cf04b` |
+
+Els de la 0.7.0 publicada són a la seva GitHub Release.
 
 `install-urls.md` i `release-notes.md` del mateix directori són generats per
 `scripts/prepare-release.mjs`.
@@ -256,12 +271,11 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
    línia dels dos helpers d'estil (1.200 i 700 línies): es confia en la suite i
    en la verificació a Auto Vigatana.
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
-3. **Publicació pendent.** Merge a `main`, tag `v0.7.0`, push i GitHub Release
-   amb els tres artefactes. Verificar els feeds després de publicar.
-4. ~~**Indústria Viva pendent.**~~ Fet: canària 0.7.0 verificada amb línia base
-   abans/després. Auto Vigatana i Indústria Viva executen totes dues la 0.7.0
-   amb rollback privat. Conservar els dos rollbacks fins que la versió estigui
-   publicada.
+3. **Publicació de la 0.8.0 pendent.** Push de `main`, tag `v0.8.0` i GitHub
+   Release amb els tres artefactes. Verificar els feeds després de publicar.
+4. **Desplegament de la 0.8.0 pendent.** Auto Vigatana i Indústria Viva
+   executen la 0.7.0 amb rollback privat conservat. Repetir el flux de canària
+   quan s'aprovi: línia base, còpia privada, instal·lació, comparació.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
 

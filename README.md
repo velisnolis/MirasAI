@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The current release is [`0.7.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.7.0). It includes:
+The latest published release is [`0.7.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.7.0); `0.8.0` is prepared and not yet published. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -68,12 +68,12 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.7.0` | `0.7.0` | `0.7.0` |
+| Version | `0.8.0` | `0.8.0` | `0.8.0` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password + `manage_options`; MirasAI token fallback | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
-| Automatic updates | XML feed and release SHA-256 verified for `0.7.0` | JSON feed and release SHA-256 verified for `0.7.0` | No feed; install the release tarball |
-| `0.7.0` canary | Joomla 6.1.2 + YOOtheme Pro 5.0.37 | WordPress 7.0.2 + PHP 8.4 + YOOtheme child theme | Style preview/verification exercised against both hosts |
+| Automatic updates | XML feed and release SHA-256 verified for `0.8.0` | JSON feed and release SHA-256 verified for `0.8.0` | No feed; install the release tarball |
+| Last live canary (`0.7.0`) | Joomla 6.1.2 + YOOtheme Pro 5.0.37 | WordPress 7.0.2 + PHP 8.4 + YOOtheme child theme | Style preview/verification exercised against both hosts |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
 | YOOtheme Styles | Read, sources, guarded update | Read, sources, guarded create/update | Pinned-worker preview, update, and verification |
@@ -258,7 +258,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.7.0.zip
+packages/mirasai-wp/dist/mirasai-wp-0.8.0.zip
 ```
 
 The WordPress admin dashboard includes:
