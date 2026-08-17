@@ -10,8 +10,9 @@ namespace Mirasai\WordPress\Tool;
  * Three facts about the native system drive this class:
  *
  * 1. Style configuration does NOT live in the `yootheme` option. That option
- *    holds Builder templates. The Style lives in `theme_mods_yootheme` under
- *    the `config` key, itself a JSON string.
+ *    holds Builder templates. The Style lives in `theme_mods_{stylesheet}`
+ *    under the `config` key, itself a JSON string. With a child theme that is
+ *    `theme_mods_<child>`, not the parent `theme_mods_yootheme` row.
  * 2. That JSON also carries `yootheme_apikey`. It must never be returned to a
  *    caller, and must be preserved byte for byte by any future writer.
  * 3. YOOtheme Pro 5 has NO server-side Less compiler. `GET /theme/style` hands
@@ -47,7 +48,27 @@ class YoothemeStyleHelper
     }
 
     /**
-     * Decoded `theme_mods_yootheme.config`, secrets included.
+     * Option that stores the live Style JSON for this request.
+     *
+     * YOOtheme writes `config` through theme mods of the active stylesheet.
+     * A child theme therefore has its own `theme_mods_<child>` row; reading
+     * via `get_theme_mod('config')` and writing `theme_mods_yootheme` is a
+     * CAS mismatch that aborts the guarded write.
+     */
+    public function styleModsOptionName(): string
+    {
+        $stylesheet = function_exists('get_stylesheet') ? (string) get_stylesheet() : '';
+        $fromThemeMod = function_exists('get_theme_mod') ? get_theme_mod('config', null) : null;
+
+        if (is_string($fromThemeMod) && $fromThemeMod !== '' && $stylesheet !== '') {
+            return 'theme_mods_' . $stylesheet;
+        }
+
+        return 'theme_mods_yootheme';
+    }
+
+    /**
+     * Decoded Style `config`, secrets included.
      * Never return this to a caller without running it through redact().
      *
      * @return array<string, mixed>
@@ -57,7 +78,7 @@ class YoothemeStyleHelper
         $mods = get_theme_mod('config', null);
 
         if (!is_string($mods) || $mods === '') {
-            $raw = get_option('theme_mods_yootheme', []);
+            $raw = get_option($this->styleModsOptionName(), []);
             $mods = is_array($raw) && is_string($raw['config'] ?? null) ? $raw['config'] : '';
         }
 
@@ -576,15 +597,17 @@ class YoothemeStyleHelper
 
         // Re-read the full option at the write gate so unrelated theme mods
         // changed concurrently are preserved even though the Style ETag
-        // intentionally covers config + CSS only.
-        $mods = get_option('theme_mods_yootheme', []);
+        // intentionally covers config + CSS only. Must be the same row
+        // loadConfig() used (child theme mods when a child is active).
+        $modsOption = $this->styleModsOptionName();
+        $mods = get_option($modsOption, []);
         if (!is_array($mods)) {
             foreach ($staged as $temporary) {
                 @unlink($temporary);
             }
 
             return [
-                'error' => 'theme_mods_yootheme is not an array.',
+                'error' => $modsOption . ' is not an array.',
                 'code' => 'invalid_style_params',
             ];
         }
@@ -619,11 +642,11 @@ class YoothemeStyleHelper
         $configWritten = false;
 
         try {
-            $configWrite = $this->compareAndSwapThemeMods($mods, $candidateMods);
+            $configWrite = $this->compareAndSwapThemeMods($mods, $candidateMods, $modsOption);
             $configWritten = ($configWrite['changed'] ?? false) === true;
             if (($configWrite['ok'] ?? false) !== true) {
                 throw new \RuntimeException(
-                    (string) ($configWrite['error'] ?? 'theme_mods_yootheme changed concurrently.')
+                    (string) ($configWrite['error'] ?? $modsOption . ' changed concurrently.')
                 );
             }
 
@@ -639,7 +662,7 @@ class YoothemeStyleHelper
                 'restored' => true,
             ];
             if ($configWritten) {
-                $rollbackWrite = $this->compareAndSwapThemeMods($candidateMods, $mods);
+                $rollbackWrite = $this->compareAndSwapThemeMods($candidateMods, $mods, $modsOption);
                 $configRollback = [
                     'attempted' => true,
                     'restored' => ($rollbackWrite['ok'] ?? false) === true,
@@ -658,7 +681,7 @@ class YoothemeStyleHelper
             $fileRollback = $this->restoreSnapshotFiles($snapshot);
             $rollbackFailures = $fileRollback['failures'];
             if (($configRollback['restored'] ?? false) !== true) {
-                $rollbackFailures[] = 'Unable to restore theme_mods_yootheme without overwriting a concurrent change.';
+                $rollbackFailures[] = 'Unable to restore ' . $modsOption . ' without overwriting a concurrent change.';
             }
             $rollback = [
                 'restored' => ($configRollback['restored'] ?? false) === true
@@ -1094,7 +1117,7 @@ class YoothemeStyleHelper
      * @param array<string, mixed> $candidate
      * @return array{ok: bool, changed: bool, error?: string}
      */
-    private function compareAndSwapThemeMods(array $expected, array $candidate): array
+    private function compareAndSwapThemeMods(array $expected, array $candidate, string $optionName): array
     {
         if ($expected === $candidate) {
             return ['ok' => true, 'changed' => false];
@@ -1121,7 +1144,7 @@ class YoothemeStyleHelper
         $query = $wpdb->prepare(
             "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
             $candidateSerialized,
-            'theme_mods_yootheme',
+            $optionName,
             $expectedSerialized
         );
         $affected = $wpdb->query($query);
@@ -1130,21 +1153,21 @@ class YoothemeStyleHelper
             return [
                 'ok' => false,
                 'changed' => false,
-                'error' => 'theme_mods_yootheme changed concurrently at the write gate.',
+                'error' => $optionName . ' changed concurrently at the write gate.',
             ];
         }
 
         if (function_exists('wp_cache_delete')) {
-            wp_cache_delete('theme_mods_yootheme', 'options');
+            wp_cache_delete($optionName, 'options');
             wp_cache_delete('alloptions', 'options');
         }
 
-        $readback = get_option('theme_mods_yootheme', []);
+        $readback = get_option($optionName, []);
         if ($readback !== $candidate) {
             return [
                 'ok' => false,
                 'changed' => true,
-                'error' => 'theme_mods_yootheme compare-and-swap could not be verified.',
+                'error' => $optionName . ' compare-and-swap could not be verified.',
             ];
         }
 
@@ -1159,8 +1182,9 @@ class YoothemeStyleHelper
         $cleared = [];
 
         if (function_exists('wp_cache_delete')) {
-            wp_cache_delete('theme_mods_yootheme', 'options');
-            $cleared[] = 'theme_mods_yootheme';
+            $modsOption = $this->styleModsOptionName();
+            wp_cache_delete($modsOption, 'options');
+            $cleared[] = $modsOption;
         }
 
         if (function_exists('wp_clean_themes_cache')) {

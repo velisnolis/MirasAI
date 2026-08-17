@@ -76,10 +76,10 @@ class TemplateStyleReadTool extends AbstractTool
             'fonts' => $helper->fonts(),
             'child_theme' => $helper->childTheme(),
             'storage' => [
-                'option' => 'theme_mods_yootheme',
+                'option' => $helper->styleModsOptionName(),
                 'key' => 'config',
                 'format' => 'json_string',
-                'note' => 'Style configuration does not live in the "yootheme" option; that one holds Builder templates.',
+                'note' => 'Style configuration does not live in the "yootheme" option; that one holds Builder templates. Child themes store it in theme_mods_{stylesheet}, not the parent theme_mods_yootheme row.',
             ],
             'warnings' => $this->warnings($compiled, $helper->childTheme()),
             'etag' => $helper->etag($config, $compiled),
