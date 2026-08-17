@@ -112,6 +112,20 @@ Use `--config /path/to/sites.json` to override the registry path.
 uses: newline-delimited JSON (the MCP specification, used by Claude Desktop,
 Cursor, and mcp2cli) and LSP-style `Content-Length` headers.
 
+## Connection preflight
+
+`mirasai-mcp test-site <site_id>` and the router tool `mirasai/sites-test` run
+the same read-only preflight: `dns_tls`, `http`, `auth`, `initialize`,
+`tools/list`, and `diagnose`. Every stage reports `status`, `http_status`,
+`content_type`, `final_url`, `classification`, and `next_action`.
+
+Failures return structured `ok: false` results instead of a generic JSON-RPC
+exception. Any response body excerpt is capped at 300 characters;
+`Authorization` and `Set-Cookie` are never serialized. Standard `mcp` hosts skip
+`diagnose` because `system/diagnose` is MirasAI-specific. Use
+`mirasai/host-diagnose` for the MirasAI runtime playbook after connectivity is
+known to work.
+
 ## Current Scope
 
 Implemented now:
@@ -147,7 +161,7 @@ compiler. Point mcp2cli at `mirasai-mcp serve` (stdio) for Style compile/write.
 Always pass `site_id`; `default_site_id` may be a different site. mcp2cli
 `--dry-run` is `store_true` — omitting it still sends `dry_run=true`. A real
 write needs JSON with `dry_run: false` and `confirm_guarded_write: true`.
-See `docs/agent-routes.md`.
+See [agent routes after installing MirasAI](../../docs/agent-routes.md).
 
 The WordPress host additionally exposes guarded `template/style-create`. It
 scaffolds a YOOtheme child theme when needed and writes a versionable

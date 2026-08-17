@@ -362,6 +362,11 @@ A real Style update follows:
 5. confirm with a fresh ETag;
 6. snapshot, write, record compile provenance, clear caches, read back, and verify the served result.
 
+Related operational references:
+
+- [Agent routes after installing MirasAI](docs/agent-routes.md)
+- [Verified YOOtheme Builder findings](docs/yootheme-builder-findings.md)
+
 ### ReReplacer
 
 Joomla can expose ReReplacer and Regular Labs Conditions through `plg_mirasai_rereplacer`.
