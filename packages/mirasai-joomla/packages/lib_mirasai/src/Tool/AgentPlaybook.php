@@ -24,12 +24,9 @@ class AgentPlaybook
     {
         return implode("\n", [
             'MirasAI Joomla host. This HTTP endpoint does not compile YOOtheme LESS.',
-            'Call system/diagnose first and follow playbook. Do not trial-and-error Customizer or SQL Style writes.',
-            'Builder layouts: template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-            'Style CSS (theme.<id>.css): compile only if YOUR tools/list includes mirasai/style-preview. Then use mirasai/style-update. mcp2cli against this URL is still this host, not the compiler.',
-            'If those router tools are absent, stop. Do not write #__template_styles.params.config expecting CSS to rebuild. Customizer save() with dirty=false is a silent no-op.',
-            'SSH: verify the CSS header and purge page cache. It does not regenerate CSS.',
-            'Proof of a Style write is the CSS compiled-on header, not a visible colour change. Always pass site_id on the router.',
+            'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+            'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
         ]);
     }
 

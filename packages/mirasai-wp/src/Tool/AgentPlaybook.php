@@ -24,14 +24,9 @@ class AgentPlaybook
     {
         return implode("\n", [
             'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
-            'Call system/diagnose first and follow playbook. Do not trial-and-error Customizer or WP-CLI Style writes.',
-            'Builder layouts: template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-            'Style CSS (theme.<id>.css): compile only if YOUR tools/list includes mirasai/style-preview. Then use mirasai/style-update. mcp2cli against this URL is still this host, not the compiler.',
-            'If those router tools are absent, stop. Do not write theme_mods via WP-CLI. Customizer save() with dirty=false is a silent no-op.',
-            'SSH: verify the CSS header and purge page cache (WP Rocket rocket_clean_domain). It does not regenerate CSS.',
-            'Style JSON is theme_mods of the active stylesheet (a child is not theme_mods_yootheme). After a router write, style-read config_freshness proves fresh/stale; unknown means there is no valid provenance.',
-            'If template/style-read reports storage.write_safe=false, stop. The active child has no initialized Style config and must not mutate the parent fallback.',
-            'sandbox/execute-php is listed only when dangerous execution is enabled for this domain; each call needs confirm_execute_php=true.',
+            'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+            'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
         ]);
     }
 

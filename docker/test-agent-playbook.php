@@ -152,11 +152,12 @@ foreach ($playbooks as $platform => $playbook) {
 }
 
 $wpInstructions = WordPressPlaybook::initializeInstructions();
-expectPlaybookContains('WordPress initialize names diagnose', $wpInstructions, 'system/diagnose');
-expectPlaybookContains('WordPress initialize denies host compile', $wpInstructions, 'does not compile');
-expectPlaybookContains('WordPress initialize names router compiler tool', $wpInstructions, 'mirasai/style-preview');
-expectPlaybookContains('WordPress initialize names Customizer no-op', $wpInstructions, 'dirty=false');
-expectPlaybookContains('WordPress initialize names child theme_mods', $wpInstructions, 'theme_mods_yootheme');
+expectPlaybook('WordPress initialize is exactly four invariants', explode("\n", $wpInstructions), [
+    'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
+    'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+    'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+]);
 
 $wpLoops = array_values(array_map(
     static fn (array $loop): string => (string) ($loop['id'] ?? ''),
@@ -176,9 +177,12 @@ expectPlaybookContains(
 );
 
 $joomlaInstructions = JoomlaPlaybook::initializeInstructions();
-expectPlaybookContains('Joomla initialize names diagnose', $joomlaInstructions, 'system/diagnose');
-expectPlaybookContains('Joomla initialize denies host compile', $joomlaInstructions, 'does not compile');
-expectPlaybookContains('Joomla initialize names router compiler tool', $joomlaInstructions, 'mirasai/style-preview');
+expectPlaybook('Joomla initialize is exactly four invariants', explode("\n", $joomlaInstructions), [
+    'MirasAI Joomla host. This HTTP endpoint does not compile YOOtheme LESS.',
+    'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+    'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+]);
 
 $wp = new WordPressMcpHandler(new WordPressToolRegistry());
 $wpInit = $wp->handleRequest([
