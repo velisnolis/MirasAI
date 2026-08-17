@@ -14,7 +14,7 @@ namespace Mirasai\WordPress\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     /**
      * Short initialize text. Agents often skip long instructions; the full
@@ -29,7 +29,8 @@ class AgentPlaybook
             'Style CSS (theme.<id>.css): compile only if YOUR tools/list includes mirasai/style-preview. Then use mirasai/style-update. mcp2cli against this URL is still this host, not the compiler.',
             'If those router tools are absent, stop. Do not write theme_mods via WP-CLI. Customizer save() with dirty=false is a silent no-op.',
             'SSH: verify the CSS header and purge page cache (WP Rocket rocket_clean_domain). It does not regenerate CSS.',
-            'Style JSON is theme_mods of the active stylesheet (a child is not theme_mods_yootheme). Proof of a write is the CSS compiled-on header, not a visible colour change.',
+            'Style JSON is theme_mods of the active stylesheet (a child is not theme_mods_yootheme). After a router write, style-read config_freshness proves fresh/stale; unknown means there is no valid provenance.',
+            'If template/style-read reports storage.write_safe=false, stop. The active child has no initialized Style config and must not mutate the parent fallback.',
             'sandbox/execute-php is listed only when dangerous execution is enabled for this domain; each call needs confirm_execute_php=true.',
         ]);
     }
@@ -102,7 +103,7 @@ class AgentPlaybook
                     'regenerate theme.<id>.css from config alone',
                     'reach the endpoint when anonymous access is locked (503/401)',
                 ],
-                'storage' => 'Style JSON is theme_mods_{get_stylesheet()}.config. A child theme is not the parent theme_mods_yootheme row. The yootheme option holds Builder templates.',
+                'storage' => 'Style JSON is theme_mods_{get_stylesheet()}.config once initialized. A child theme is not the parent theme_mods_yootheme row. If an active child has no config, style-read reports the parent fallback with write_safe=false and writes must stop. The yootheme option holds Builder templates.',
             ],
             'router' => [
                 'binary' => 'mirasai-mcp serve',
@@ -174,8 +175,8 @@ class AgentPlaybook
                 'id' => 'yootheme_style_read',
                 'do' => 'Inspect Style variables, custom Less, compiled CSS freshness.',
                 'best' => 'template/style-read. Optional template/style-sources for the import tree.',
-                'caveat' => 'compiled.stale_sources is a Less-file mtime heuristic. It stays false after config-only edits (theme_mods_{stylesheet}.config less/custom_less). compiled.stale_config is not detected on this host.',
-                'storage' => 'theme_mods_{get_stylesheet()}.config. Child themes: theme_mods_<child>, not theme_mods_yootheme.',
+                'caveat' => 'compiled.stale_sources is only a Less-file mtime heuristic. Use compiled.config_freshness.state: fresh/stale is proven against the last router write; unknown means absent/invalid provenance or CSS changed outside the router.',
+                'storage' => 'theme_mods_{get_stylesheet()}.config. Child themes: theme_mods_<child>, not theme_mods_yootheme. If storage.write_safe=false, stop and initialize the child config explicitly.',
                 'ssh' => 'Optional: head -n1 wp-content/themes/yootheme/css/theme.<id>.css',
             ],
             [
@@ -183,7 +184,7 @@ class AgentPlaybook
                 'do' => 'Change Style variables or custom Less and regenerate the served CSS.',
                 'best_if_router_tools_listed' => 'mirasai/style-update: dry_run=true, review, then dry_run=false + confirm_guarded_write=true + fresh if_match. Empty vars recompiles the current config. Pass site_id. Use --stdin JSON so dry_run is not left at the CLI default.',
                 'if_only_this_host' => 'STOP. template/style-update requires compiled_css and compiled_rtl you cannot produce here. Do not write theme_mods via WP-CLI. Do not open the Customizer as the default path.',
-                'proof' => 'New etag + CSS /* compiled on */ header moved. #fff vs #FFFFFF (and similar hex minify) may leave CSS bytes unchanged; that is not a failed write.',
+                'proof' => 'New etag + compiled.config_freshness.state=fresh + CSS /* compiled on */ header. #fff vs #FFFFFF (and similar hex minify) may leave the CSS body unchanged; that is not a failed write.',
                 'last_resort_browser' => 'Only when the router is unavailable: Customizer with &site=<url>, wait for iframe, change a real control and undo (this starts less.js), then await yootheme.store.useConfigStore().save(), then check the CSS compiled-on header. save() with dirty=false writes nothing.',
                 'avoid' => [
                     'cs.save() without a real control change',
@@ -196,7 +197,7 @@ class AgentPlaybook
             [
                 'id' => 'verify_css_on_disk',
                 'do' => 'Prove the stylesheet actually changed.',
-                'best_if_router_tools_listed' => 'mirasai/style-verify, then template/style-read. Treat fresh=true with caution: it is not a byte comparison and ignores config-only staleness.',
+                'best_if_router_tools_listed' => 'mirasai/style-verify, then template/style-read. Require compiled.config_freshness.state=fresh for config/CSS lockstep; unknown is not proof of freshness.',
                 'ssh' => 'Read the first line: /* YOOtheme Pro v… compiled on <ISO8601> */. Count tokens with grep -o, never grep -c. Decimals minify (-0.03em → -.03em).',
             ],
             [
@@ -242,7 +243,7 @@ class AgentPlaybook
                 'id' => 'stale_sources_false_negative',
                 'symptom' => 'style-read reports stale_sources=false after a config-only change.',
                 'cause' => 'The heuristic compares CSS mtime with Less files, not with stored config. wp_options has no updated_at.',
-                'fix' => 'Ignore stale_sources for config-only edits. Recompile via the router, or treat CSS as stale until the compiled-on header moves.',
+                'fix' => 'Read compiled.config_freshness. stale proves config drift; fresh proves lockstep; unknown requires a router recompile before claiming freshness.',
             ],
             [
                 'id' => 'mcp2cli_host_is_not_router',
@@ -255,6 +256,12 @@ class AgentPlaybook
                 'symptom' => 'style-update returns stale_etag / Style config changed at the write gate. CSS header unchanged.',
                 'cause' => 'Read used get_theme_mod(config) on the child; write compared theme_mods_yootheme (parent). Different JSON, CAS abort.',
                 'fix' => 'Write theme_mods_{get_stylesheet()}. storage.option on style-read must match that row.',
+            ],
+            [
+                'id' => 'child_theme_uninitialized',
+                'symptom' => 'style-read reports inherited_from_parent=true and storage.write_safe=false.',
+                'cause' => 'The active child theme has no Style config row of its own, so reads fall back to the parent.',
+                'fix' => 'Stop before compiling or writing. Initialize the child Style config through an explicit guarded workflow; never mutate the parent fallback implicitly.',
             ],
             [
                 'id' => 'router_wrong_site_or_unpinned_worker',

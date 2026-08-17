@@ -13,7 +13,7 @@ class TemplateStyleReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads the YOOtheme Pro Style state: active style and variation, variable overrides, custom Less, available styles, compiled CSS freshness, and locally stored fonts. Read-only. stale_sources compares CSS mtime with Less files only — config-only edits stay looking fresh. This host does not compile LESS.';
+        return 'Reads the YOOtheme Pro Style state: active style and variation, variable overrides, custom Less, storage safety, available styles, compiled CSS freshness, and locally stored fonts. Read-only. If storage.write_safe is false, stop before Style writes. compiled.config_freshness is fresh/stale only with verified router provenance; external CSS writes are unknown. This host does not compile LESS.';
     }
 
     public function getSurface(): string
@@ -58,6 +58,7 @@ class TemplateStyleReadTool extends AbstractTool
         $config = $helper->loadConfig();
         $compiled = $helper->compiledState();
         $overrides = $helper->overrides($config);
+        $storage = $helper->styleStorageState();
 
         if (($arguments['include_overrides'] ?? true) === false) {
             unset($overrides['less']);
@@ -76,9 +77,14 @@ class TemplateStyleReadTool extends AbstractTool
             'fonts' => $helper->fonts(),
             'child_theme' => $helper->childTheme(),
             'storage' => [
-                'option' => $helper->styleModsOptionName(),
+                'option' => $storage['source_option'],
+                'active_option' => $storage['active_option'],
+                'source_option' => $storage['source_option'],
                 'key' => 'config',
                 'format' => 'json_string',
+                'inherited_from_parent' => $storage['inherited_from_parent'],
+                'write_safe' => $storage['write_safe'],
+                'reason' => $storage['reason'],
                 'note' => 'Style configuration does not live in the "yootheme" option; that one holds Builder templates. Child themes store it in theme_mods_{stylesheet}, not the parent theme_mods_yootheme row.',
             ],
             'warnings' => $this->warnings($compiled, $helper->childTheme()),
@@ -107,6 +113,10 @@ class TemplateStyleReadTool extends AbstractTool
                 (string) ($compiled['newest_source'] ?? 'unknown'),
                 (string) ($compiled['newest_source_mtime'] ?? 'unknown')
             );
+        }
+
+        if (($compiled['config_freshness']['state'] ?? null) === 'stale') {
+            $warnings[] = 'The stored Style config changed after the last router-controlled compile, while the compiled CSS artefacts still match that compile. Recompile before trusting the frontend result.';
         }
 
         if (($compiled['stale_version'] ?? false) === true) {

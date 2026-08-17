@@ -14,7 +14,7 @@ namespace Mirasai\Library\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     /**
      * Short initialize prefix. Agents often skip long instructions; the full

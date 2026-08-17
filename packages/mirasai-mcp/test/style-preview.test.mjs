@@ -194,6 +194,55 @@ test('style-preview honors the host worker path and base URL contract', async ()
   );
 });
 
+test('style source provenance hash is canonical and reacts to compile inputs', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  let imports = { 'b.less': '@b: 2;', 'a.less': '@a: 1;', 'entry.less': '' };
+  let baseUrl = 'https://example.test/wp-admin/customize.php';
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports,
+            vars: { '@z': '3', '@a': '1' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 3,
+            compile_contract: { base_url: baseUrl },
+          },
+        };
+      }
+      if (name === 'file/read') return { structuredContent: { content: worker } };
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const first = await previewStyle({ client, expectedWorkerSha256: sha256(worker) });
+  imports = { 'entry.less': '', 'a.less': '@a: 1;', 'b.less': '@b: 2;' };
+  const reordered = await previewStyle({ client, expectedWorkerSha256: sha256(worker) });
+  assert.equal(first.compile.sources_sha256, reordered.compile.sources_sha256);
+
+  baseUrl = 'https://example.test/wp-admin/other.php';
+  const changed = await previewStyle({ client, expectedWorkerSha256: sha256(worker) });
+  assert.notEqual(first.compile.sources_sha256, changed.compile.sources_sha256);
+});
+
 test('style-verify separates tool success from served freshness', async () => {
   const worker = `
     self.addEventListener('message', function (event) {
@@ -287,6 +336,10 @@ test('style-update compiles first and sends a hash-bound dry-run to the host', a
             is_active_style: true,
             import_count: 1,
             etag: 'etag-123',
+            compile_contract: {
+              platform: 'wordpress',
+              provenance: 'router_provenance_v1',
+            },
           },
         };
       }
@@ -325,6 +378,9 @@ test('style-update compiles first and sends a hash-bound dry-run to the host', a
   assert.equal(hostCall.args.if_match, 'etag-123');
   assert.equal(hostCall.args.compiled_css_sha256, sha256(hostCall.args.compiled_css));
   assert.equal(hostCall.args.compiled_rtl_sha256, sha256(hostCall.args.compiled_rtl));
+  assert.equal(hostCall.args.compile_provenance.worker_sha256, sha256(worker));
+  assert.match(hostCall.args.compile_provenance.sources_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(result.preview.compile.sources_sha256, hostCall.args.compile_provenance.sources_sha256);
   assert.equal(result.preview.compiled_css, undefined);
 });
 
@@ -375,6 +431,7 @@ test('style-update forwards an explicit empty variation so the host clears it', 
             is_active_style: true,
             import_count: 1,
             etag: 'etag-clear',
+            compile_contract: { platform: 'joomla' },
           },
         };
       }
@@ -404,6 +461,7 @@ test('style-update forwards an explicit empty variation so the host clears it', 
   const hostCall = calls.find((call) => call.name === 'template/style-update');
   assert.equal(Object.hasOwn(hostCall.args, 'variation'), true);
   assert.equal(hostCall.args.variation, '');
+  assert.equal(Object.hasOwn(hostCall.args, 'compile_provenance'), false);
 });
 
 test('style-update reports a verified real write only after matching readback', async () => {

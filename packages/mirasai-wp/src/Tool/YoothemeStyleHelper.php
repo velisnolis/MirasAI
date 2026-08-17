@@ -23,6 +23,7 @@ namespace Mirasai\WordPress\Tool;
 class YoothemeStyleHelper
 {
     private const REDACTED_KEYS = ['yootheme_apikey'];
+    private const STYLE_PROVENANCE_OPTION = 'mirasai_yootheme_style_compile_state';
 
     /**
      * Style config keys that are read-only context rather than style input.
@@ -57,14 +58,64 @@ class YoothemeStyleHelper
      */
     public function styleModsOptionName(): string
     {
-        $stylesheet = function_exists('get_stylesheet') ? (string) get_stylesheet() : '';
-        $fromThemeMod = function_exists('get_theme_mod') ? get_theme_mod('config', null) : null;
+        return $this->styleStorageState()['source_option'];
+    }
 
-        if (is_string($fromThemeMod) && $fromThemeMod !== '' && $stylesheet !== '') {
-            return 'theme_mods_' . $stylesheet;
+    /**
+     * Resolve the effective Style source separately from the active stylesheet's
+     * write target. A freshly activated child can inherit the parent config while
+     * its own theme_mods row has no config yet. Reading that fallback is useful,
+     * but mutating it would silently change the parent theme.
+     *
+     * @return array{
+     *   active_option: string,
+     *   source_option: string,
+     *   inherited_from_parent: bool,
+     *   write_safe: bool,
+     *   reason: ?string
+     * }
+     */
+    public function styleStorageState(): array
+    {
+        $stylesheet = function_exists('get_stylesheet') ? (string) get_stylesheet() : 'yootheme';
+        $template = function_exists('get_template') ? (string) get_template() : 'yootheme';
+        $activeOption = 'theme_mods_' . ($stylesheet !== '' ? $stylesheet : 'yootheme');
+        $parentOption = 'theme_mods_' . ($template !== '' ? $template : 'yootheme');
+        $activeMods = get_option($activeOption, []);
+        $activeConfigPresent = is_array($activeMods)
+            && is_string($activeMods['config'] ?? null)
+            && $activeMods['config'] !== '';
+        $isChild = $stylesheet !== '' && $template !== '' && $stylesheet !== $template;
+
+        if ($activeConfigPresent) {
+            return [
+                'active_option' => $activeOption,
+                'source_option' => $activeOption,
+                'inherited_from_parent' => false,
+                'write_safe' => true,
+                'reason' => null,
+            ];
         }
 
-        return 'theme_mods_yootheme';
+        if ($isChild) {
+            return [
+                'active_option' => $activeOption,
+                'source_option' => $parentOption,
+                'inherited_from_parent' => true,
+                'write_safe' => false,
+                'reason' => 'The active child theme has no Style config of its own and is reading the parent fallback. Initialize the child config explicitly before writing.',
+            ];
+        }
+
+        return [
+            'active_option' => $activeOption,
+            'source_option' => $activeOption,
+            'inherited_from_parent' => false,
+            'write_safe' => $activeConfigPresent,
+            'reason' => $activeConfigPresent
+                ? null
+                : 'The active theme has no initialized Style config to update.',
+        ];
     }
 
     /**
@@ -292,14 +343,18 @@ class YoothemeStyleHelper
         }
 
         if (!is_file($file)) {
+            $configFreshness = $this->configFreshness($this->loadConfig());
+
             return [
                 'present' => false,
                 'file' => null,
                 'stale_version' => null,
                 'stale_sources' => null,
                 'freshness_method' => 'broad_less_mtime_heuristic',
-                'freshness_caveat' => 'stale_sources ignores Style config (less/custom_less). A false value does not mean the CSS matches the stored config.',
-                'stale_config_detectable' => false,
+                'freshness_caveat' => 'The broad stale_sources heuristic ignores Style config. Config freshness is only provable after a router-controlled compile; missing or externally replaced CSS is reported as unknown.',
+                'stale_config_detectable' => $configFreshness['state'] !== 'unknown',
+                'stale_config' => null,
+                'config_freshness' => $configFreshness,
             ];
         }
 
@@ -309,6 +364,7 @@ class YoothemeStyleHelper
         $mtime = (int) filemtime($file);
 
         $newest = $this->newestSourceMtime();
+        $configFreshness = $this->configFreshness($this->loadConfig());
 
         return [
             'present' => true,
@@ -321,10 +377,162 @@ class YoothemeStyleHelper
             'stale_version' => $compiledVersion !== null && $compiledVersion !== $this->themeVersion(),
             'stale_sources' => $newest['mtime'] !== null && $newest['mtime'] > $mtime,
             'freshness_method' => 'broad_less_mtime_heuristic',
-            'freshness_caveat' => 'stale_sources ignores Style config (less/custom_less). A false value does not mean the CSS matches the stored config.',
-            'stale_config_detectable' => false,
+            'freshness_caveat' => 'stale_sources ignores Style config and only compares Less mtimes. config_freshness proves config drift when the current CSS still matches a router-controlled compile; external CSS changes are conservatively unknown.',
+            'stale_config_detectable' => $configFreshness['state'] !== 'unknown',
+            'stale_config' => $configFreshness['state'] === 'stale'
+                ? true
+                : ($configFreshness['state'] === 'fresh' ? false : null),
+            'config_freshness' => $configFreshness,
             'newest_source' => $newest['file'],
             'newest_source_mtime' => $newest['mtime'] !== null ? gmdate('c', $newest['mtime']) : null,
+        ];
+    }
+
+    /**
+     * Proves whether the stored Style config still belongs to the CSS emitted
+     * by the last router-controlled compile. The proof is deliberately lost
+     * when any CSS artefact changes outside that path: such a replacement may
+     * be perfectly valid, so calling it stale would be a false positive.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function configFreshness(array $config): array
+    {
+        $unknown = static fn (string $reason): array => [
+            'state' => 'unknown',
+            'method' => 'router_provenance_v1',
+            'reason' => $reason,
+            'recorded_at' => null,
+            'worker_sha256' => null,
+            'sources_sha256' => null,
+        ];
+        $record = get_option(self::STYLE_PROVENANCE_OPTION, null);
+
+        if (!is_array($record) || ($record['version'] ?? null) !== 1) {
+            return $unknown('no_router_provenance');
+        }
+
+        $storage = $this->styleStorageState();
+        if (!is_string($record['theme_mods_option'] ?? null)
+            || $record['theme_mods_option'] !== $storage['source_option']) {
+            return $unknown('style_storage_changed');
+        }
+
+        $storedCss = is_array($record['css_sha256'] ?? null) ? $record['css_sha256'] : [];
+        $configHash = strtolower((string) ($record['config_sha256'] ?? ''));
+        $workerHash = strtolower((string) ($record['worker_sha256'] ?? ''));
+        $sourcesHash = strtolower((string) ($record['sources_sha256'] ?? ''));
+        if ($storedCss === []
+            || !preg_match('/^[a-f0-9]{64}$/', $configHash)
+            || !preg_match('/^[a-f0-9]{64}$/', $workerHash)
+            || !preg_match('/^[a-f0-9]{64}$/', $sourcesHash)) {
+            return $unknown('invalid_router_provenance');
+        }
+
+        $currentCss = [];
+        foreach (array_keys($this->styleCssTargets()) as $path) {
+            $relative = $this->relativeToRoot($path);
+            $currentCss[$relative] = is_file($path) ? hash_file('sha256', $path) : null;
+        }
+        ksort($storedCss);
+        ksort($currentCss);
+
+        if ($storedCss !== $currentCss) {
+            return $unknown('compiled_css_changed_outside_router');
+        }
+
+        $state = hash_equals($configHash, $this->configHash($config)) ? 'fresh' : 'stale';
+
+        return [
+            'state' => $state,
+            'method' => 'router_provenance_v1',
+            'reason' => $state === 'fresh' ? 'config_and_css_match' : 'config_changed_after_compile',
+            'recorded_at' => is_string($record['recorded_at'] ?? null) ? $record['recorded_at'] : null,
+            'worker_sha256' => $workerHash,
+            'sources_sha256' => $sourcesHash,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function configHash(array $config): string
+    {
+        // Only values consumed by the Style compiler belong in this hash.
+        // In particular, yootheme_apikey and bookkeeping fields must neither
+        // influence CSS freshness nor become part of its provenance input.
+        $normalized = $this->normalizeForHash([
+            'style' => is_string($config['style'] ?? null) ? $config['style'] : '',
+            'less' => is_array($config['less'] ?? null) ? $config['less'] : [],
+            'custom_less' => is_string($config['custom_less'] ?? null) ? $config['custom_less'] : '',
+        ]);
+        $encoded = wp_json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return hash('sha256', is_string($encoded) ? $encoded : 'null');
+    }
+
+    private function normalizeForHash(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        if (array_is_list($value)) {
+            return array_map(fn (mixed $item): mixed => $this->normalizeForHash($item), $value);
+        }
+
+        ksort($value);
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->normalizeForHash($item);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, string> $cssHashes
+     * @param array<string, mixed> $compileProvenance
+     * @return array<string, mixed>
+     */
+    private function recordCompileProvenance(
+        array $config,
+        string $modsOption,
+        array $cssHashes,
+        array $compileProvenance
+    ): array {
+        if ($compileProvenance === []) {
+            return ['stored' => false, 'reason' => 'compile_provenance_not_supplied'];
+        }
+
+        $workerHash = strtolower((string) ($compileProvenance['worker_sha256'] ?? ''));
+        $sourcesHash = strtolower((string) ($compileProvenance['sources_sha256'] ?? ''));
+        if (!preg_match('/^[a-f0-9]{64}$/', $workerHash)
+            || !preg_match('/^[a-f0-9]{64}$/', $sourcesHash)
+            || $cssHashes === []) {
+            return ['stored' => false, 'reason' => 'invalid_compile_provenance'];
+        }
+
+        ksort($cssHashes);
+        $record = [
+            'version' => 1,
+            'theme_mods_option' => $modsOption,
+            'config_sha256' => $this->configHash($config),
+            'css_sha256' => $cssHashes,
+            'worker_sha256' => $workerHash,
+            'sources_sha256' => $sourcesHash,
+            'recorded_at' => gmdate('c'),
+        ];
+        update_option(self::STYLE_PROVENANCE_OPTION, $record, false);
+        $stored = get_option(self::STYLE_PROVENANCE_OPTION, null);
+
+        return [
+            'stored' => $stored === $record,
+            'version' => 1,
+            'worker_sha256' => $workerHash,
+            'sources_sha256' => $sourcesHash,
+            ...($stored === $record ? [] : ['reason' => 'provenance_write_not_verified']),
         ];
     }
 
@@ -530,8 +738,19 @@ class YoothemeStyleHelper
         array $candidateConfig,
         string $compiledCss,
         string $compiledRtl,
-        string $ifMatch
+        string $ifMatch,
+        array $compileProvenance = []
     ): array {
+        $storage = $this->styleStorageState();
+        if (!$storage['write_safe']) {
+            return [
+                'error' => $storage['reason'],
+                'code' => 'style_storage_uninitialized',
+                'storage' => $storage,
+            ];
+        }
+        $modsOption = $storage['source_option'];
+
         $freshConfig = $this->loadConfig();
         $freshCompiled = $this->compiledState();
         $freshEtag = $this->etag($freshConfig, $freshCompiled);
@@ -599,7 +818,19 @@ class YoothemeStyleHelper
         // changed concurrently are preserved even though the Style ETag
         // intentionally covers config + CSS only. Must be the same row
         // loadConfig() used (child theme mods when a child is active).
-        $modsOption = $this->styleModsOptionName();
+        $writeStorage = $this->styleStorageState();
+        if (!$writeStorage['write_safe'] || $writeStorage['source_option'] !== $modsOption) {
+            foreach ($staged as $temporary) {
+                @unlink($temporary);
+            }
+
+            return [
+                'error' => 'Style storage changed while CSS was being prepared. Re-read it and retry.',
+                'code' => 'stale_etag',
+                'storage' => $writeStorage,
+            ];
+        }
+
         $mods = get_option($modsOption, []);
         if (!is_array($mods)) {
             foreach ($staged as $temporary) {
@@ -628,7 +859,7 @@ class YoothemeStyleHelper
 
         $candidateMods = $mods;
         $candidateMods['config'] = $encodedConfig;
-        $snapshot = $this->createStyleSnapshot($mods, array_keys($targets));
+        $snapshot = $this->createStyleSnapshot($mods, array_keys($targets), $modsOption);
 
         if (isset($snapshot['error'])) {
             foreach ($staged as $temporary) {
@@ -705,17 +936,25 @@ class YoothemeStyleHelper
 
         clearstatcache(true);
         $updatedConfig = $this->loadConfig();
-        $updatedCompiled = $this->compiledState();
         $paths = array_keys($staged);
         $relativePaths = array_map([$this, 'relativeToRoot'], $paths);
+        $writtenHashes = array_combine(
+            $relativePaths,
+            array_map(static fn (string $path): string => (string) hash_file('sha256', $path), $paths)
+        );
+        $provenance = $this->recordCompileProvenance(
+            $updatedConfig,
+            $modsOption,
+            is_array($writtenHashes) ? $writtenHashes : [],
+            $compileProvenance
+        );
+        $updatedCompiled = $this->compiledState();
 
         return [
             'snapshot_id' => $snapshot['snapshot_id'],
             'written_files' => $relativePaths,
-            'written_sha256' => array_combine(
-                $relativePaths,
-                array_map(static fn (string $path): string => (string) hash_file('sha256', $path), $paths)
-            ),
+            'written_sha256' => $writtenHashes,
+            'provenance' => $provenance,
             'cache' => $this->invalidateStyleCache(),
             'new_etag' => $this->etag($updatedConfig, $updatedCompiled),
             'compiled' => $updatedCompiled,
@@ -1007,7 +1246,7 @@ class YoothemeStyleHelper
      * @param list<string> $files
      * @return array<string, mixed>
      */
-    private function createStyleSnapshot(array $mods, array $files): array
+    private function createStyleSnapshot(array $mods, array $files, string $modsOption): array
     {
         $root = defined('ABSPATH') ? rtrim((string) ABSPATH, '/') : $this->themeDir();
         $base = dirname($root) . '/mirasai-backups/style';
@@ -1025,9 +1264,10 @@ class YoothemeStyleHelper
         @chmod($dir, 0700);
 
         $serializedMods = serialize($mods);
-        $modsPath = $dir . '/theme_mods_yootheme.serialized';
+        $safeOptionName = preg_replace('/[^A-Za-z0-9_.-]/', '_', $modsOption) ?: 'theme_mods';
+        $modsPath = $dir . '/' . $safeOptionName . '.serialized';
         if (file_put_contents($modsPath, $serializedMods, LOCK_EX) !== strlen($serializedMods)) {
-            return ['error' => 'Unable to snapshot theme_mods_yootheme.', 'code' => 'snapshot_failed'];
+            return ['error' => 'Unable to snapshot ' . $modsOption . '.', 'code' => 'snapshot_failed'];
         }
         @chmod($modsPath, 0600);
 
@@ -1063,6 +1303,7 @@ class YoothemeStyleHelper
             'snapshot_id' => $snapshotId,
             'platform' => 'wordpress',
             'created_at' => gmdate('c'),
+            'theme_mods_option' => $modsOption,
             'theme_mods_sha256' => hash('sha256', $serializedMods),
             'files' => $manifestFiles,
         ];

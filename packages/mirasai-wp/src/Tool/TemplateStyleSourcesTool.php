@@ -136,6 +136,7 @@ class TemplateStyleSourcesTool extends AbstractTool
                 'platform' => 'wordpress',
                 'worker' => 'wp-content/themes/yootheme/assets/admin/js/worker.js',
                 'base_url' => admin_url('customize.php'),
+                'provenance' => 'router_provenance_v1',
                 'commands' => ['css', 'vars', 'minify', 'rtl'],
                 'css_input' => [
                     'style' => ['filename', 'filepath', 'imports', 'vars'],

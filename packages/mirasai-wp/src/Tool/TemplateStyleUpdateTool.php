@@ -44,6 +44,15 @@ class TemplateStyleUpdateTool extends AbstractTool
                 'compiled_rtl' => ['type' => 'string'],
                 'compiled_css_sha256' => ['type' => 'string'],
                 'compiled_rtl_sha256' => ['type' => 'string'],
+                'compile_provenance' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'worker_sha256' => ['type' => 'string', 'pattern' => '^[a-fA-F0-9]{64}$'],
+                        'sources_sha256' => ['type' => 'string', 'pattern' => '^[a-fA-F0-9]{64}$'],
+                    ],
+                    'required' => ['worker_sha256', 'sources_sha256'],
+                    'additionalProperties' => false,
+                ],
                 'dry_run' => ['type' => 'boolean'],
                 'confirm_guarded_write' => ['type' => 'boolean'],
             ],
@@ -134,6 +143,9 @@ class TemplateStyleUpdateTool extends AbstractTool
         $rtl = is_string($arguments['compiled_rtl'] ?? null) ? $arguments['compiled_rtl'] : '';
         $cssHash = strtolower(trim((string) ($arguments['compiled_css_sha256'] ?? '')));
         $rtlHash = strtolower(trim((string) ($arguments['compiled_rtl_sha256'] ?? '')));
+        $compileProvenance = is_array($arguments['compile_provenance'] ?? null)
+            ? $arguments['compile_provenance']
+            : [];
 
         if ($css === '' || $rtl === '' || strlen($css) > self::MAX_CSS_BYTES || strlen($rtl) > self::MAX_CSS_BYTES) {
             return [
@@ -147,6 +159,19 @@ class TemplateStyleUpdateTool extends AbstractTool
                 'error' => 'A compiled CSS SHA-256 does not match its payload.',
                 'code' => 'compiled_css_hash_mismatch',
             ];
+        }
+
+        if ($compileProvenance !== []) {
+            foreach (['worker_sha256', 'sources_sha256'] as $key) {
+                $value = strtolower(trim((string) ($compileProvenance[$key] ?? '')));
+                if (!preg_match('/^[a-f0-9]{64}$/', $value)) {
+                    return [
+                        'error' => 'compile_provenance requires valid worker_sha256 and sources_sha256 values.',
+                        'code' => 'invalid_compile_provenance',
+                    ];
+                }
+                $compileProvenance[$key] = $value;
+            }
         }
 
         $candidateConfig = $helper->patchConfig(
@@ -180,6 +205,7 @@ class TemplateStyleUpdateTool extends AbstractTool
                 'rtl_bytes' => strlen($rtl),
                 'rtl_sha256' => $rtlHash,
             ],
+            'compile_provenance' => $compileProvenance !== [] ? $compileProvenance : null,
             'secret_preserved' => ($config['yootheme_apikey'] ?? null)
                 === ($candidateConfig['yootheme_apikey'] ?? null),
         ];
@@ -192,7 +218,13 @@ class TemplateStyleUpdateTool extends AbstractTool
             ];
         }
 
-        $written = $helper->commitStyleUpdate($candidateConfig, $css, $rtl, $ifMatch);
+        $written = $helper->commitStyleUpdate(
+            $candidateConfig,
+            $css,
+            $rtl,
+            $ifMatch,
+            $compileProvenance
+        );
         if (isset($written['error'])) {
             return $written;
         }

@@ -88,7 +88,7 @@ $playbooks = [
 ];
 
 foreach ($playbooks as $platform => $playbook) {
-    expectPlaybook("{$platform} playbook version is 2", $playbook['version'] ?? null, 2);
+    expectPlaybook("{$platform} playbook version is 3", $playbook['version'] ?? null, 3);
     expectPlaybook(
         "{$platform} playbook names host auth as a dependency",
         is_array($playbook['depends_on']['host_http'] ?? null),
@@ -163,10 +163,16 @@ $wpLoops = array_values(array_map(
     is_array($playbooks['wordpress']['anti_loops'] ?? null) ? $playbooks['wordpress']['anti_loops'] : []
 ));
 expectPlaybook('wordpress playbook has anti-loop child_theme_parent_mods', in_array('child_theme_parent_mods', $wpLoops, true), true);
+expectPlaybook('wordpress playbook has anti-loop child_theme_uninitialized', in_array('child_theme_uninitialized', $wpLoops, true), true);
 expectPlaybookContains(
     'wordpress host storage names child theme_mods',
     (string) ($playbooks['wordpress']['channels']['this_host']['storage'] ?? ''),
     'theme_mods_{get_stylesheet()}'
+);
+expectPlaybookContains(
+    'wordpress host storage blocks an uninitialized child config',
+    (string) ($playbooks['wordpress']['channels']['this_host']['storage'] ?? ''),
+    'write_safe=false'
 );
 
 $joomlaInstructions = JoomlaPlaybook::initializeInstructions();

@@ -2,7 +2,7 @@
 
 Call `system/diagnose` and read `playbook`. Do not invent a Customizer, WP-CLI, or SQL path when a listed tool already covers the job.
 
-This document matches the MCP playbook on both hosts (`playbook.version` 2). Production agents never see the git repo; the live source of truth is `system/diagnose.playbook`.
+This document matches the MCP playbook on both hosts (`playbook.version` 3). Production agents never see the git repo; the live source of truth is `system/diagnose.playbook`.
 
 ## Detect the channel from tools you can see
 
@@ -59,25 +59,28 @@ Builder JSON and Style `theme.css` are different systems. Changing an element do
 
 **WordPress Style storage**
 
-- Live Style JSON is `theme_mods_{get_stylesheet()}.config`.
+- Live Style JSON is `theme_mods_{get_stylesheet()}.config` once that stylesheet has initialized its own config.
 - A child theme is **not** `theme_mods_yootheme`. Writing the parent row while `get_theme_mod('config')` reads the child aborts with `stale_etag` / “Style config changed at the write gate”.
+- A freshly activated child can have no config yet and read the parent as a fallback. In that state `style-read.storage` reports `inherited_from_parent=true` and `write_safe=false`; stop rather than mutating the parent implicitly.
 - The `yootheme` option holds Builder templates, not Style.
 
 **Proof of a Style write**
 
 - `style-read` shows the new var and `storage.option`.
+- `style-read.compiled.config_freshness.state` is `fresh` after a router-controlled write. `stale` proves later config drift; `unknown` means no usable provenance or CSS changed outside the router.
 - CSS first line: `/* YOOtheme Pro v… compiled on <ISO8601> */` moved.
 - `#fff` vs `#FFFFFF` (and similar hex minify) may leave CSS bytes unchanged. That is not a failed write. Do not use a screenshot as the test.
 
 ## Do not enter these loops
 
 1. **Customizer `save()` with `dirty=false`** — returns success and writes nothing. `change()` only marks dirty; it does not start less.js. Touch a real control and undo only as a last-resort browser path when the router is unavailable.
-2. **WP-CLI / SQL Style config** — updates the DB; the site keeps serving stale `theme.<id>.css` forever. `style-read.stale_sources` stays `false` because it compares CSS mtime with Less *files*, not with stored config.
+2. **WP-CLI / SQL Style config** — updates the DB; the site keeps serving stale `theme.<id>.css` forever. `style-read.stale_sources` stays `false`, but router provenance now makes `compiled.config_freshness.state=stale` when the CSS artefacts still match the last controlled compile.
 3. **Host `template/style-update` without compiled CSS** — that tool stores CSS the router already compiled. It is not a compiler.
 4. **Treating mcp2cli → host as the router** — you will see `template/style-*` and miss `mirasai/style-*`.
 5. **Writing `theme_mods_yootheme` on a child theme** — CAS compares the wrong option. Use `storage.option` from `style-read`.
 6. **Omitting `site_id` or skipping a worker re-pin** — compile/write hits the default site, or refuses the worker.
 7. **Omitting `dry_run=false` in JSON** — the call succeeds as a dry-run; disk unchanged.
+8. **Writing while `storage.write_safe=false`** — the child has no initialized config and reads the parent fallback. Stop and initialize the child through a separate guarded workflow.
 
 ## Last-resort browser recipe
 
