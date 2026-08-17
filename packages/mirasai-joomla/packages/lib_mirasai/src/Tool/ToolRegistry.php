@@ -16,7 +16,7 @@ class ToolRegistry
      */
     private const CORE_TOOL_METADATA = [
         'system/info' => ['description' => 'Returns comprehensive Joomla runtime information: CMS version, PHP version, DB engine, installed languages, active extensions with status, template summary (name, style ID, language assignments), YOOtheme version, environment detection, and MirasAI capabilities.', 'risk_level' => AbstractTool::RISK_READ],
-        'system/diagnose' => ['description' => 'Runs a compact MirasAI diagnostic: environment, extension/addon status, registered tools, provider warnings, YOOtheme layout/template counts, and production elevation state.', 'risk_level' => AbstractTool::RISK_READ],
+        'system/diagnose' => ['description' => 'Runs a compact MirasAI diagnostic and the agent playbook: environment, tools, YOOtheme counts, elevation, and which channel (this host, local router, mcp2cli, SSH) to use for each job.', 'risk_level' => AbstractTool::RISK_READ],
         'content/list' => ['description' => 'Lists articles with their language, category, publication state, and existing translation associations.', 'risk_level' => AbstractTool::RISK_READ],
         'content/read' => ['description' => 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category.', 'risk_level' => AbstractTool::RISK_READ],
         'content/translate' => ['description' => 'Creates or updates a translated version of an article. YOU must provide the translated content.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],

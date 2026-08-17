@@ -74,7 +74,7 @@ class McpHandler
                 'host_platform' => 'wordpress',
                 'host_contract_version' => MIRASAI_WP_CONTRACT_VERSION,
             ],
-            'instructions' => 'MirasAI WordPress host. Use system/info and system/diagnose to inspect the site. Use content/list and content/read for read-only content discovery. sandbox/execute-php is a dangerous_exec tool that is only listed when dangerous execution controls are enabled for the current domain and each call must pass confirm_execute_php=true.',
+            'instructions' => \Mirasai\WordPress\Tool\AgentPlaybook::initializeInstructions(),
         ];
     }
 

@@ -35,6 +35,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeLayoutProcessor.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeElementNavigator.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemePropsValidator.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/RuntimeSettings.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AgentPlaybook.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SystemInfoTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SystemDiagnoseTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentListTool.php';

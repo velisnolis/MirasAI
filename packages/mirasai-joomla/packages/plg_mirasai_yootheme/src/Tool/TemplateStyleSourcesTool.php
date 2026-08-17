@@ -18,7 +18,7 @@ class TemplateStyleSourcesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Returns everything needed to compile a Joomla YOOtheme Pro style outside the browser: the entry Less file, fully resolved import tree, forced style vars, and active overrides. Read-only.';
+        return 'Returns the Joomla YOOtheme import tree so a client can compile LESS outside the browser. This host has no compiler. The local MirasAI router consumes this via mirasai/style-preview. mcp2cli against this endpoint cannot compile the tree by itself.';
     }
 
     public function getInputSchema(): array

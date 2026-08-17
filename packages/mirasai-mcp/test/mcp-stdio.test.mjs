@@ -31,6 +31,9 @@ test('router initialize reports package version', async () => {
 
   assert.equal(response.jsonrpc, '2.0');
   assert.equal(response.result.serverInfo.version, packageVersion);
+  assert.match(response.result.instructions, /mirasai\/style-preview/);
+  assert.match(response.result.instructions, /playbook/);
+  assert.match(response.result.instructions, /do not compile/i);
 });
 
 test('router warns when a remote host reports an unexpected contract version', async () => {

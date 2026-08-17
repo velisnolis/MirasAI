@@ -18,7 +18,7 @@ class SystemDiagnoseTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Runs a compact MirasAI diagnostic: environment, extension/addon status, registered tools, provider warnings, YOOtheme layout/template counts, and production elevation state. Use this first when connectivity works but a tool is missing or a workflow is not behaving as expected.';
+        return 'Runs a compact MirasAI diagnostic and the agent playbook: environment, tools, YOOtheme counts, elevation, and which channel (this host, local router, mcp2cli, SSH) to use for each job. Call this first after install. Do not trial-and-error YOOtheme Style writes.';
     }
 
     public function getInputSchema(): array
@@ -94,6 +94,7 @@ class SystemDiagnoseTool extends AbstractTool
             ],
             'yootheme' => $yootheme,
             'elevation' => $elevation,
+            'playbook' => AgentPlaybook::build(),
             'checks' => $checks,
         ];
     }
