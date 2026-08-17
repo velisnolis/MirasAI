@@ -252,6 +252,35 @@ test('router can test default site through injected client', async () => {
   assert.equal(response.result.structuredContent.site_id, 'joomla-demo');
 });
 
+test('router contains an unexpected sites-test exception as a structured tool failure', async () => {
+  const handler = createRouterHandler(registry, {
+    clientFactory: () => ({
+      test: async () => {
+        throw new Error('unexpected client failure');
+      },
+    }),
+  });
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      name: 'mirasai/sites-test',
+      arguments: {},
+    },
+    id: 31,
+  });
+
+  assert.equal(response.error, undefined);
+  assert.equal(response.result.isError, true);
+  assert.equal(response.result.structuredContent.ok, false);
+  assert.equal(response.result.structuredContent.error.classification, 'unexpected_preflight_failure');
+  assert.deepEqual(
+    response.result.structuredContent.stages.map((stage) => stage.name),
+    ['dns_tls', 'http', 'auth', 'initialize', 'tools/list', 'diagnose'],
+  );
+});
+
 test('router exposes remote tools with site_id injected', async () => {
   const handler = createRouterHandler(registry, {
     clientFactory: () => ({

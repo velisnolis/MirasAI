@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
-import { MirasaiHostClient } from './site-client.mjs';
+import { MirasaiHostClient, unexpectedPreflightResult } from './site-client.mjs';
 import { previewStyle, updateStyle, verifyCompiledStyle } from './style-preview.mjs';
 
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -21,6 +21,7 @@ export function createRouterHandler(registry, options = {}) {
   cachingFactory.evict = (site) => {
     clientCache.delete(site.site_id);
   };
+  cachingFactory.fresh = (site) => clientFactory(site);
 
   return async function handleJsonRpc(request) {
     const id = request?.id ?? null;
@@ -89,7 +90,7 @@ export function routerTools() {
     },
     {
       name: 'mirasai/sites-test',
-      description: 'Validate one configured MirasAI host by calling initialize, tools/list, and system/diagnose.',
+      description: 'Run a read-only staged connection preflight for one configured host: DNS/TLS, HTTP, auth, initialize, tools/list, and system/diagnose when supported. Failures return structured classifications and next actions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -249,8 +250,15 @@ async function callRouterTool(registry, clientFactory, params) {
 
   if (name === 'mirasai/sites-test') {
     const site = findSite(registry, args.site_id);
-    const result = await clientFactory(site).test();
-    return callToolResult(result, result.ok !== true);
+    try {
+      const client = typeof clientFactory.fresh === 'function'
+        ? clientFactory.fresh(site)
+        : clientFactory(site);
+      const result = await client.test();
+      return callToolResult(result, result.ok !== true);
+    } catch {
+      return callToolResult(unexpectedPreflightResult(site), true);
+    }
   }
 
   if (
