@@ -20,7 +20,7 @@ class TemplateStyleSourcesTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Returns everything needed to compile a YOOtheme Pro style outside the browser: the entry Less file, the fully resolved import tree (url => Less source), forced style vars, and the active overrides. YOOtheme has no server-side Less compiler, so a client must compile this tree itself. Read-only.';
+        return 'Returns the YOOtheme import tree so a client can compile LESS outside the browser. This host has no compiler. The local MirasAI router consumes this via mirasai/style-preview. mcp2cli against this endpoint cannot compile the tree by itself.';
     }
 
     public function getSurface(): string

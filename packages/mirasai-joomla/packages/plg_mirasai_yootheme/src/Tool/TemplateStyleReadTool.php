@@ -15,7 +15,7 @@ class TemplateStyleReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads the Joomla YOOtheme Pro Style state: active style and variation, variable overrides, custom Less, available styles, compiled CSS freshness, and locally stored fonts. Read-only. The YOOtheme API key is never returned.';
+        return 'Reads the Joomla YOOtheme Pro Style state: active style and variation, variable overrides, custom Less, available styles, compiled CSS freshness, and locally stored fonts. Read-only. stale_sources compares CSS mtime with Less files only — config-only edits stay looking fresh. This host does not compile LESS.';
     }
 
     public function getInputSchema(): array

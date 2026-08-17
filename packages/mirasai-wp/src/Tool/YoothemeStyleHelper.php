@@ -277,6 +277,8 @@ class YoothemeStyleHelper
                 'stale_version' => null,
                 'stale_sources' => null,
                 'freshness_method' => 'broad_less_mtime_heuristic',
+                'freshness_caveat' => 'stale_sources ignores Style config (less/custom_less). A false value does not mean the CSS matches the stored config.',
+                'stale_config_detectable' => false,
             ];
         }
 
@@ -298,6 +300,8 @@ class YoothemeStyleHelper
             'stale_version' => $compiledVersion !== null && $compiledVersion !== $this->themeVersion(),
             'stale_sources' => $newest['mtime'] !== null && $newest['mtime'] > $mtime,
             'freshness_method' => 'broad_less_mtime_heuristic',
+            'freshness_caveat' => 'stale_sources ignores Style config (less/custom_less). A false value does not mean the CSS matches the stored config.',
+            'stale_config_detectable' => false,
             'newest_source' => $newest['file'],
             'newest_source_mtime' => $newest['mtime'] !== null ? gmdate('c', $newest['mtime']) : null,
         ];

@@ -20,7 +20,7 @@ class SystemDiagnoseTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Runs a compact MirasAI WordPress diagnostic: endpoint readiness, auth configuration, tool counts, WordPress environment, and key runtime warnings.';
+        return 'Runs a compact MirasAI WordPress diagnostic and the agent playbook: which channel (this host, local router, mcp2cli, SSH) to use for each job. Call this first after install. Do not trial-and-error YOOtheme Style writes.';
     }
 
     public function getSurface(): string
@@ -94,6 +94,10 @@ class SystemDiagnoseTool extends AbstractTool
                     'layout_counts' => $this->layoutCounts($yoothemeLayouts),
                     'post_state_count' => count($yoothemePostStates),
                     'post_state_counts' => $this->postStateCounts($yoothemePostStates),
+                    'style_read_tool' => 'template/style-read',
+                    'style_update_tool' => 'template/style-update',
+                    'compiles_less_on_this_host' => false,
+                    'compiler_tools' => ['mirasai/style-preview', 'mirasai/style-update', 'mirasai/style-verify'],
                 ]),
                 'sandbox' => [
                     'status_tool' => 'sandbox/status',
@@ -110,6 +114,7 @@ class SystemDiagnoseTool extends AbstractTool
                     'state' => RuntimeSettings::dangerousExecStatus()['state'],
                 ],
             ],
+            'playbook' => AgentPlaybook::build(),
             'warnings' => $this->warnings(),
         ];
     }

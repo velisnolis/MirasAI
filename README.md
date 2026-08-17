@@ -337,6 +337,11 @@ in a separate, timeout-bounded, permission-restricted process. The pin,
 subprocess, and Node Permission Model are defense in depth, not a security
 boundary for arbitrary untrusted JavaScript.
 
+Host HTTP endpoints and `mcp2cli` pointed at a CMS URL do **not** compile LESS.
+After install, agents should call `system/diagnose` and follow `playbook`
+(see `docs/agent-routes.md`). Builder layouts stay on `template/element-*`.
+Style CSS writes go through `mirasai/style-update` on the local router.
+
 A real Style update follows:
 
 1. read sources and the current Style ETag;

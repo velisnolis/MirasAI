@@ -50,6 +50,7 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/YooThemeHelper.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ToolRegistry.php';
 // Core tools
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemInfoTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/AgentPlaybook.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/SystemDiagnoseTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';

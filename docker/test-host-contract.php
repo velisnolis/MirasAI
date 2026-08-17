@@ -18,12 +18,14 @@ define('MIRASAI_WP_CONTRACT_VERSION', '1');
 
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolInterface.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AbstractTool.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AgentPlaybook.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolRegistry.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpHandler.php';
 
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mirasai.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ToolInterface.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/AbstractTool.php';
+require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/AgentPlaybook.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ToolRegistry.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Sandbox/EnvironmentGuard.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpHandler.php';
@@ -74,6 +76,16 @@ $joomlaInfo = $joomlaResponse['result']['serverInfo'] ?? [];
 
 expectHostContract('Joomla initialize reports host platform', $joomlaInfo['host_platform'] ?? null, 'joomla');
 expectHostContract('Joomla initialize reports contract version', $joomlaInfo['host_contract_version'] ?? null, '1');
+expectHostContract(
+    'WordPress initialize points agents at diagnose',
+    str_contains((string) ($wpResponse['result']['instructions'] ?? ''), 'system/diagnose'),
+    true
+);
+expectHostContract(
+    'Joomla initialize points agents at diagnose',
+    str_contains((string) ($joomlaResponse['result']['instructions'] ?? ''), 'system/diagnose'),
+    true
+);
 
 if ($failed > 0) {
     echo "\n{$failed} host contract test(s) failed.\n";

@@ -204,10 +204,14 @@ starts everywhere except the argument list.
 
 `template/style-read` and `template/style-sources` inspect the active Style,
 available styles, Less inputs, overrides, compiled CSS freshness, and relative
-assets without exposing the YOOtheme API key. `template/style-update` is a
-guarded write: the router compiles LTR/RTL first, binds the dry-run to those CSS
-hashes, and the host snapshots state, validates relative assets, writes through
-compare-and-swap, clears caches, and verifies readback.
+assets without exposing the YOOtheme API key. `stale_sources` is a Less-file
+mtime heuristic; config-only edits do not flip it. `template/style-update` does
+not compile LESS: the local router compiles LTR/RTL first, binds the dry-run to
+those CSS hashes, and the host snapshots state, validates relative assets,
+writes through compare-and-swap, clears caches, and verifies readback.
+
+After install, call `system/diagnose` and follow `playbook` (`docs/agent-routes.md`)
+instead of Customizer or WP-CLI Style writes.
 
 `template/style-create` is WordPress-only. It can scaffold a YOOtheme child
 theme and create a versionable `less/theme.<id>.less` source after dry-run,

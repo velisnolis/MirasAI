@@ -9,6 +9,7 @@ use Mirasai\Library\Sandbox\ElevationService;
 use Mirasai\Library\Sandbox\EnvironmentGuard;
 use Mirasai\Library\Mirasai;
 use Mirasai\Library\Tool\AbstractTool;
+use Mirasai\Library\Tool\AgentPlaybook;
 use Mirasai\Library\Tool\ToolArgumentValidator;
 use Mirasai\Library\Tool\ToolRegistry;
 
@@ -68,7 +69,9 @@ class McpHandler
     {
         $environment = EnvironmentGuard::isStaging() ? 'staging' : 'production';
 
-        $instructions = 'MirasAI is an MCP server for Joomla 5. It provides tools for content management, '
+        $instructions = AgentPlaybook::initializeInstructions()
+            . "\n\n"
+            . 'MirasAI is an MCP server for Joomla 5. It provides tools for content management, '
             . 'multilingual translation (including YOOtheme Builder layouts), site inspection, '
             . 'file operations, database queries, and transaction-wrapped in-process PHP execution.'
             . "\n\n"

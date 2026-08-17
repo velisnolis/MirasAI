@@ -223,6 +223,8 @@ check('style-read reports the style source directory', ($flow['source'] ?? '') =
 
 check('style-read detects CSS older than its Less sources', ($read['compiled']['stale_sources'] ?? null) === true);
 check('style-read detects a CSS compiled by an older YOOtheme', ($read['compiled']['stale_version'] ?? null) === true);
+check('style-read does not claim config staleness is detectable', ($read['compiled']['stale_config_detectable'] ?? true) === false);
+check('style-read warns that stale_sources ignores config', str_contains((string) ($read['compiled']['freshness_caveat'] ?? ''), 'ignores Style config'));
 check('style-read warns about the stale CSS', (bool) array_filter($read['warnings'] ?? [], static fn($w) => str_contains($w, 'predates its own Less sources')));
 check('style-read warns about the missing child theme', (bool) array_filter($read['warnings'] ?? [], static fn($w) => str_contains($w, 'No child theme')));
 check('style-read groups the local font families', ($read['fonts']['families'] ?? []) === ['montserrat', 'varelaround']);

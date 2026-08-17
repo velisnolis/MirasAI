@@ -119,6 +119,14 @@ checkJoomlaStyle(
     'freshness method is explicitly an mtime heuristic',
     $compiled['freshness_method'] === 'broad_less_mtime_heuristic'
 );
+checkJoomlaStyle(
+    'config staleness is not claimed as detectable',
+    ($compiled['stale_config_detectable'] ?? true) === false
+);
+checkJoomlaStyle(
+    'freshness caveat says config is ignored',
+    str_contains((string) ($compiled['freshness_caveat'] ?? ''), 'ignores Style config')
+);
 checkJoomlaStyle('theme version comes from templateDetails.xml', $compiled['theme_version'] === '5.0.37');
 checkJoomlaStyle('local fonts are summarized', $fonts['families'] === ['Roboto']);
 checkJoomlaStyle(

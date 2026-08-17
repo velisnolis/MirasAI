@@ -41,7 +41,9 @@ export function createRouterHandler(registry, options = {}) {
             version: ROUTER_VERSION,
           },
           instructions:
-            'MirasAI MCP router. Use mirasai/sites-list to inspect configured sites, mirasai/sites-test to validate one host, and mirasai/host-diagnose to run system/diagnose on a host.',
+            'MirasAI MCP router. This process compiles YOOtheme LESS (mirasai/style-preview, mirasai/style-update, mirasai/style-verify) using each site\'s pinned worker.js. Host HTTP endpoints and mcp2cli pointed at a CMS URL do not compile.\n'
+            + 'Call mirasai/host-diagnose (or system/diagnose) and follow playbook before Style work. Builder layouts stay on template/element-*. Style CSS writes use mirasai/style-update here — never Customizer save() and never WP-CLI/SQL config edits.\n'
+            + 'Use mirasai/sites-list, mirasai/sites-test, and pin style_worker_sha256 before compiling.',
         });
       }
 
@@ -108,7 +110,7 @@ export function routerTools() {
     {
       name: 'mirasai/style-preview',
       description:
-        'Compiles a YOOtheme Pro style with a candidate variable patch and reports what would change, without writing anything. YOOtheme has no server-side Less compiler, so the router runs the site\'s own worker.js headlessly.',
+        'Compiles a YOOtheme Pro style with a candidate variable patch and reports what would change, without writing anything. This is the compiler. The CMS host cannot do this. mcp2cli must be pointed at this router (stdio), not at the host HTTP URL.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -139,7 +141,7 @@ export function routerTools() {
     {
       name: 'mirasai/style-update',
       description:
-        'Compiles and applies a guarded patch to the active YOOtheme Style. The host rechecks the ETag, snapshots config/CSS privately, replaces LTR/RTL CSS atomically, and rolls back on failure. Run dry_run=true first.',
+        'Compiles and applies a guarded patch to the active YOOtheme Style. Do not call host template/style-update yourself and do not use the Customizer. Empty vars recompiles the current config. Run dry_run=true first.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -173,7 +175,7 @@ export function routerTools() {
     {
       name: 'mirasai/style-verify',
       description:
-        'Recompiles the active YOOtheme style exactly as configured and reports host freshness signals for the served CSS. The CSS bytes are not directly compared because YOOtheme post-processes headers and fonts after compilation. Writes nothing.',
+        'Recompiles the active YOOtheme style exactly as configured and reports host freshness signals. Writes nothing. stale_sources can be a false negative after config-only edits; confirm with the CSS compiled-on header. Not a byte-for-byte comparison.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -191,7 +193,7 @@ export function routerTools() {
     },
     {
       name: 'mirasai/host-diagnose',
-      description: 'Run system/diagnose on one configured MirasAI host.',
+      description: 'Run system/diagnose on one configured MirasAI host, including the agent playbook for Builder vs Style vs SSH routing.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -17,7 +17,7 @@ class TemplateStyleUpdateTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Applies a guarded Joomla YOOtheme Style patch together with already compiled LTR/RTL CSS. Requires if_match, dry_run first, and confirm_guarded_write for a real write. Creates a private config/CSS snapshot and rolls back automatically on failure.';
+        return 'Applies a guarded Joomla YOOtheme Style patch together with already compiled LTR/RTL CSS. Does not compile LESS. Requires compiled_css, compiled_rtl, and their SHA-256 from the local router tool mirasai/style-update. If those router tools are not in your tools/list, stop — do not SQL-update template params or Customizer save(). Guarded: if_match, dry_run first, confirm_guarded_write.';
     }
 
     public function getPermissions(): array

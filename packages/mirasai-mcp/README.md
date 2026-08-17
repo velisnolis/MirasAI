@@ -142,6 +142,10 @@ compiled CSS targets, and worker paths inside the host adapter. A real update
 requires `dry_run: false`, `confirm_guarded_write: true`, and the fresh Style ETag returned by
 `template/style-read` or `mirasai/style-preview`.
 
+`mcp2cli --transport streamable` against a host URL is the host, not this
+compiler. Point mcp2cli at `mirasai-mcp serve` (stdio) for Style compile/write.
+See `docs/agent-routes.md`.
+
 The WordPress host additionally exposes guarded `template/style-create`. It
 scaffolds a YOOtheme child theme when needed and writes a versionable
 `less/theme.<id>.less` source after `dry_run` + `if_match` + confirmation. It
