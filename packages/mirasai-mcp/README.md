@@ -4,7 +4,7 @@
 
 It keeps the client-facing MCP surface in one place and routes calls to Joomla or WordPress host endpoints by `site_id`.
 
-Current internal version: `0.8.0`.
+Current internal version: `0.8.1`.
 
 This release implements the registry, secret resolution with in-memory TTL,
 host probing, remote tool discovery, and a stdio MCP server that can expose
@@ -144,6 +144,9 @@ requires `dry_run: false`, `confirm_guarded_write: true`, and the fresh Style ET
 
 `mcp2cli --transport streamable` against a host URL is the host, not this
 compiler. Point mcp2cli at `mirasai-mcp serve` (stdio) for Style compile/write.
+Always pass `site_id`; `default_site_id` may be a different site. mcp2cli
+`--dry-run` is `store_true` — omitting it still sends `dry_run=true`. A real
+write needs JSON with `dry_run: false` and `confirm_guarded_write: true`.
 See `docs/agent-routes.md`.
 
 The WordPress host additionally exposes guarded `template/style-create`. It

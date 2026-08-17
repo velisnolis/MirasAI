@@ -14,7 +14,7 @@ namespace Mirasai\WordPress\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     /**
      * Short initialize text. Agents often skip long instructions; the full
@@ -29,6 +29,7 @@ class AgentPlaybook
             'Style CSS (theme.<id>.css): compile only if YOUR tools/list includes mirasai/style-preview. Then use mirasai/style-update. mcp2cli against this URL is still this host, not the compiler.',
             'If those router tools are absent, stop. Do not write theme_mods via WP-CLI. Customizer save() with dirty=false is a silent no-op.',
             'SSH: verify the CSS header and purge page cache (WP Rocket rocket_clean_domain). It does not regenerate CSS.',
+            'Style JSON is theme_mods of the active stylesheet (a child is not theme_mods_yootheme). Proof of a write is the CSS compiled-on header, not a visible colour change.',
             'sandbox/execute-php is listed only when dangerous execution is enabled for this domain; each call needs confirm_execute_php=true.',
         ]);
     }
@@ -49,9 +50,35 @@ class AgentPlaybook
             ],
             'compiler_on_this_endpoint' => false,
             'compiler_present_iff' => 'mirasai/style-preview or mirasai/style-update appears in YOUR current tools/list (usually via local @miras/mirasai-mcp). This diagnose payload cannot see that list.',
+            'depends_on' => self::dependsOn(),
             'channels' => self::channels(),
             'jobs' => self::jobs(),
             'anti_loops' => self::antiLoops(),
+        ];
+    }
+
+    /**
+     * What has to be true before a channel can do the jobs below.
+     *
+     * @return array<string, mixed>
+     */
+    private static function dependsOn(): array
+    {
+        return [
+            'host_http' => [
+                'Authenticated MCP (WordPress Application Password + manage_options). Anonymous 401/503 is a lock or missing auth, not a missing plugin.',
+                'This plugin version actually deployed (a GitHub ZIP older than the playbook will not mention it).',
+            ],
+            'router' => [
+                'A local machine with Node.js 20+ and @miras/mirasai-mcp (Cloud Agents without 1Password/SSH cannot compile).',
+                'sites.json entry for the target site_id. default_site_id may be a different site — always pass site_id.',
+                'style_worker_sha256 pinned to THAT site\'s wp-content/themes/yootheme/assets/admin/js/worker.js. Re-pin after a YOOtheme upgrade.',
+                'Host credentials (op:// or env). The pin without credentials still cannot call the host.',
+            ],
+            'ssh' => [
+                'A working user key to the account, not a Host alias that forces root.',
+                'CageFS WP-CLI path when the account is jailed.',
+            ],
         ];
     }
 
@@ -73,7 +100,9 @@ class AgentPlaybook
                 'cannot' => [
                     'compile YOOtheme LESS',
                     'regenerate theme.<id>.css from config alone',
+                    'reach the endpoint when anonymous access is locked (503/401)',
                 ],
+                'storage' => 'Style JSON is theme_mods_{get_stylesheet()}.config. A child theme is not the parent theme_mods_yootheme row. The yootheme option holds Builder templates.',
             ],
             'router' => [
                 'binary' => 'mirasai-mcp serve',
@@ -83,14 +112,23 @@ class AgentPlaybook
                     'multi-site routing',
                     'everything this host can do, proxied',
                 ],
+                'cannot' => [
+                    'compile if style_worker_sha256 is missing or mismatches worker.js',
+                    'write the intended site if you omit site_id and default_site_id is elsewhere',
+                ],
                 'requires' => [
                     'Node.js 20+',
-                    'sites.json entry with style_worker_sha256 pinned',
+                    'sites.json entry with style_worker_sha256 pinned for this site_id',
+                    'host credentials for that site',
                 ],
             ],
             'mcp2cli' => [
                 'use_for' => 'Whatever MCP it is pointed at. Pointed at this host: same as this_host. Pointed at mirasai-mcp serve (stdio): same as router.',
                 'do_not_assume' => 'Having mcp2cli does not mean you have the Style compiler.',
+                'cli_gotchas' => [
+                    'The --dry-run flag is store_true. Omitting it still sends dry_run=true to the tool. A real write needs JSON with dry_run=false and confirm_guarded_write=true (typically --stdin).',
+                    'Pass --site-id when the router default is not the target site.',
+                ],
             ],
             'ssh' => [
                 'use_for' => [
@@ -136,20 +174,23 @@ class AgentPlaybook
                 'id' => 'yootheme_style_read',
                 'do' => 'Inspect Style variables, custom Less, compiled CSS freshness.',
                 'best' => 'template/style-read. Optional template/style-sources for the import tree.',
-                'caveat' => 'compiled.stale_sources is a Less-file mtime heuristic. It stays false after config-only edits (theme_mods_yootheme.config less/custom_less). compiled.stale_config is not detected on this host.',
+                'caveat' => 'compiled.stale_sources is a Less-file mtime heuristic. It stays false after config-only edits (theme_mods_{stylesheet}.config less/custom_less). compiled.stale_config is not detected on this host.',
+                'storage' => 'theme_mods_{get_stylesheet()}.config. Child themes: theme_mods_<child>, not theme_mods_yootheme.',
                 'ssh' => 'Optional: head -n1 wp-content/themes/yootheme/css/theme.<id>.css',
             ],
             [
                 'id' => 'yootheme_style_write',
                 'do' => 'Change Style variables or custom Less and regenerate the served CSS.',
-                'best_if_router_tools_listed' => 'mirasai/style-update: dry_run=true, review, then dry_run=false + confirm_guarded_write=true + fresh if_match. Empty vars recompiles the current config.',
+                'best_if_router_tools_listed' => 'mirasai/style-update: dry_run=true, review, then dry_run=false + confirm_guarded_write=true + fresh if_match. Empty vars recompiles the current config. Pass site_id. Use --stdin JSON so dry_run is not left at the CLI default.',
                 'if_only_this_host' => 'STOP. template/style-update requires compiled_css and compiled_rtl you cannot produce here. Do not write theme_mods via WP-CLI. Do not open the Customizer as the default path.',
+                'proof' => 'New etag + CSS /* compiled on */ header moved. #fff vs #FFFFFF (and similar hex minify) may leave CSS bytes unchanged; that is not a failed write.',
                 'last_resort_browser' => 'Only when the router is unavailable: Customizer with &site=<url>, wait for iframe, change a real control and undo (this starts less.js), then await yootheme.store.useConfigStore().save(), then check the CSS compiled-on header. save() with dirty=false writes nothing.',
                 'avoid' => [
                     'cs.save() without a real control change',
                     'cs.change() expecting a compile',
-                    'WP-CLI option update of theme_mods_yootheme',
+                    'WP-CLI option update of theme_mods_yootheme or the child row',
                     'calling host template/style-update without router-compiled CSS hashes',
+                    'writing the parent theme_mods_yootheme row when a child stylesheet is active',
                 ],
             ],
             [
@@ -208,6 +249,36 @@ class AgentPlaybook
                 'symptom' => 'mcp2cli --list shows template/style-update but not mirasai/style-preview.',
                 'cause' => 'mcp2cli is pointed at the CMS HTTP endpoint.',
                 'fix' => 'Keep that for Builder/content. For Style compile, point mcp2cli at `mirasai-mcp serve` (stdio) with a pinned style_worker_sha256.',
+            ],
+            [
+                'id' => 'child_theme_parent_mods',
+                'symptom' => 'style-update returns stale_etag / Style config changed at the write gate. CSS header unchanged.',
+                'cause' => 'Read used get_theme_mod(config) on the child; write compared theme_mods_yootheme (parent). Different JSON, CAS abort.',
+                'fix' => 'Write theme_mods_{get_stylesheet()}. storage.option on style-read must match that row.',
+            ],
+            [
+                'id' => 'router_wrong_site_or_unpinned_worker',
+                'symptom' => 'Compile hits the wrong site, style_worker_hash_required, or hash_mismatch.',
+                'cause' => 'default_site_id is another site, or worker.js changed after a YOOtheme upgrade and the pin did not.',
+                'fix' => 'Pass site_id every call. Re-pin style_worker_sha256 to the live worker.js after reviewing the hash.',
+            ],
+            [
+                'id' => 'mcp2cli_dry_run_omitted',
+                'symptom' => 'style-update reports ok but dry_run=true; nothing written.',
+                'cause' => 'mcp2cli --dry-run is store_true and the tool defaults dry_run to true when the field is omitted.',
+                'fix' => 'Send JSON with dry_run=false and confirm_guarded_write=true via --stdin. Do not confirm twice without a fresh etag.',
+            ],
+            [
+                'id' => 'hex_minify_same_css_bytes',
+                'symptom' => 'Config shows #fff instead of #FFFFFF but CSS sha256/bytes look unchanged.',
+                'cause' => 'Less minifies equivalent hex. A recompile can also rewrite the compiled-on header without a visible colour change.',
+                'fix' => 'Prove the write with style-read (var + storage.option) and the CSS compiled-on header, not a screenshot.',
+            ],
+            [
+                'id' => 'unauthenticated_host',
+                'symptom' => 'Host MCP returns 401 or 503. Agent assumes MirasAI is not installed.',
+                'cause' => 'Anonymous REST is locked or Application Password was not sent. Site-lock plugins often 503 the frontend and unauthenticated REST.',
+                'fix' => 'Call with Application Password. 503 anonymous + 200 authenticated is expected on locked staging sites.',
             ],
         ];
     }

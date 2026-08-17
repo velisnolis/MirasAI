@@ -114,16 +114,22 @@ function get_theme_mod(string $key, mixed $default = null): mixed
 }
 function get_option(string $key, mixed $default = false): mixed
 {
-    return $key === 'theme_mods_yootheme'
-        ? ['config' => (string) json_encode($GLOBALS['test_config'])] + $GLOBALS['test_theme_mod_extras']
-        : $default;
+    $stylesheetMods = 'theme_mods_' . $GLOBALS['test_stylesheet'];
+    if ($key === $stylesheetMods) {
+        return ['config' => (string) json_encode($GLOBALS['test_config'])] + $GLOBALS['test_theme_mod_extras'];
+    }
+    if ($key === 'theme_mods_yootheme' && $GLOBALS['test_stylesheet'] !== 'yootheme') {
+        return ['config' => (string) json_encode(['style' => 'flow'])];
+    }
+    return $default;
 }
 function update_option(string $key, mixed $value, mixed $autoload = null): bool
 {
     $GLOBALS['test_update_option_calls']++;
-    if ($key === 'theme_mods_yootheme' && is_array($value) && is_string($value['config'] ?? null)) {
+    $stylesheetMods = 'theme_mods_' . $GLOBALS['test_stylesheet'];
+    if (($key === $stylesheetMods || $key === 'theme_mods_yootheme') && is_array($value) && is_string($value['config'] ?? null)) {
         $decoded = json_decode($value['config'], true);
-        if (is_array($decoded)) {
+        if (is_array($decoded) && $key === $stylesheetMods) {
             $GLOBALS['test_config'] = $decoded;
         }
         $extras = $value;
@@ -158,7 +164,8 @@ final class TestStyleWpdb
         $arguments = is_array($prepared) ? ($prepared['arguments'] ?? []) : [];
         [$candidate, $optionName, $expected] = $arguments + [null, null, null];
 
-        if ($optionName !== 'theme_mods_yootheme'
+        if (!is_string($optionName)
+            || !str_starts_with($optionName, 'theme_mods_')
             || !is_string($candidate)
             || !is_string($expected)
             || maybe_serialize(get_option($optionName, [])) !== $expected) {
@@ -418,10 +425,29 @@ $currentMods = get_option('theme_mods_yootheme', []);
 $conflictingMods = $currentMods;
 $conflictingMods['config'] = (string) json_encode($beforeCommitConfig);
 $GLOBALS['test_force_cas_conflict'] = true;
-$conflict = $cas->invoke($helper, $currentMods, $conflictingMods);
+$conflict = $cas->invoke($helper, $currentMods, $conflictingMods, 'theme_mods_yootheme');
 $GLOBALS['test_force_cas_conflict'] = false;
 check('style-update rejects a lost-update race at the database gate', ($conflict['ok'] ?? true) === false);
 check('a rejected compare-and-swap leaves the current config untouched', $helper->loadConfig() === $commitCandidate);
+
+$previousStylesheet = $GLOBALS['test_stylesheet'];
+$GLOBALS['test_stylesheet'] = 'yootheme-industria-viva';
+$childRead = (new TemplateStyleReadTool())->handle([]);
+check('style-read storage option follows the child stylesheet', ($childRead['storage']['option'] ?? '') === 'theme_mods_yootheme-industria-viva');
+$childHelper = new YoothemeStyleHelper();
+check('styleModsOptionName uses child theme mods', $childHelper->styleModsOptionName() === 'theme_mods_yootheme-industria-viva');
+$childConfig = $childHelper->loadConfig();
+$childEtag = $childHelper->etag($childConfig, $childHelper->compiledState());
+$childCandidate = $childHelper->patchConfig($childConfig, 'flow', 'white-pink', ['@global-background' => '#fff'], [], null, false);
+$childCommit = $childHelper->commitStyleUpdate(
+    $childCandidate,
+    '.x{color:#fff}',
+    '.x{color:#fff;direction:rtl}',
+    $childEtag
+);
+check('style-update commits against child theme_mods, not the parent row', !isset($childCommit['error']) && is_string($childCommit['new_etag'] ?? null));
+check('child style-update stored @global-background as #fff', ($childHelper->loadConfig()['less']['@global-background'] ?? null) === '#fff');
+$GLOBALS['test_stylesheet'] = $previousStylesheet;
 
 // YOOtheme's StyleFontLoader stores downloaded files in its own fonts cache,
 // then makes their URLs relative to the CSS destination directory passed to

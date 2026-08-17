@@ -76,6 +76,10 @@ $requiredLoops = [
     'host_style_update_missing_css',
     'stale_sources_false_negative',
     'mcp2cli_host_is_not_router',
+    'router_wrong_site_or_unpinned_worker',
+    'mcp2cli_dry_run_omitted',
+    'hex_minify_same_css_bytes',
+    'unauthenticated_host',
 ];
 
 $playbooks = [
@@ -84,7 +88,17 @@ $playbooks = [
 ];
 
 foreach ($playbooks as $platform => $playbook) {
-    expectPlaybook("{$platform} playbook version is 1", $playbook['version'] ?? null, 1);
+    expectPlaybook("{$platform} playbook version is 2", $playbook['version'] ?? null, 2);
+    expectPlaybook(
+        "{$platform} playbook names host auth as a dependency",
+        is_array($playbook['depends_on']['host_http'] ?? null),
+        true
+    );
+    expectPlaybookContains(
+        "{$platform} router depends on site_id",
+        json_encode($playbook['depends_on']['router'] ?? []),
+        'site_id'
+    );
     expectPlaybook("{$platform} host does not compile LESS", $playbook['compiler_on_this_endpoint'] ?? true, false);
     expectPlaybook(
         "{$platform} tells agents to inspect tools/list for the compiler",
@@ -117,6 +131,16 @@ foreach ($playbooks as $platform => $playbook) {
         (string) ($styleWrite['best_if_router_tools_listed'] ?? ''),
         'mirasai/style-update'
     );
+    expectPlaybookContains(
+        "{$platform} style write names site_id",
+        (string) ($styleWrite['best_if_router_tools_listed'] ?? ''),
+        'site_id'
+    );
+    expectPlaybookContains(
+        "{$platform} style write says hex minify is not failure",
+        (string) ($styleWrite['proof'] ?? ''),
+        'compiled on'
+    );
 
     $loopIds = array_values(array_map(
         static fn (array $loop): string => (string) ($loop['id'] ?? ''),
@@ -132,6 +156,18 @@ expectPlaybookContains('WordPress initialize names diagnose', $wpInstructions, '
 expectPlaybookContains('WordPress initialize denies host compile', $wpInstructions, 'does not compile');
 expectPlaybookContains('WordPress initialize names router compiler tool', $wpInstructions, 'mirasai/style-preview');
 expectPlaybookContains('WordPress initialize names Customizer no-op', $wpInstructions, 'dirty=false');
+expectPlaybookContains('WordPress initialize names child theme_mods', $wpInstructions, 'theme_mods_yootheme');
+
+$wpLoops = array_values(array_map(
+    static fn (array $loop): string => (string) ($loop['id'] ?? ''),
+    is_array($playbooks['wordpress']['anti_loops'] ?? null) ? $playbooks['wordpress']['anti_loops'] : []
+));
+expectPlaybook('wordpress playbook has anti-loop child_theme_parent_mods', in_array('child_theme_parent_mods', $wpLoops, true), true);
+expectPlaybookContains(
+    'wordpress host storage names child theme_mods',
+    (string) ($playbooks['wordpress']['channels']['this_host']['storage'] ?? ''),
+    'theme_mods_{get_stylesheet()}'
+);
 
 $joomlaInstructions = JoomlaPlaybook::initializeInstructions();
 expectPlaybookContains('Joomla initialize names diagnose', $joomlaInstructions, 'system/diagnose');
