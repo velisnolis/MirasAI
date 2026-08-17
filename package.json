@@ -11,6 +11,7 @@
     "test:local-contracts": "bash docker/test-local-contracts.sh",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
+    "test:host-contract": "php docker/test-host-contract.php",
     "test:agent-playbook": "php docker/test-agent-playbook.php",
     "test:wp-auth": "php docker/test-wp-rest-auth-contract.php",
     "test:wp-mcp-handler": "php docker/test-wp-mcp-handler-contract.php",
