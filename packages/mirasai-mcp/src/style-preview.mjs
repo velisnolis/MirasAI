@@ -9,6 +9,15 @@ import { compileStyle, diffVariables, affectedComponents, sha256 } from './style
 
 const LEGACY_WORKER_PATH = 'wp-content/themes/yootheme/assets/admin/js/worker.js';
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value === null || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
+  );
+}
+
 /**
  * Host tool results arrive as MCP content envelopes. Unwrap to the payload.
  */
@@ -112,6 +121,14 @@ export async function previewStyle({
   const baseUrl = isHttpUrl(contractBaseUrl)
     ? contractBaseUrl
     : `${String(siteUrl ?? 'https://localhost').replace(/\/+$/, '')}${fallbackPath}`;
+  const sourcesSha256 = sha256(JSON.stringify(canonicalize({
+    filename: sources.filename,
+    filepath: sources.filepath,
+    desturl: sources.desturl,
+    imports: sources.imports,
+    vars: sources.vars,
+    base_url: baseUrl,
+  })));
 
   // The baseline is what the site would compile right now: its stored
   // overrides, its custom Less, its variation. Comparing a patch against the
@@ -186,6 +203,8 @@ export async function previewStyle({
       errors: candidate.errors,
       duration_ms: candidate.duration_ms,
       import_count: sources.import_count,
+      sources_sha256: sourcesSha256,
+      provenance: sources?.compile_contract?.provenance ?? null,
     },
     css: {
       baseline_bytes: baseline.bytes ?? null,
@@ -296,6 +315,14 @@ export async function updateStyle({
     compiled_rtl: preview.compiled_rtl,
     compiled_css_sha256: preview.css.candidate_sha256,
     compiled_rtl_sha256: sha256(preview.compiled_rtl),
+    ...(preview.compile.provenance === 'router_provenance_v1'
+      ? {
+        compile_provenance: {
+          worker_sha256: preview.worker.sha256,
+          sources_sha256: preview.compile.sources_sha256,
+        },
+      }
+      : {}),
     dry_run: dryRun,
     ...(confirmGuardedWrite ? { confirm_guarded_write: true } : {}),
   });

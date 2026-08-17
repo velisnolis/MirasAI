@@ -88,7 +88,7 @@ $playbooks = [
 ];
 
 foreach ($playbooks as $platform => $playbook) {
-    expectPlaybook("{$platform} playbook version is 2", $playbook['version'] ?? null, 2);
+    expectPlaybook("{$platform} playbook version is 3", $playbook['version'] ?? null, 3);
     expectPlaybook(
         "{$platform} playbook names host auth as a dependency",
         is_array($playbook['depends_on']['host_http'] ?? null),
@@ -152,27 +152,37 @@ foreach ($playbooks as $platform => $playbook) {
 }
 
 $wpInstructions = WordPressPlaybook::initializeInstructions();
-expectPlaybookContains('WordPress initialize names diagnose', $wpInstructions, 'system/diagnose');
-expectPlaybookContains('WordPress initialize denies host compile', $wpInstructions, 'does not compile');
-expectPlaybookContains('WordPress initialize names router compiler tool', $wpInstructions, 'mirasai/style-preview');
-expectPlaybookContains('WordPress initialize names Customizer no-op', $wpInstructions, 'dirty=false');
-expectPlaybookContains('WordPress initialize names child theme_mods', $wpInstructions, 'theme_mods_yootheme');
+expectPlaybook('WordPress initialize is exactly four invariants', explode("\n", $wpInstructions), [
+    'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
+    'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+    'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+]);
 
 $wpLoops = array_values(array_map(
     static fn (array $loop): string => (string) ($loop['id'] ?? ''),
     is_array($playbooks['wordpress']['anti_loops'] ?? null) ? $playbooks['wordpress']['anti_loops'] : []
 ));
 expectPlaybook('wordpress playbook has anti-loop child_theme_parent_mods', in_array('child_theme_parent_mods', $wpLoops, true), true);
+expectPlaybook('wordpress playbook has anti-loop child_theme_uninitialized', in_array('child_theme_uninitialized', $wpLoops, true), true);
 expectPlaybookContains(
     'wordpress host storage names child theme_mods',
     (string) ($playbooks['wordpress']['channels']['this_host']['storage'] ?? ''),
     'theme_mods_{get_stylesheet()}'
 );
+expectPlaybookContains(
+    'wordpress host storage blocks an uninitialized child config',
+    (string) ($playbooks['wordpress']['channels']['this_host']['storage'] ?? ''),
+    'write_safe=false'
+);
 
 $joomlaInstructions = JoomlaPlaybook::initializeInstructions();
-expectPlaybookContains('Joomla initialize names diagnose', $joomlaInstructions, 'system/diagnose');
-expectPlaybookContains('Joomla initialize denies host compile', $joomlaInstructions, 'does not compile');
-expectPlaybookContains('Joomla initialize names router compiler tool', $joomlaInstructions, 'mirasai/style-preview');
+expectPlaybook('Joomla initialize is exactly four invariants', explode("\n", $joomlaInstructions), [
+    'MirasAI Joomla host. This HTTP endpoint does not compile YOOtheme LESS.',
+    'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
+    'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+]);
 
 $wp = new WordPressMcpHandler(new WordPressToolRegistry());
 $wpInit = $wp->handleRequest([

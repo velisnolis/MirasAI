@@ -89,12 +89,14 @@ $GLOBALS['test_config'] = [
     'yootheme_apikey' => $GLOBALS['test_apikey'],
 ];
 $GLOBALS['test_stylesheet'] = 'yootheme';
+$GLOBALS['test_active_theme_mod_config_present'] = true;
 $GLOBALS['test_update_option_calls'] = 0;
 $GLOBALS['test_clean_themes_cache_calls'] = 0;
 $GLOBALS['test_theme_mod_extras'] = ['nav_menu_locations' => ['primary' => 17]];
 $GLOBALS['test_force_cas_conflict'] = false;
 $GLOBALS['test_force_cas_conflict_on_query'] = null;
 $GLOBALS['test_cas_query_calls'] = 0;
+$GLOBALS['test_options'] = [];
 
 // ------------------------------------------------------------- WP stubs ----
 
@@ -110,16 +112,27 @@ function wp_clean_themes_cache(): void { $GLOBALS['test_clean_themes_cache_calls
 function wp_json_encode(mixed $v, int $flags = 0): string|false { return json_encode($v, $flags); }
 function get_theme_mod(string $key, mixed $default = null): mixed
 {
+    if ($key === 'config' && !$GLOBALS['test_active_theme_mod_config_present']) {
+        return $default;
+    }
+
     return $key === 'config' ? (string) json_encode($GLOBALS['test_config']) : $default;
 }
 function get_option(string $key, mixed $default = false): mixed
 {
     $stylesheetMods = 'theme_mods_' . $GLOBALS['test_stylesheet'];
     if ($key === $stylesheetMods) {
+        if (!$GLOBALS['test_active_theme_mod_config_present']) {
+            return $GLOBALS['test_theme_mod_extras'];
+        }
+
         return ['config' => (string) json_encode($GLOBALS['test_config'])] + $GLOBALS['test_theme_mod_extras'];
     }
     if ($key === 'theme_mods_yootheme' && $GLOBALS['test_stylesheet'] !== 'yootheme') {
         return ['config' => (string) json_encode(['style' => 'flow'])];
+    }
+    if (array_key_exists($key, $GLOBALS['test_options'])) {
+        return $GLOBALS['test_options'][$key];
     }
     return $default;
 }
@@ -135,6 +148,8 @@ function update_option(string $key, mixed $value, mixed $autoload = null): bool
         $extras = $value;
         unset($extras['config']);
         $GLOBALS['test_theme_mod_extras'] = $extras;
+    } else {
+        $GLOBALS['test_options'][$key] = $value;
     }
     return true;
 }
@@ -231,6 +246,7 @@ check('style-read reports the style source directory', ($flow['source'] ?? '') =
 check('style-read detects CSS older than its Less sources', ($read['compiled']['stale_sources'] ?? null) === true);
 check('style-read detects a CSS compiled by an older YOOtheme', ($read['compiled']['stale_version'] ?? null) === true);
 check('style-read does not claim config staleness is detectable', ($read['compiled']['stale_config_detectable'] ?? true) === false);
+check('style-read reports unknown config freshness without router provenance', ($read['compiled']['config_freshness']['state'] ?? null) === 'unknown');
 check('style-read warns that stale_sources ignores config', str_contains((string) ($read['compiled']['freshness_caveat'] ?? ''), 'ignores Style config'));
 check('style-read warns about the stale CSS', (bool) array_filter($read['warnings'] ?? [], static fn($w) => str_contains($w, 'predates its own Less sources')));
 check('style-read warns about the missing child theme', (bool) array_filter($read['warnings'] ?? [], static fn($w) => str_contains($w, 'No child theme')));
@@ -330,6 +346,24 @@ $dryRun = (new TemplateStyleUpdateTool())->handle([
 check('style-update dry-run validates successfully', ($dryRun['action'] ?? null) === 'preview');
 check('style-update dry-run does not write theme mods', $GLOBALS['test_update_option_calls'] === $beforeDryRunWrites);
 check('style-update dry-run reports secret preservation', ($dryRun['secret_preserved'] ?? false) === true);
+
+$invalidProvenance = (new TemplateStyleUpdateTool())->handle([
+    'if_match' => $currentRead['etag'],
+    'compiled_css' => $dryRunCss,
+    'compiled_rtl' => $dryRunRtl,
+    'compiled_css_sha256' => hash('sha256', $dryRunCss),
+    'compiled_rtl_sha256' => hash('sha256', $dryRunRtl),
+    'compile_provenance' => [
+        'worker_sha256' => 'not-a-sha256',
+        'sources_sha256' => str_repeat('b', 64),
+    ],
+    'dry_run' => true,
+]);
+check(
+    'style-update rejects malformed compile provenance before any write',
+    ($invalidProvenance['code'] ?? null) === 'invalid_compile_provenance'
+        && $GLOBALS['test_update_option_calls'] === $beforeDryRunWrites
+);
 
 $createTarget = $root . '/wp-content/themes/yootheme-brand';
 $createArguments = [
@@ -447,6 +481,129 @@ $childCommit = $childHelper->commitStyleUpdate(
 );
 check('style-update commits against child theme_mods, not the parent row', !isset($childCommit['error']) && is_string($childCommit['new_etag'] ?? null));
 check('child style-update stored @global-background as #fff', ($childHelper->loadConfig()['less']['@global-background'] ?? null) === '#fff');
+
+$childSnapshotDir = $accountRoot . '/mirasai-backups/style/' . ($childCommit['snapshot_id'] ?? 'missing');
+$childSnapshotManifest = is_file($childSnapshotDir . '/manifest.json')
+    ? json_decode((string) file_get_contents($childSnapshotDir . '/manifest.json'), true)
+    : null;
+check(
+    'child style-update snapshot names the exact theme_mods option',
+    is_file($childSnapshotDir . '/theme_mods_yootheme-industria-viva.serialized')
+);
+check(
+    'child style-update manifest records the exact theme_mods option',
+    ($childSnapshotManifest['theme_mods_option'] ?? null) === 'theme_mods_yootheme-industria-viva'
+);
+
+$provenanceRead = (new TemplateStyleReadTool())->handle([]);
+$provenanceCss = '.x{color:#112233}';
+$provenanceRtl = '.x{color:#112233;direction:rtl}';
+$provenanceUpdate = (new TemplateStyleUpdateTool())->handle([
+    'if_match' => $provenanceRead['etag'],
+    'vars' => ['@global-background' => '#112233'],
+    'compiled_css' => $provenanceCss,
+    'compiled_rtl' => $provenanceRtl,
+    'compiled_css_sha256' => hash('sha256', $provenanceCss),
+    'compiled_rtl_sha256' => hash('sha256', $provenanceRtl),
+    'compile_provenance' => [
+        'worker_sha256' => str_repeat('a', 64),
+        'sources_sha256' => str_repeat('b', 64),
+    ],
+    'dry_run' => false,
+    'confirm_guarded_write' => true,
+]);
+$provenanceFresh = (new TemplateStyleReadTool())->handle([]);
+check('style-update stores compile provenance after a guarded router write', ($provenanceUpdate['provenance']['stored'] ?? false) === true);
+$storedProvenance = $GLOBALS['test_options']['mirasai_yootheme_style_compile_state'] ?? [];
+check(
+    'stored compile provenance contains hashes, never config or secret fields',
+    is_array($storedProvenance)
+        && !array_key_exists('config', $storedProvenance)
+        && !array_key_exists('yootheme_apikey', $storedProvenance)
+);
+check('style-read proves the router-written config and CSS are fresh', ($provenanceFresh['compiled']['config_freshness']['state'] ?? null) === 'fresh');
+check('style-read marks config freshness as detectable with matching router provenance', ($provenanceFresh['compiled']['stale_config_detectable'] ?? false) === true);
+check('style-read exposes the pinned worker hash without storing config content', ($provenanceFresh['compiled']['config_freshness']['worker_sha256'] ?? null) === str_repeat('a', 64));
+$validStoredProvenance = $GLOBALS['test_options']['mirasai_yootheme_style_compile_state'];
+$GLOBALS['test_options']['mirasai_yootheme_style_compile_state']['config_sha256'] = 'broken';
+$invalidStoredProvenance = (new TemplateStyleReadTool())->handle([]);
+check(
+    'style-read treats corrupt persisted provenance as unknown',
+    ($invalidStoredProvenance['compiled']['config_freshness']['state'] ?? null) === 'unknown'
+        && ($invalidStoredProvenance['compiled']['config_freshness']['reason'] ?? null) === 'invalid_router_provenance'
+);
+$GLOBALS['test_options']['mirasai_yootheme_style_compile_state'] = $validStoredProvenance;
+$GLOBALS['test_options']['mirasai_yootheme_style_compile_state']['theme_mods_option'] = 'theme_mods_other';
+$mismatchedStoredProvenance = (new TemplateStyleReadTool())->handle([]);
+check(
+    'style-read rejects provenance recorded for a different Style option',
+    ($mismatchedStoredProvenance['compiled']['config_freshness']['state'] ?? null) === 'unknown'
+        && ($mismatchedStoredProvenance['compiled']['config_freshness']['reason'] ?? null) === 'style_storage_changed'
+);
+$GLOBALS['test_options']['mirasai_yootheme_style_compile_state'] = $validStoredProvenance;
+$freshApiKey = $GLOBALS['test_config']['yootheme_apikey'];
+$GLOBALS['test_config']['yootheme_apikey'] = str_repeat('c', 40);
+$secretOnlyChange = (new TemplateStyleReadTool())->handle([]);
+check('style-read ignores non-compilation secrets when hashing Style freshness', ($secretOnlyChange['compiled']['config_freshness']['state'] ?? null) === 'fresh');
+$GLOBALS['test_config']['yootheme_apikey'] = $freshApiKey;
+
+$freshConfig = $GLOBALS['test_config'];
+$freshLtr = (string) file_get_contents($ltrTarget);
+$GLOBALS['test_config']['less']['@global-background'] = '#445566';
+$provenanceStale = (new TemplateStyleReadTool())->handle([]);
+check('style-read detects config-only drift from the last router compile', ($provenanceStale['compiled']['config_freshness']['state'] ?? null) === 'stale');
+check('style-read warns about config-only drift', (bool) array_filter($provenanceStale['warnings'] ?? [], static fn($w) => str_contains($w, 'changed after the last router-controlled compile')));
+
+file_put_contents($ltrTarget, $freshLtr . "\n/* out-of-band compile */");
+$provenanceUnknown = (new TemplateStyleReadTool())->handle([]);
+check('style-read treats out-of-band CSS changes as unknown, not stale', ($provenanceUnknown['compiled']['config_freshness']['state'] ?? null) === 'unknown');
+check('style-read no longer claims detectability after an out-of-band CSS change', ($provenanceUnknown['compiled']['stale_config_detectable'] ?? true) === false);
+$GLOBALS['test_config'] = $freshConfig;
+file_put_contents($ltrTarget, $freshLtr);
+
+$freshRtl = (string) file_get_contents($rtlTarget);
+unlink($rtlTarget);
+$missingCompiledArtifact = (new TemplateStyleReadTool())->handle([]);
+check(
+    'style-read treats a missing recorded CSS artefact as unknown',
+    ($missingCompiledArtifact['compiled']['config_freshness']['state'] ?? null) === 'unknown'
+        && ($missingCompiledArtifact['compiled']['config_freshness']['reason'] ?? null) === 'compiled_css_changed_outside_router'
+);
+file_put_contents($rtlTarget, $freshRtl);
+
+$GLOBALS['test_active_theme_mod_config_present'] = false;
+$uninitializedRead = (new TemplateStyleReadTool())->handle([]);
+check(
+    'style-read marks an active child without config as unsafe to write',
+    ($uninitializedRead['storage']['write_safe'] ?? true) === false
+);
+check(
+    'style-read identifies the uninitialized child option and parent fallback separately',
+    ($uninitializedRead['storage']['active_option'] ?? null) === 'theme_mods_yootheme-industria-viva'
+        && ($uninitializedRead['storage']['source_option'] ?? null) === 'theme_mods_yootheme'
+);
+$uninitializedUpdate = (new TemplateStyleUpdateTool())->handle([
+    'if_match' => $uninitializedRead['etag'],
+    'compiled_css' => $dryRunCss,
+    'compiled_rtl' => $dryRunRtl,
+    'compiled_css_sha256' => hash('sha256', $dryRunCss),
+    'compiled_rtl_sha256' => hash('sha256', $dryRunRtl),
+    'dry_run' => false,
+    'confirm_guarded_write' => true,
+]);
+check(
+    'style-update blocks an active child whose Style config is not initialized',
+    ($uninitializedUpdate['code'] ?? null) === 'style_storage_uninitialized'
+);
+$GLOBALS['test_stylesheet'] = 'yootheme';
+$uninitializedParentRead = (new TemplateStyleReadTool())->handle([]);
+check(
+    'style-read also blocks an active parent theme whose Style config is not initialized',
+    ($uninitializedParentRead['storage']['write_safe'] ?? true) === false
+        && ($uninitializedParentRead['storage']['inherited_from_parent'] ?? true) === false
+        && ($uninitializedParentRead['storage']['source_option'] ?? null) === 'theme_mods_yootheme'
+);
+$GLOBALS['test_active_theme_mod_config_present'] = true;
 $GLOBALS['test_stylesheet'] = $previousStylesheet;
 
 // YOOtheme's StyleFontLoader stores downloaded files in its own fonts cache,

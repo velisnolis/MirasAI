@@ -2,7 +2,7 @@
 
 This package is the WordPress host plugin for the MirasAI multi-platform architecture.
 
-Current internal version: `0.8.1`.
+Current internal version: `0.8.2`.
 
 It is not a wrapper around Novamira or the WordPress MCP Adapter. It implements the MirasAI Host MCP Contract directly so the local `@miras/mirasai-mcp` router can treat WordPress and Joomla hosts consistently.
 
@@ -22,7 +22,7 @@ npm run build:zip
 The ZIP is written to:
 
 ```text
-dist/mirasai-wp-0.8.1.zip
+dist/mirasai-wp-0.8.2.zip
 ```
 
 Authenticate with:
@@ -210,8 +210,9 @@ not compile LESS: the local router compiles LTR/RTL first, binds the dry-run to
 those CSS hashes, and the host snapshots state, validates relative assets,
 writes through compare-and-swap, clears caches, and verifies readback.
 
-After install, call `system/diagnose` and follow `playbook` (`docs/agent-routes.md`)
-instead of Customizer or WP-CLI Style writes. Style config is
+After install, call `system/diagnose` and follow `playbook` in
+[agent routes after installing MirasAI](../../docs/agent-routes.md) instead of
+Customizer or WP-CLI Style writes. Style config is
 `theme_mods_{stylesheet}.config`; a child theme is not `theme_mods_yootheme`.
 
 `template/style-create` is WordPress-only. It can scaffold a YOOtheme child
