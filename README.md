@@ -339,8 +339,12 @@ boundary for arbitrary untrusted JavaScript.
 
 Host HTTP endpoints and `mcp2cli` pointed at a CMS URL do **not** compile LESS.
 After install, agents should call `system/diagnose` and follow `playbook`
-(see `docs/agent-routes.md`). Builder layouts stay on `template/element-*`.
-Style CSS writes go through `mirasai/style-update` on the local router.
+(see `docs/agent-routes.md` for what each environment can and cannot do).
+Builder layouts stay on `template/element-*`. Style CSS writes go through
+`mirasai/style-update` on the local router, with `site_id` and a pinned
+`style_worker_sha256`. WordPress writes `theme_mods_{stylesheet}.config`
+(a child theme is not the parent `theme_mods_yootheme` row). Proof of a
+write is the CSS `compiled on` header, not a visible colour change.
 
 A real Style update follows:
 

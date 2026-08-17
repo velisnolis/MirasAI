@@ -144,6 +144,9 @@ requires `dry_run: false`, `confirm_guarded_write: true`, and the fresh Style ET
 
 `mcp2cli --transport streamable` against a host URL is the host, not this
 compiler. Point mcp2cli at `mirasai-mcp serve` (stdio) for Style compile/write.
+Always pass `site_id`; `default_site_id` may be a different site. mcp2cli
+`--dry-run` is `store_true` — omitting it still sends `dry_run=true`. A real
+write needs JSON with `dry_run: false` and `confirm_guarded_write: true`.
 See `docs/agent-routes.md`.
 
 The WordPress host additionally exposes guarded `template/style-create`. It

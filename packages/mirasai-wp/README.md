@@ -211,7 +211,8 @@ those CSS hashes, and the host snapshots state, validates relative assets,
 writes through compare-and-swap, clears caches, and verifies readback.
 
 After install, call `system/diagnose` and follow `playbook` (`docs/agent-routes.md`)
-instead of Customizer or WP-CLI Style writes.
+instead of Customizer or WP-CLI Style writes. Style config is
+`theme_mods_{stylesheet}.config`; a child theme is not `theme_mods_yootheme`.
 
 `template/style-create` is WordPress-only. It can scaffold a YOOtheme child
 theme and create a versionable `less/theme.<id>.less` source after dry-run,
