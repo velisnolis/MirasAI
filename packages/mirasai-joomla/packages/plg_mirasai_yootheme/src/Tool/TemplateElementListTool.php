@@ -10,6 +10,7 @@ use Mirasai\Library\Tool\YooThemeHelper;
 
 class TemplateElementListTool extends AbstractTool
 {
+    use TemplateElementSourceSupportTrait;
     /** @var list<string> */
     private const FIELD_KEYS = [
         'path',
@@ -38,7 +39,7 @@ class TemplateElementListTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect.';
+        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only.';
     }
 
     public function getInputSchema(): array
@@ -72,6 +73,7 @@ class TemplateElementListTool extends AbstractTool
                     'minimum' => 1,
                     'maximum' => 2000,
                 ],
+                'mode' => YooThemeElementNavigator::readModeSchemaProperty(),
             ],
             'required' => [],
         ];
@@ -104,12 +106,18 @@ class TemplateElementListTool extends AbstractTool
             return $maxResults;
         }
 
+        $mode = YooThemeElementNavigator::normalizeReadMode($arguments['mode'] ?? null);
+
+        if (isset($mode['error'])) {
+            return $mode;
+        }
+
         if ($articleId > 0) {
-            return $this->handleArticle($articleId, $fields, $maxResults);
+            return $this->handleArticle($articleId, $fields, $maxResults, $mode['mode']);
         }
 
         if ($moduleId > 0) {
-            return $this->handleModule($moduleId, $fields, $maxResults);
+            return $this->handleModule($moduleId, $fields, $maxResults, $mode['mode']);
         }
 
         $templates = $this->yooHelper->loadTemplates();
@@ -124,26 +132,18 @@ class TemplateElementListTool extends AbstractTool
             return ['error' => "Template {$key} has no layout."];
         }
 
-        $elements = (new YooThemeElementNavigator())->listElements($layout);
-        $truncated = count($elements) > $maxResults['max_results'];
-        $elements = array_slice($elements, 0, $maxResults['max_results']);
-
-        if (isset($fields['fields'])) {
-            $elements = array_map(
-                fn (array $item): array => $this->projectFields($item, $fields['fields']),
-                $elements,
-            );
-        }
-
-        return [
-            'storage' => 'template',
-            'key' => $key,
-            'name' => $this->yooHelper->getTemplateName($template),
-            'etag' => $this->yooHelper->buildTemplateEtag($template),
-            'count' => count($elements),
-            'truncated' => $truncated,
-            'elements' => $elements,
-        ];
+        return $this->presentElements(
+            $layout,
+            $mode['mode'],
+            $fields,
+            $maxResults,
+            [
+                'storage' => 'template',
+                'key' => $key,
+                'name' => $this->yooHelper->getTemplateName($template),
+                'etag' => $this->yooHelper->buildTemplateEtag($template),
+            ],
+        );
     }
 
     /**
@@ -151,7 +151,7 @@ class TemplateElementListTool extends AbstractTool
      * @param array{max_results: int, error?: string} $maxResults
      * @return array<string, mixed>
      */
-    private function handleArticle(int $articleId, array $fields, array $maxResults): array
+    private function handleArticle(int $articleId, array $fields, array $maxResults, string $mode): array
     {
         $article = $this->yooHelper->loadArticle($articleId);
 
@@ -165,27 +165,19 @@ class TemplateElementListTool extends AbstractTool
             return ['error' => "Article {$articleId} has no YOOtheme layout in fulltext.", 'code' => 'article_layout_missing'];
         }
 
-        $elements = (new YooThemeElementNavigator())->listElements($layout);
-        $truncated = count($elements) > $maxResults['max_results'];
-        $elements = array_slice($elements, 0, $maxResults['max_results']);
-
-        if (isset($fields['fields'])) {
-            $elements = array_map(
-                fn (array $item): array => $this->projectFields($item, $fields['fields']),
-                $elements,
-            );
-        }
-
-        return [
-            'storage' => 'article',
-            'article_id' => $articleId,
-            'article_title' => (string) ($article['title'] ?? ''),
-            'article_state' => (int) ($article['state'] ?? 0),
-            'etag' => $this->yooHelper->buildArticleLayoutEtag($article),
-            'count' => count($elements),
-            'truncated' => $truncated,
-            'elements' => $elements,
-        ];
+        return $this->presentElements(
+            $layout,
+            $mode,
+            $fields,
+            $maxResults,
+            [
+                'storage' => 'article',
+                'article_id' => $articleId,
+                'article_title' => (string) ($article['title'] ?? ''),
+                'article_state' => (int) ($article['state'] ?? 0),
+                'etag' => $this->yooHelper->buildArticleLayoutEtag($article),
+            ],
+        );
     }
 
     /**
@@ -193,7 +185,7 @@ class TemplateElementListTool extends AbstractTool
      * @param array{max_results: int, error?: string} $maxResults
      * @return array<string, mixed>
      */
-    private function handleModule(int $moduleId, array $fields, array $maxResults): array
+    private function handleModule(int $moduleId, array $fields, array $maxResults, string $mode): array
     {
         $module = $this->yooHelper->loadModule($moduleId);
 
@@ -215,7 +207,48 @@ class TemplateElementListTool extends AbstractTool
             return ['error' => "Module {$moduleId} has no YOOtheme layout in content.", 'code' => 'module_layout_missing'];
         }
 
-        $elements = (new YooThemeElementNavigator())->listElements($layout);
+        return $this->presentElements(
+            $layout,
+            $mode,
+            $fields,
+            $maxResults,
+            [
+                'storage' => 'module',
+                'module_id' => $moduleId,
+                'module_title' => (string) ($module['title'] ?? ''),
+                'module_type' => (string) ($module['module'] ?? ''),
+                'module_published' => (int) ($module['published'] ?? 0),
+                'etag' => $this->yooHelper->buildModuleLayoutEtag($module),
+            ],
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @param array{fields?: list<string>, error?: string} $fields
+     * @param array{max_results: int, error?: string} $maxResults
+     * @param array<string, mixed> $identity
+     * @return array<string, mixed>
+     */
+    private function presentElements(array $layout, string $mode, array $fields, array $maxResults, array $identity): array
+    {
+        $navigator = new YooThemeElementNavigator();
+        $response = $identity + ['mode' => $mode];
+
+        if ($mode === 'outline') {
+            $response['tree'] = $navigator->outlineTree($layout);
+
+            return $response;
+        }
+
+        if ($mode === 'bindings_only') {
+            $response['bindings'] = $this->bindingsOnlyFromLayout($navigator, $layout);
+            $response['count'] = count($response['bindings']);
+
+            return $response;
+        }
+
+        $elements = $navigator->listElements($layout);
         $truncated = count($elements) > $maxResults['max_results'];
         $elements = array_slice($elements, 0, $maxResults['max_results']);
 
@@ -226,17 +259,11 @@ class TemplateElementListTool extends AbstractTool
             );
         }
 
-        return [
-            'storage' => 'module',
-            'module_id' => $moduleId,
-            'module_title' => (string) ($module['title'] ?? ''),
-            'module_type' => (string) ($module['module'] ?? ''),
-            'module_published' => (int) ($module['published'] ?? 0),
-            'etag' => $this->yooHelper->buildModuleLayoutEtag($module),
-            'count' => count($elements),
-            'truncated' => $truncated,
-            'elements' => $elements,
-        ];
+        $response['count'] = count($elements);
+        $response['truncated'] = $truncated;
+        $response['elements'] = $elements;
+
+        return $response;
     }
 
     /**

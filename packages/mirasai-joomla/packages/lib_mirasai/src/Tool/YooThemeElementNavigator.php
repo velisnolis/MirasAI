@@ -21,6 +21,56 @@ final class YooThemeElementNavigator
     }
 
     /**
+     * Nested type/path/name/title/children tree with no props.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    public function outlineTree(array $layout): array
+    {
+        return $this->outlineNode($layout, 'root');
+    }
+
+    /**
+     * @return array{mode: string}|array{error: string, code: string}
+     */
+    public static function normalizeReadMode(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return ['mode' => 'full'];
+        }
+
+        if (!is_string($value)) {
+            return ['error' => 'mode must be a string.', 'code' => 'invalid_mode'];
+        }
+
+        $mode = strtolower(trim($value));
+
+        if (!in_array($mode, ['full', 'outline', 'bindings_only'], true)) {
+            return [
+                'error' => "Unsupported mode '{$value}'. Use full, outline, or bindings_only.",
+                'code' => 'invalid_mode',
+            ];
+        }
+
+        return ['mode' => $mode];
+    }
+
+    /**
+     * Schema fragment shared by template/read and template/element-list.
+     *
+     * @return array<string, mixed>
+     */
+    public static function readModeSchemaProperty(): array
+    {
+        return [
+            'type' => 'string',
+            'enum' => ['full', 'outline', 'bindings_only'],
+            'description' => 'full (default) is the current payload. outline returns a nested tree of type, path, name, title, and children with no props. bindings_only returns only nodes with a Dynamic Source binding, using the same summary as template/element-source-read. The etag is always the full layout.',
+        ];
+    }
+
+    /**
      * Summarize observed element types from one or more decoded layouts.
      *
      * @param list<array<string, mixed>> $layouts
@@ -656,6 +706,39 @@ final class YooThemeElementNavigator
             'deleted_path' => $path,
             'deleted_type' => (string) ($source['metadata']['type'] ?? 'unknown'),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function outlineNode(array $node, string $path): array
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+        $title = is_string($props['title'] ?? null) ? trim((string) $props['title']) : '';
+        $outline = [
+            'type' => $this->nodeType($node),
+            'path' => $path,
+            'title' => $title !== '' ? $title : $this->nodeLabel($node),
+            'children' => [],
+        ];
+
+        if (is_string($node['name'] ?? null) && trim((string) $node['name']) !== '') {
+            $outline['name'] = (string) $node['name'];
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $childIndex => $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+
+            $childType = $this->nodeType($child);
+            $outline['children'][] = $this->outlineNode($child, "{$path}>{$childType}[{$childIndex}]");
+        }
+
+        return $outline;
     }
 
     /**

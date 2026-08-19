@@ -316,6 +316,12 @@ Common workflow:
 4. `template/element-schema` if a write needs runtime prop schema
 5. write with `if_match` and either `dry_run:true` or `confirm_guarded_write:true`
 
+`template/read` and `template/element-list` accept `mode`. `full` (default) is
+the current payload. `outline` returns a nested tree of `type`, `path`,
+`name`/`title`, and `children` with no props. `bindings_only` returns only
+nodes with a Dynamic Source binding, using the same summary as
+`template/element-source-read`. The etag is always the full layout.
+
 Element tools include add, update props, move, clone, delete, Dynamic Source preview/set/delete, and translation-oriented reads.
 
 ### YOOtheme Styles

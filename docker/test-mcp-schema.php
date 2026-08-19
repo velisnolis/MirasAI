@@ -21,14 +21,19 @@ require_once $yoothemeToolSrc . '/TemplateElementUpdatePropsTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementMoveTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementCloneTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementDeleteTool.php';
+require_once $yoothemeToolSrc . '/TemplateElementSourceSupportTrait.php';
+require_once $yoothemeToolSrc . '/TemplateReadTool.php';
+require_once $yoothemeToolSrc . '/TemplateElementListTool.php';
 
 use Mirasai\Library\Tool\AbstractTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\AbstractTemplateElementWriteTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementAddTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementCloneTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementDeleteTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementMoveTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementUpdatePropsTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateReadTool;
 
 $passed = 0;
 $failed = 0;
@@ -181,6 +186,14 @@ expect(
     is_subclass_of(TemplateElementUpdatePropsTool::class, AbstractTemplateElementWriteTool::class),
     true,
 );
+
+foreach ([TemplateReadTool::class, TemplateElementListTool::class] as $class) {
+    $short = (new ReflectionClass($class))->getShortName();
+    $mode = schemaForToolWithoutConstructor($class)['properties']['mode'] ?? [];
+
+    expect("joomla {$short} schema exposes mode", array_key_exists('enum', $mode), true);
+    expect("joomla {$short} mode enum", $mode['enum'] ?? [], ['full', 'outline', 'bindings_only']);
+}
 
 if ($failed > 0) {
     echo "\n{$failed} schema test(s) failed.\n";

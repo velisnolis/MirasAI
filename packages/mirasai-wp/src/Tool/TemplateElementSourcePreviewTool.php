@@ -6,8 +6,6 @@ namespace Mirasai\WordPress\Tool;
 
 class TemplateElementSourcePreviewTool extends TemplateReadTool
 {
-    use TemplateElementSourceSupportTrait;
-
     public function getName(): string
     {
         return 'template/element-source-preview';

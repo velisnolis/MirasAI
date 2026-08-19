@@ -306,4 +306,36 @@ trait TemplateElementSourceSupportTrait
 
         return $sanitized;
     }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return list<array{path: string, type: string, binding: array<string, mixed>}>
+     */
+    protected function bindingsOnlyFromLayout(object $navigator, array $layout): array
+    {
+        $bindings = [];
+
+        foreach ($navigator->listElements($layout) as $meta) {
+            if (empty($meta['has_source_binding']) || !is_string($meta['path'] ?? null)) {
+                continue;
+            }
+
+            $found = $navigator->findElement($layout, $meta['path']);
+
+            if ($found === null) {
+                continue;
+            }
+
+            $binding = $this->summarizeBinding($found['element']);
+            unset($binding['raw_source']);
+
+            $bindings[] = [
+                'path' => $meta['path'],
+                'type' => is_string($meta['type'] ?? null) ? $meta['type'] : 'unknown',
+                'binding' => $binding,
+            ];
+        }
+
+        return $bindings;
+    }
 }

@@ -80,6 +80,7 @@ main() {
   php "${ROOT_DIR}/docker/test-sandbox-execute-php-contract.php"
   php "${ROOT_DIR}/docker/test-yootheme-summary.php"
   php "${ROOT_DIR}/docker/test-yootheme-elements.php"
+  php "${ROOT_DIR}/docker/test-yootheme-read-modes.php"
 
   echo "Smoke checks passed."
 

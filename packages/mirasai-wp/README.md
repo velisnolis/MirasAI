@@ -175,6 +175,12 @@ summarizes existing element bindings from `source`, `props.source`, or
 `source_extended` without exposing the raw payload unless `include_raw:true` is
 passed.
 
+`template/read` and `template/element-list` accept `mode`. `full` (default) is
+unchanged. `outline` returns a nested tree of `type`, `path`, `name`/`title`,
+and `children` with no props. `bindings_only` returns only nodes with a
+Dynamic Source binding, using the same summary as `template/element-source-read`.
+The etag is always the full layout.
+
 `template/element-source-preview`, `template/element-source-set`, and
 `template/element-source-delete` are guarded Dynamic Source write tools.
 Real writes require `if_match` plus `confirm_guarded_write:true`; `dry_run:true`
