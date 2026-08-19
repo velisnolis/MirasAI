@@ -493,3 +493,35 @@ cridar. Corregit a `protected` als dos CMS.
 `outline` no exposa `props.status`; per veure files disabled cal
 `element-list` full o `element-read` fins que clone-rebind existeixi
 (`skipped_disabled` al dry-run).
+
+### F-019 · Clonar un element duplicava el seu `props.id` i trencava l'àncora
+
+**Data:** 19/08/2026 · **Versió:** MirasAI 0.8.2 · **CMS:** WordPress i Joomla
+
+**Símptoma.** Clonar una fila que té ID (BIT Vic: `root>section[0]>row[6]`,
+`id=visual`) deixava dos elements amb `id="visual"` a la mateixa pàgina. El
+botó d'àncora `#visual` continuava saltant a l'original: la còpia era
+inabastable per enllaç, i l'usuari ho llegia com «el clone no ha funcionat».
+
+**Causa verificada.** `YoothemeElementNavigator::cloneElement()` inseria
+`$source['element']` verbatim, `props` incloses. YOOtheme renderitza
+`props.id` com l'atribut `id` de l'HTML, i el navegador resol `#id` al primer
+node del document. Mateix defecte a `cloneElementBeside()` i als dos hosts.
+És la germana de F-016: allà l'àncora no saltava perquè el destí no existia;
+aquí no salta perquè n'hi ha dos i guanya el vell.
+
+**Fix.** El clone reserva ids: qualsevol `props.id` de la còpia que xoqui amb
+un id ja present al layout es renombra (`visual` → `visual-2`, mantenint
+l'string original sencer perquè un id datat com `edicio-2026` no perdi l'any),
+i els props que valen exactament `#idvell` **dins del subarbre copiat**
+segueixen el rename. Els enllaços de fora de la còpia no es toquen. Les tools
+`template/element-clone` dels dos hosts retornen `renamed_ids` quan hi ha
+hagut cap rename, també al dry-run.
+
+Els ids que el layout d'origen ja duplicava es queden duplicats: desduplicar
+l'original no és feina del clone.
+
+**Regla accionable.** Qualsevol operació que copiï un subarbre de Builder ha
+de tractar `props.id` com un recurs únic del document, no com una prop més.
+Després d'un clone, comprovar `renamed_ids` abans d'assumir que un `#àncora`
+de la còpia apunta on toca.

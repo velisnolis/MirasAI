@@ -13,6 +13,7 @@
 - NovaMira (`use-novamira/novamira`, AGPL-3.0) and YT Builder MCP/API Mapper are reference only: never port code (no PHP-first eval, Gutenberg, in-CMS Chat, or dynamize). Fossat is guarded Builder writes plus the local Style compiler.
 - Production agents’ live source of truth is `system/diagnose.playbook`, not the git repo. Keep MCP `initialize` short.
 - CageFS accounts need WP-CLI via the cPanel PHP binary; the plain `wp` wrapper can fail. SSH as the cPanel user with IdentitiesOnly; never the `server.miras.pro` Host alias (it forces root). SSH cannot regenerate YOOtheme CSS.
-- `template/clone-rebind` is designed, not implemented; do not call it, and do not call it «dynamize».
+- `template/clone-rebind` is deferred, not implemented; do not call it, and do not call it «dynamize». The 2026-08-19 review cut its two `scope` modes in favour of a fail-closed batch form of `template/element-source-set`; see `docs/template-clone-rebind.md`.
+- `template/element-clone` renames a cloned `props.id` that would collide and repoints `#anchors` inside the copy, reporting `renamed_ids`. Check that field before trusting an anchor in a clone.
 - `template/read` and `template/element-list` support `mode=full|outline|bindings_only`; ETag is always the full layout.
 - Never rsync or `docker cp` the full repo onto the Joomla lab with `--delete`.

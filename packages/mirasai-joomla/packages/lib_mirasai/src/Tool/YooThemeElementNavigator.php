@@ -446,7 +446,9 @@ final class YooThemeElementNavigator
             return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
         }
 
-        $result = $this->addElementBeside($layout, $referencePath, $source['element'], $mode);
+        $renamedIds = [];
+        $copy = $this->reserveClonedIds($layout, $source['element'], $renamedIds);
+        $result = $this->addElementBeside($layout, $referencePath, $copy, $mode);
 
         if (isset($result['error'])) {
             return $result;
@@ -459,6 +461,7 @@ final class YooThemeElementNavigator
             'metadata' => $result['metadata'],
             'element' => $result['element'],
             'reference_parent_path' => $result['reference_parent_path'],
+            'renamed_ids' => $renamedIds,
         ];
     }
 
@@ -654,7 +657,9 @@ final class YooThemeElementNavigator
         }
 
         $updated = $layout;
-        $newPath = $this->insertSiblingAfterInPlace($updated, $path, $source['element']);
+        $renamedIds = [];
+        $copy = $this->reserveClonedIds($layout, $source['element'], $renamedIds);
+        $newPath = $this->insertSiblingAfterInPlace($updated, $path, $copy);
 
         if ($newPath === null) {
             return ['error' => "Element path {$path} could not be cloned.", 'code' => 'element_not_found'];
@@ -672,6 +677,7 @@ final class YooThemeElementNavigator
             'new_path' => $newPath,
             'metadata' => $found['metadata'],
             'element' => $found['element'],
+            'renamed_ids' => $renamedIds,
         ];
     }
 
@@ -1283,5 +1289,150 @@ final class YooThemeElementNavigator
         }
 
         return '';
+    }
+
+    /**
+     * Give a cloned subtree its own HTML ids.
+     *
+     * YOOtheme renders props.id as the element's HTML id, so a verbatim copy
+     * leaves two nodes answering to the same anchor and the browser resolves
+     * #id to the first one. Anchors pointing inside the copied subtree follow
+     * the rename; links pointing outside it are left alone. Ids the source
+     * already duplicated stay duplicated: de-duplicating the original is not
+     * this method's job.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $element
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function reserveClonedIds(array $layout, array $element, array &$renamed): array
+    {
+        $taken = [];
+        $this->collectElementIds($layout, $taken);
+        $renamed = [];
+        $element = $this->renameElementIds($element, $taken, $renamed);
+
+        if ($renamed === []) {
+            return $element;
+        }
+
+        return $this->rewriteAnchorProps($element, $renamed);
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param array<string, true> $taken
+     */
+    private function collectElementIds(array $node, array &$taken): void
+    {
+        $id = $this->elementId($node);
+
+        if ($id !== '') {
+            $taken[$id] = true;
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $child) {
+            if (is_array($child)) {
+                $this->collectElementIds($child, $taken);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param array<string, true> $taken
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function renameElementIds(array $node, array &$taken, array &$renamed): array
+    {
+        $id = $this->elementId($node);
+
+        if ($id !== '') {
+            if (isset($taken[$id])) {
+                $fresh = $renamed[$id] ?? $this->freshElementId($id, $taken);
+                $renamed[$id] = $fresh;
+                $taken[$fresh] = true;
+                $node['props']['id'] = $fresh;
+            } else {
+                $taken[$id] = true;
+            }
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $index => $child) {
+            if (is_array($child)) {
+                $node['children'][$index] = $this->renameElementIds($child, $taken, $renamed);
+            }
+        }
+
+        return $node;
+    }
+
+    /**
+     * Rewrite #anchor props that point at an id this clone renamed.
+     *
+     * @param array<string, mixed> $node
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function rewriteAnchorProps(array $node, array $renamed): array
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        foreach ($props as $key => $value) {
+            if (!is_string($value) || !str_starts_with($value, '#')) {
+                continue;
+            }
+
+            $target = substr($value, 1);
+
+            if (isset($renamed[$target])) {
+                $node['props'][$key] = '#' . $renamed[$target];
+            }
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $index => $child) {
+            if (is_array($child)) {
+                $node['children'][$index] = $this->rewriteAnchorProps($child, $renamed);
+            }
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function elementId(array $node): string
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        return is_string($props['id'] ?? null) ? trim((string) $props['id']) : '';
+    }
+
+    /**
+     * The original id keeps its whole string so a dated id such as
+     * edicio-2026 does not lose its year to the suffix.
+     *
+     * @param array<string, true> $taken
+     */
+    private function freshElementId(string $id, array $taken): string
+    {
+        for ($suffix = 2; $suffix < 1000; $suffix++) {
+            $candidate = "{$id}-{$suffix}";
+
+            if (!isset($taken[$candidate])) {
+                return $candidate;
+            }
+        }
+
+        return $id . '-' . substr(md5($id), 0, 6);
     }
 }

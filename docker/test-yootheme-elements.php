@@ -161,6 +161,132 @@ expectElement('headline observed prop key', $typesByName['headline']['prop_keys'
 expectElement('text binding count', $typesByName['text']['has_source_binding_count'], 1);
 expectElement('section sample path', $typesByName['section']['sample_paths'][0], 'root>section[0]');
 
+// Cloning must not duplicate props.id: YOOtheme renders it as the HTML id and
+// an in-page #anchor would resolve to the source, never to the copy (BIT Vic).
+$anchorLayout = [
+    'type' => 'layout',
+    'children' => [[
+        'type' => 'section',
+        'children' => [
+            [
+                'type' => 'row',
+                'props' => ['id' => 'visual'],
+                'children' => [[
+                    'type' => 'column',
+                    'children' => [[
+                        'type' => 'button',
+                        'children' => [[
+                            'type' => 'button_item',
+                            'props' => ['id' => 'visual-cta', 'link' => '#visual'],
+                        ]],
+                    ]],
+                ]],
+            ],
+            [
+                'type' => 'row',
+                'children' => [[
+                    'type' => 'column',
+                    'children' => [[
+                        'type' => 'button',
+                        'children' => [[
+                            'type' => 'button_item',
+                            'props' => ['link' => '#visual'],
+                        ]],
+                    ]],
+                ]],
+            ],
+        ],
+    ]],
+];
+
+$anchorClone = $navigator->cloneElement($anchorLayout, 'root>section[0]>row[0]');
+$anchorTree = $anchorClone['layout'];
+$copiedRow = $anchorTree['children'][0]['children'][1];
+$sourceRow = $anchorTree['children'][0]['children'][0];
+$outsideRow = $anchorTree['children'][0]['children'][2];
+
+expectElement(
+    'cloneElement renames a colliding props.id',
+    $copiedRow['props']['id'] ?? null,
+    'visual-2'
+);
+expectElement(
+    'cloneElement renames nested colliding ids too',
+    $copiedRow['children'][0]['children'][0]['children'][0]['props']['id'] ?? null,
+    'visual-cta-2'
+);
+expectElement(
+    'cloneElement repoints an anchor inside the copy',
+    $copiedRow['children'][0]['children'][0]['children'][0]['props']['link'] ?? null,
+    '#visual-2'
+);
+expectElement(
+    'cloneElement leaves the source id alone',
+    $sourceRow['props']['id'] ?? null,
+    'visual'
+);
+expectElement(
+    'cloneElement leaves an anchor outside the copy alone',
+    $outsideRow['children'][0]['children'][0]['children'][0]['props']['link'] ?? null,
+    '#visual'
+);
+expectElement(
+    'cloneElement reports the renames',
+    $anchorClone['renamed_ids'] ?? null,
+    ['visual' => 'visual-2', 'visual-cta' => 'visual-cta-2']
+);
+
+$secondClone = $navigator->cloneElement($anchorClone['layout'], 'root>section[0]>row[0]');
+expectElement(
+    'a second clone skips the id already taken',
+    $secondClone['layout']['children'][0]['children'][1]['props']['id'] ?? null,
+    'visual-3'
+);
+
+expectElement(
+    'cloneElement reports no renames when there is no id',
+    $navigator->cloneElement($layout, 'root>section[0]>row[0]>column[0]>headline[0]')['renamed_ids'] ?? null,
+    []
+);
+
+$besideClone = $navigator->cloneElementBeside(
+    $anchorLayout,
+    'root>section[0]>row[0]',
+    'root>section[0]>row[1]',
+    'after'
+);
+expectElement(
+    'cloneElementBeside renames a colliding props.id',
+    $besideClone['layout']['children'][0]['children'][2]['props']['id'] ?? null,
+    'visual-2'
+);
+
+// WordPress ships its own copy of the navigator; the two must agree.
+if (!function_exists('wp_strip_all_tags')) {
+    function wp_strip_all_tags(string $text, bool $remove_breaks = false): string
+    {
+        $stripped = preg_replace('/\s+/', ' ', strip_tags($text)) ?? '';
+
+        return trim($stripped);
+    }
+}
+
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/YoothemeElementNavigator.php';
+
+$wpClone = (new Mirasai\WordPress\Tool\YoothemeElementNavigator())
+    ->cloneElement($anchorLayout, 'root>section[0]>row[0]');
+
+expectElement(
+    'WordPress navigator renames the same way',
+    $wpClone['layout']['children'][0]['children'][1]['props']['id'] ?? null,
+    'visual-2'
+);
+expectElement(
+    'WordPress navigator reports the same renames',
+    $wpClone['renamed_ids'] ?? null,
+    ['visual' => 'visual-2', 'visual-cta' => 'visual-cta-2']
+);
+
 if ($failed > 0) {
     echo "\n{$failed} element navigator test(s) failed.\n";
     exit(1);
