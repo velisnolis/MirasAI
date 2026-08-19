@@ -322,6 +322,12 @@ the current payload. `outline` returns a nested tree of `type`, `path`,
 nodes with a Dynamic Source binding, using the same summary as
 `template/element-source-read`. The etag is always the full layout.
 
+Both modes carry `status` on an element the Builder keeps but does not output,
+and `outline` adds `has_source_binding`; each is omitted when the element
+renders and carries no binding. Because `bindings_only` is flat, it also
+reports `disabled_by`: the nearest self-or-ancestor that is disabled, so a
+placeholder binding left inside a disabled row is not mistaken for a live one.
+
 Element tools include add, update props, move, clone, delete, Dynamic Source preview/set/delete, and translation-oriented reads.
 
 ### YOOtheme Styles

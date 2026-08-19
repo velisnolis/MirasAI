@@ -13,7 +13,7 @@ class TemplateElementListTool extends TemplateReadTool
 
     public function getDescription(): string
     {
-        return 'Lists YOOtheme Builder elements for one layout by key, post_id, or widget_id. Paths can be used with template/element-read. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only.';
+        return 'Lists YOOtheme Builder elements for one layout by key, post_id, or widget_id. Paths can be used with template/element-read. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only. Every mode carries status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor.';
     }
 
     /**

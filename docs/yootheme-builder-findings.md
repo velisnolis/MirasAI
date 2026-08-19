@@ -525,3 +525,26 @@ l'original no és feina del clone.
 de tractar `props.id` com un recurs únic del document, no com una prop més.
 Després d'un clone, comprovar `renamed_ids` abans d'assumir que un `#àncora`
 de la còpia apunta on toca.
+
+### F-020 · `status=disabled` viu al contenidor, no a la fulla amb el binding
+
+**Data:** 19/08/2026 · **CMS:** WordPress i Joomla
+
+**Observació.** Quan al Builder s'apaga un bloc, `props.status=disabled` queda
+a l'element que s'ha apagat — típicament la **fila** o la secció — i no baixa
+als descendents. A BIT Vic, `root>section[0]>row[6]` porta `status=disabled` i
+el `gallery_item` de dins conserva el `docmansource` `edicio-2024-vic-vt` com a
+placeholder, sense cap marca pròpia.
+
+**Per què costa una iteració.** `template/element-list mode=bindings_only`
+retorna una llista **plana**. Un agent que hi construeixi un mapa de rebind veu
+el `gallery_item` amb el seu source i cap senyal que estigui apagat: la relació
+d'ascendència, que a l'arbre és òbvia, a la llista plana no existeix. El
+resultat és mapar un placeholder que ningú volia tocar.
+
+**Regla accionable.** `bindings_only` reporta `disabled_by` amb el path de
+l'avantpassat (o d'ell mateix) que està apagat; si el camp hi és, aquell binding
+és un placeholder i no s'ha de rebindejar tret que es demani explícitament.
+`outline` reporta `status` per node i l'ascendència es llegeix del niat. Els dos
+camps s'ometen quan no diuen res. Regla general: qualsevol vista plana d'un
+arbre ha de tornar explícitament el context que la planitud destrueix.

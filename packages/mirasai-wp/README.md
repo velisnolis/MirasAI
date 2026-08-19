@@ -181,6 +181,11 @@ and `children` with no props. `bindings_only` returns only nodes with a
 Dynamic Source binding, using the same summary as `template/element-source-read`.
 The etag is always the full layout.
 
+Both modes carry `status` on an element the Builder keeps but does not output,
+and `outline` adds `has_source_binding`; each is omitted when the element
+renders and carries no binding. `bindings_only` is flat, so it also reports
+`disabled_by`, the nearest self-or-ancestor that is disabled.
+
 `template/element-source-preview`, `template/element-source-set`, and
 `template/element-source-delete` are guarded Dynamic Source write tools.
 Real writes require `if_match` plus `confirm_guarded_write:true`; `dry_run:true`

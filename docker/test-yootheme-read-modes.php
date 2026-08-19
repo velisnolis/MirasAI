@@ -19,6 +19,8 @@ if (!function_exists('wp_strip_all_tags')) {
 
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/YooThemeElementNavigator.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/YoothemeElementNavigator.php';
+require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/TemplateElementSourceSupportTrait.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/TemplateElementSourceSupportTrait.php';
 
 use Mirasai\Library\Tool\YooThemeElementNavigator;
 use Mirasai\WordPress\Tool\YoothemeElementNavigator as WpYoothemeElementNavigator;
@@ -71,6 +73,27 @@ $layout = [
     ]],
 ];
 
+// BIT Vic's shape: the row is disabled and last edition's source stays on the
+// gallery inside it as a placeholder.
+$layout['children'][] = [
+    'type' => 'section',
+    'props' => ['title' => 'Arxiu'],
+    'children' => [[
+        'type' => 'row',
+        'props' => ['id' => 'visual', 'status' => 'disabled'],
+        'children' => [[
+            'type' => 'column',
+            'children' => [[
+                'type' => 'gallery',
+                'props' => [
+                    'title' => 'Galeria edicio anterior',
+                    'source' => ['props' => ['images' => 'files']],
+                ],
+            ]],
+        ]],
+    ]],
+];
+
 $joomla = new YooThemeElementNavigator();
 $wp = new WpYoothemeElementNavigator();
 
@@ -108,6 +131,93 @@ expectMode('outline paths match the flat index', $outlinePaths, $flatPaths);
 $schema = YooThemeElementNavigator::readModeSchemaProperty();
 expectMode('schema enum matches both hosts', $schema['enum'], WpYoothemeElementNavigator::readModeSchemaProperty()['enum']);
 expectMode('schema enum values', $schema['enum'], ['full', 'outline', 'bindings_only']);
+
+
+// status and has_source_binding: what an agent needs before building a rebind
+// map, without paying for props.
+$liveSection = $joomlaTree['children'][0];
+$archiveSection = $joomlaTree['children'][1];
+$disabledRow = $archiveSection['children'][0];
+$boundText = $liveSection['children'][0]['children'][0]['children'][1];
+$plainHeadline = $liveSection['children'][0]['children'][0]['children'][0];
+
+expectMode('outline marks a disabled row', $disabledRow['status'] ?? null, 'disabled');
+expectMode('outline omits status when the element renders', array_key_exists('status', $liveSection), false);
+expectMode('outline flags a bound node', $boundText['has_source_binding'] ?? null, true);
+expectMode('outline omits the flag when there is no binding', array_key_exists('has_source_binding', $plainHeadline), false);
+expectMode('hosts still share outline shape with flags', $joomlaTree, $wp->outlineTree($layout));
+
+$metaByPath = [];
+
+foreach ($joomla->listElements($layout) as $meta) {
+    $metaByPath[$meta['path']] = $meta;
+}
+
+expectMode(
+    'element-list carries status too',
+    $metaByPath['root>section[1]>row[0]']['status'] ?? null,
+    'disabled'
+);
+expectMode(
+    'element-list omits status when the element renders',
+    array_key_exists('status', $metaByPath['root>section[0]']),
+    false
+);
+
+$bindingRows = new class {
+    use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceSupportTrait;
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return list<array<string, mixed>>
+     */
+    public function rows(object $navigator, array $layout): array
+    {
+        return $this->bindingsOnlyFromLayout($navigator, $layout);
+    }
+};
+
+$wpBindingRows = new class {
+    use Mirasai\WordPress\Tool\TemplateElementSourceSupportTrait;
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return list<array<string, mixed>>
+     */
+    public function rows(object $navigator, array $layout): array
+    {
+        return $this->bindingsOnlyFromLayout($navigator, $layout);
+    }
+};
+
+$rows = $bindingRows->rows($joomla, $layout);
+$rowsByPath = [];
+
+foreach ($rows as $row) {
+    $rowsByPath[$row['path']] = $row;
+}
+
+expectMode('bindings_only finds both bindings', count($rows), 2);
+expectMode(
+    'a binding inside a disabled row names the ancestor',
+    $rowsByPath['root>section[1]>row[0]>column[0]>gallery[0]']['disabled_by'] ?? null,
+    'root>section[1]>row[0]'
+);
+expectMode(
+    'the disabled ancestor is not the node itself',
+    array_key_exists('status', $rowsByPath['root>section[1]>row[0]>column[0]>gallery[0]']),
+    false
+);
+expectMode(
+    'a live binding carries no disabled_by',
+    array_key_exists('disabled_by', $rowsByPath['root>section[0]>row[0]>column[0]>text[1]']),
+    false
+);
+expectMode(
+    'hosts agree on bindings_only rows',
+    $rows,
+    $wpBindingRows->rows($wp, $layout)
+);
 
 if ($failed > 0) {
     echo "\n{$failed} read-mode test(s) failed.\n";

@@ -66,7 +66,7 @@ final class YooThemeElementNavigator
         return [
             'type' => 'string',
             'enum' => ['full', 'outline', 'bindings_only'],
-            'description' => 'full (default) is the current payload. outline returns a nested tree of type, path, name, title, and children with no props. bindings_only returns only nodes with a Dynamic Source binding, using the same summary as template/element-source-read. The etag is always the full layout.',
+            'description' => 'full (default) is the current payload. outline returns a nested tree of type, path, name, title, and children with no props, plus status and has_source_binding, each omitted when the element renders and carries no binding. bindings_only returns only nodes with a Dynamic Source binding, using the same summary as template/element-source-read, and carries status plus disabled_by, the nearest self-or-ancestor the Builder disabled, which the flat list cannot show by nesting. The etag is always the full layout.',
         ];
     }
 
@@ -733,6 +733,16 @@ final class YooThemeElementNavigator
             $outline['name'] = (string) $node['name'];
         }
 
+        $status = $this->elementStatus($node);
+
+        if ($status !== '') {
+            $outline['status'] = $status;
+        }
+
+        if ($this->hasSourceBinding($node)) {
+            $outline['has_source_binding'] = true;
+        }
+
         $children = is_array($node['children'] ?? null) ? $node['children'] : [];
 
         foreach ($children as $childIndex => $child) {
@@ -756,7 +766,7 @@ final class YooThemeElementNavigator
         $children = is_array($node['children'] ?? null) ? $node['children'] : [];
         $props = is_array($node['props'] ?? null) ? $node['props'] : [];
 
-        $elements[] = [
+        $meta = [
             'path' => $path,
             'type' => $this->nodeType($node),
             'depth' => $depth,
@@ -767,6 +777,13 @@ final class YooThemeElementNavigator
             'label' => $this->nodeLabel($node),
             'has_source_binding' => $this->hasSourceBinding($node),
         ];
+        $status = $this->elementStatus($node);
+
+        if ($status !== '') {
+            $meta['status'] = $status;
+        }
+
+        $elements[] = $meta;
 
         foreach ($children as $childIndex => $child) {
             if (!is_array($child)) {
@@ -1244,6 +1261,19 @@ final class YooThemeElementNavigator
     /**
      * @param array<string, mixed> $node
      */
+    /**
+     * props.status is absent on an element that renders and 'disabled' on one
+     * the Builder keeps but does not output.
+     *
+     * @param array<string, mixed> $node
+     */
+    private function elementStatus(array $node): string
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        return is_string($props['status'] ?? null) ? trim((string) $props['status']) : '';
+    }
+
     private function hasSourceBinding(array $node): bool
     {
         if (is_array($node['source'] ?? null) || is_array($node['source_extended'] ?? null)) {

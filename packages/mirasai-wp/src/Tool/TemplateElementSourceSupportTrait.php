@@ -357,13 +357,29 @@ trait TemplateElementSourceSupportTrait
 
     /**
      * @param array<string, mixed> $layout
-     * @return list<array{path: string, type: string, binding: array<string, mixed>}>
+     * @return list<array{path: string, type: string, status?: string, disabled_by?: string, binding: array<string, mixed>}>
      */
     protected function bindingsOnlyFromLayout(object $navigator, array $layout): array
     {
+        $elements = $navigator->listElements($layout);
+        $parents = [];
+        $disabled = [];
+
+        foreach ($elements as $meta) {
+            if (!is_string($meta['path'] ?? null)) {
+                continue;
+            }
+
+            $parents[$meta['path']] = is_string($meta['parent_path'] ?? null) ? $meta['parent_path'] : null;
+
+            if (($meta['status'] ?? null) === 'disabled') {
+                $disabled[$meta['path']] = true;
+            }
+        }
+
         $bindings = [];
 
-        foreach ($navigator->listElements($layout) as $meta) {
+        foreach ($elements as $meta) {
             if (empty($meta['has_source_binding']) || !is_string($meta['path'] ?? null)) {
                 continue;
             }
@@ -377,13 +393,51 @@ trait TemplateElementSourceSupportTrait
             $binding = $this->summarizeBinding($found['element']);
             unset($binding['raw_source']);
 
-            $bindings[] = [
+            $row = [
                 'path' => $meta['path'],
                 'type' => is_string($meta['type'] ?? null) ? $meta['type'] : 'unknown',
-                'binding' => $binding,
             ];
+
+            if (is_string($meta['status'] ?? null) && $meta['status'] !== '') {
+                $row['status'] = $meta['status'];
+            }
+
+            $disabledBy = $this->nearestDisabledAncestor($meta['path'], $disabled, $parents);
+
+            if ($disabledBy !== null) {
+                $row['disabled_by'] = $disabledBy;
+            }
+
+            $row['binding'] = $binding;
+            $bindings[] = $row;
         }
 
         return $bindings;
+    }
+
+    /**
+     * bindings_only is a flat list, so a binding whose row or section is
+     * disabled has no nesting left to show it. BIT Vic disables the row and
+     * leaves last edition's source on the gallery inside it: without this the
+     * agent maps a placeholder it was never meant to touch.
+     *
+     * @param array<string, true> $disabled
+     * @param array<string, string|null> $parents
+     */
+    private function nearestDisabledAncestor(string $path, array $disabled, array $parents): ?string
+    {
+        $current = $path;
+        $seen = [];
+
+        while (is_string($current) && !isset($seen[$current])) {
+            if (isset($disabled[$current])) {
+                return $current;
+            }
+
+            $seen[$current] = true;
+            $current = $parents[$current] ?? null;
+        }
+
+        return null;
     }
 }

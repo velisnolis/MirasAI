@@ -15,7 +15,7 @@ class TemplateReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads one YOOtheme Builder layout by storage selector. Use one of key, post_id, or widget_id. Returns translatable_nodes for template/translate and template/widget-translate workflows. mode=outline returns a nested type/path/title tree with no props; mode=bindings_only returns Dynamic Source bindings only. The etag is always the full layout.';
+        return 'Reads one YOOtheme Builder layout by storage selector. Use one of key, post_id, or widget_id. Returns translatable_nodes for template/translate and template/widget-translate workflows. mode=outline returns a nested type/path/title tree with no props; mode=bindings_only returns Dynamic Source bindings only. Both carry status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor. The etag is always the full layout.';
     }
 
     public function getInputSchema(): array

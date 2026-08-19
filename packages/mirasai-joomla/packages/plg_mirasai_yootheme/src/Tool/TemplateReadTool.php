@@ -30,7 +30,7 @@ class TemplateReadTool extends AbstractTool
         return 'Reads a single YOOtheme Builder page template by key. Returns its assignment metadata, full layout JSON, '
             . 'and an array of translatable_nodes with replacement_key (same format as content/read\'s yootheme_translatable_nodes). '
             . 'Use the replacement_key values in template/translate\'s yootheme_text_replacements. '
-            . 'mode=outline returns a nested type/path/title tree with no props; mode=bindings_only returns Dynamic Source bindings only. The etag is always the full layout.';
+            . 'mode=outline returns a nested type/path/title tree with no props; mode=bindings_only returns Dynamic Source bindings only. Both carry status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor. The etag is always the full layout.';
     }
 
     public function getInputSchema(): array

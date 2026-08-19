@@ -263,23 +263,24 @@ Ja desplegat a industriaviva (WP) i al lab Joomla 2026-08-18.
 1. `template/read mode=outline` per situar `section[n]` / files.
 2. `template/element-list mode=bindings_only` per construir el `leaf_map`.
    Cada fila és `{path, type, binding:{query_path, query_arguments, field_mappings, …}}`.
-3. Anotar `props.status=disabled` amb `element-read` o `element-list` `full`
-   (outline no porta props; un node disabled no es distingeix a l'outline).
-   **Forat del read-mode:** `outline` no marca `status`. El dry-run de
-   clone-rebind ha de llistar `skipped_disabled`. Si cal veure'ls abans,
-   `element-list` sense mode, camp `status` si ja hi és, o `element-read`.
+3. Els nodes disabled ja es veuen des dels dos modes: no cal baixar a
+   `element-list full` ni a `element-read` només per això.
 
-**Requisit previ** (revisió 19/08, ja no opcional): `outline` **i**
-`bindings_only` han de portar `status` (i `has_binding` a l'outline) com a
-flags barats, sense props. Sense això, qui construeix el mapa des de
-`bindings_only` no veu quins nodes són disabled i xoca amb
-`rebind_disabled_blocked`.
+**Requisit previ — FET el 19/08.** `outline` porta `status` i
+`has_source_binding` (el nom que ja feia servir `element-list`, no
+`has_binding`), i `bindings_only` porta `status` i **`disabled_by`**. Aquest
+últim no era al pla: com que `bindings_only` és una llista plana, un binding
+dins d'una fila disabled no es distingia de cap manera, i és exactament la
+forma de BIT Vic (la fila apagada, el `gallery_item` de dins amb el source de
+l'edició passada). `disabled_by` dona el path de l'avantpassat (o d'ell mateix)
+que està apagat. Tots els flags s'ometen quan l'element renderitza i no té
+binding.
 
 ## Implementació (quan es demani)
 
 Ordre, no abans:
 
-1. `status` / `has_binding` als read-modes (requisit previ, sobre).
+1. ~~`status` / `has_source_binding` / `disabled_by` als read-modes~~ — fet el 19/08.
 2. Tests de forma + navigator (leaf_map, disabled, rewrite literal).
 3. WP al draft **548**, mai `post_id=65`. Smoke: `element-clone`
    `section[7]` → `[8]`, després batch-rebind terms 7→9 a `fs_grid_item`
