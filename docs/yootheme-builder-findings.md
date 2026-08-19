@@ -548,3 +548,40 @@ l'avantpassat (o d'ell mateix) que està apagat; si el camp hi és, aquell bindi
 `outline` reporta `status` per node i l'ascendència es llegeix del niat. Els dos
 camps s'ometen quan no diuen res. Regla general: qualsevol vista plana d'un
 arbre ha de tornar explícitament el context que la planitud destrueix.
+
+### F-021 · Un rebind oblidat no dona cap error: filtra malament i calla
+
+**Data:** 19/08/2026 · **CMS:** WordPress · **YOOtheme:** 5.0.40 · **Site:**
+industriaviva (compte de desenvolupament, draft 548)
+
+**Observació.** El clone del 18/08 va quedar a mitges i hi va **seguir** un dia
+sencer sense que res ho denunciés. A `root>section[8]`:
+
+| Fulla | `terms` |
+|---|---|
+| `…>fs_grid[0]>fs_grid_item[0]` | `[9]` (rebindejada) |
+| `…>text[1]` (`_condition`) | `[7]` (oblidada) |
+
+Totes les altres seccions de cursos quadraven: 5→2/2, 7→7/7, 10→9/9, 12→12/12,
+14→16/16. Només la clonada estava desparellada.
+
+**Per què no es veu.** Un binding amb l'argument equivocat és un binding
+perfectament vàlid. YOOtheme no valida que dues fulles germanes que consulten la
+mateixa source hi vagin amb els mateixos arguments, i la condició de visibilitat
+d'una llista buida no crida l'atenció de ningú: la secció simplement es comporta
+com si el filtre fos un altre. No hi ha error, ni log, ni res al Customizer.
+
+**Com es detecta.** `template/element-list mode=bindings_only` i comparar les
+fulles que comparteixen `query_path` dins d'una mateixa secció. Les que consulten
+la mateixa source i tenen arguments diferents són sospitoses. La forma `leaves[]`
+d'`element-source-set` ho fa explícit: el dry-run de la crida incompleta reporta
+la germana com a `untouched` amb el mateix `query_path`, que és exactament el
+senyal que faltava el 18/08.
+
+**Verificat.** Corregit al draft 548 amb un sol write (`kept` la graella,
+`rebound` el text de `[7]` a `[9]`); diff dels 64 bindings abans i després: un
+sol canvi, i només els seus `terms`.
+
+**Regla accionable.** Després de clonar i rebindejar, no et refiïs de mirar la
+pàgina: compara els arguments de totes les fulles que comparteixen `query_path`
+a la secció copiada. Un rebind a mitges no es queixa mai.
