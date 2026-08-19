@@ -4,7 +4,7 @@
 
 It keeps the client-facing MCP surface in one place and routes calls to Joomla or WordPress host endpoints by `site_id`.
 
-Current internal version: `0.8.2`.
+Current internal version: `0.9.0`.
 
 This release implements the registry, secret resolution with in-memory TTL,
 host probing, remote tool discovery, and a stdio MCP server that can expose

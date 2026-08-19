@@ -19,6 +19,56 @@ final class YoothemeElementNavigator
     }
 
     /**
+     * Nested type/path/name/title/children tree with no props.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    public function outlineTree(array $layout): array
+    {
+        return $this->outlineNode($layout, 'root');
+    }
+
+    /**
+     * @return array{mode: string}|array{error: string, code: string}
+     */
+    public static function normalizeReadMode(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return ['mode' => 'full'];
+        }
+
+        if (!is_string($value)) {
+            return ['error' => 'mode must be a string.', 'code' => 'invalid_mode'];
+        }
+
+        $mode = strtolower(trim($value));
+
+        if (!in_array($mode, ['full', 'outline', 'bindings_only'], true)) {
+            return [
+                'error' => "Unsupported mode '{$value}'. Use full, outline, or bindings_only.",
+                'code' => 'invalid_mode',
+            ];
+        }
+
+        return ['mode' => $mode];
+    }
+
+    /**
+     * Schema fragment shared by template/read and template/element-list.
+     *
+     * @return array<string, mixed>
+     */
+    public static function readModeSchemaProperty(): array
+    {
+        return [
+            'type' => 'string',
+            'enum' => ['full', 'outline', 'bindings_only'],
+            'description' => 'full (default) is the current payload. outline returns a nested tree of type, path, name, title, and children with no props, plus status and has_source_binding, each omitted when the element renders and carries no binding. bindings_only returns only nodes with a Dynamic Source binding, using the same summary as template/element-source-read, and carries status plus disabled_by, the nearest self-or-ancestor the Builder disabled, which the flat list cannot show by nesting. The etag is always the full layout.',
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $layout
      */
     public function countElements(array $layout): int
@@ -395,7 +445,9 @@ final class YoothemeElementNavigator
             return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
         }
 
-        $result = $this->addElementBeside($layout, $referencePath, $source['element'], $mode);
+        $renamedIds = [];
+        $copy = $this->reserveClonedIds($layout, $source['element'], $renamedIds);
+        $result = $this->addElementBeside($layout, $referencePath, $copy, $mode);
 
         if (isset($result['error'])) {
             return $result;
@@ -408,6 +460,7 @@ final class YoothemeElementNavigator
             'metadata' => $result['metadata'],
             'element' => $result['element'],
             'reference_parent_path' => $result['reference_parent_path'],
+            'renamed_ids' => $renamedIds,
         ];
     }
 
@@ -603,7 +656,9 @@ final class YoothemeElementNavigator
         }
 
         $updated = $layout;
-        $newPath = $this->insertSiblingAfterInPlace($updated, $path, $source['element']);
+        $renamedIds = [];
+        $copy = $this->reserveClonedIds($layout, $source['element'], $renamedIds);
+        $newPath = $this->insertSiblingAfterInPlace($updated, $path, $copy);
 
         if ($newPath === null) {
             return ['error' => "Element path {$path} could not be cloned.", 'code' => 'element_not_found'];
@@ -621,6 +676,7 @@ final class YoothemeElementNavigator
             'new_path' => $newPath,
             'metadata' => $found['metadata'],
             'element' => $found['element'],
+            'renamed_ids' => $renamedIds,
         ];
     }
 
@@ -659,6 +715,49 @@ final class YoothemeElementNavigator
 
     /**
      * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function outlineNode(array $node, string $path): array
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+        $title = is_string($props['title'] ?? null) ? trim((string) $props['title']) : '';
+        $outline = [
+            'type' => $this->nodeType($node),
+            'path' => $path,
+            'title' => $title !== '' ? $title : $this->nodeLabel($node),
+            'children' => [],
+        ];
+
+        if (is_string($node['name'] ?? null) && trim((string) $node['name']) !== '') {
+            $outline['name'] = (string) $node['name'];
+        }
+
+        $status = $this->elementStatus($node);
+
+        if ($status !== '') {
+            $outline['status'] = $status;
+        }
+
+        if ($this->hasSourceBinding($node)) {
+            $outline['has_source_binding'] = true;
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $childIndex => $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+
+            $childType = $this->nodeType($child);
+            $outline['children'][] = $this->outlineNode($child, "{$path}>{$childType}[{$childIndex}]");
+        }
+
+        return $outline;
+    }
+
+    /**
+     * @param array<string, mixed> $node
      * @param list<array<string, mixed>> $elements
      */
     private function walk(array $node, string $path, ?string $parentPath, int $depth, int $index, array &$elements): void
@@ -666,7 +765,7 @@ final class YoothemeElementNavigator
         $children = is_array($node['children'] ?? null) ? $node['children'] : [];
         $props = is_array($node['props'] ?? null) ? $node['props'] : [];
 
-        $elements[] = [
+        $meta = [
             'path' => $path,
             'type' => $this->nodeType($node),
             'depth' => $depth,
@@ -677,6 +776,13 @@ final class YoothemeElementNavigator
             'label' => $this->nodeLabel($node),
             'has_source_binding' => $this->hasSourceBinding($node),
         ];
+        $status = $this->elementStatus($node);
+
+        if ($status !== '') {
+            $meta['status'] = $status;
+        }
+
+        $elements[] = $meta;
 
         foreach ($children as $childIndex => $child) {
             if (!is_array($child)) {
@@ -1164,6 +1270,19 @@ final class YoothemeElementNavigator
     /**
      * @param array<string, mixed> $node
      */
+    /**
+     * props.status is absent on an element that renders and 'disabled' on one
+     * the Builder keeps but does not output.
+     *
+     * @param array<string, mixed> $node
+     */
+    private function elementStatus(array $node): string
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        return is_string($props['status'] ?? null) ? trim((string) $props['status']) : '';
+    }
+
     private function hasSourceBinding(array $node): bool
     {
         if (is_array($node['source'] ?? null) || is_array($node['source_extended'] ?? null)) {
@@ -1209,5 +1328,150 @@ final class YoothemeElementNavigator
         }
 
         return '';
+    }
+
+    /**
+     * Give a cloned subtree its own HTML ids.
+     *
+     * YOOtheme renders props.id as the element's HTML id, so a verbatim copy
+     * leaves two nodes answering to the same anchor and the browser resolves
+     * #id to the first one. Anchors pointing inside the copied subtree follow
+     * the rename; links pointing outside it are left alone. Ids the source
+     * already duplicated stay duplicated: de-duplicating the original is not
+     * this method's job.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $element
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function reserveClonedIds(array $layout, array $element, array &$renamed): array
+    {
+        $taken = [];
+        $this->collectElementIds($layout, $taken);
+        $renamed = [];
+        $element = $this->renameElementIds($element, $taken, $renamed);
+
+        if ($renamed === []) {
+            return $element;
+        }
+
+        return $this->rewriteAnchorProps($element, $renamed);
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param array<string, true> $taken
+     */
+    private function collectElementIds(array $node, array &$taken): void
+    {
+        $id = $this->elementId($node);
+
+        if ($id !== '') {
+            $taken[$id] = true;
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $child) {
+            if (is_array($child)) {
+                $this->collectElementIds($child, $taken);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @param array<string, true> $taken
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function renameElementIds(array $node, array &$taken, array &$renamed): array
+    {
+        $id = $this->elementId($node);
+
+        if ($id !== '') {
+            if (isset($taken[$id])) {
+                $fresh = $renamed[$id] ?? $this->freshElementId($id, $taken);
+                $renamed[$id] = $fresh;
+                $taken[$fresh] = true;
+                $node['props']['id'] = $fresh;
+            } else {
+                $taken[$id] = true;
+            }
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $index => $child) {
+            if (is_array($child)) {
+                $node['children'][$index] = $this->renameElementIds($child, $taken, $renamed);
+            }
+        }
+
+        return $node;
+    }
+
+    /**
+     * Rewrite #anchor props that point at an id this clone renamed.
+     *
+     * @param array<string, mixed> $node
+     * @param array<string, string> $renamed
+     * @return array<string, mixed>
+     */
+    private function rewriteAnchorProps(array $node, array $renamed): array
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        foreach ($props as $key => $value) {
+            if (!is_string($value) || !str_starts_with($value, '#')) {
+                continue;
+            }
+
+            $target = substr($value, 1);
+
+            if (isset($renamed[$target])) {
+                $node['props'][$key] = '#' . $renamed[$target];
+            }
+        }
+
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        foreach ($children as $index => $child) {
+            if (is_array($child)) {
+                $node['children'][$index] = $this->rewriteAnchorProps($child, $renamed);
+            }
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function elementId(array $node): string
+    {
+        $props = is_array($node['props'] ?? null) ? $node['props'] : [];
+
+        return is_string($props['id'] ?? null) ? trim((string) $props['id']) : '';
+    }
+
+    /**
+     * The original id keeps its whole string so a dated id such as
+     * edicio-2026 does not lose its year to the suffix.
+     *
+     * @param array<string, true> $taken
+     */
+    private function freshElementId(string $id, array $taken): string
+    {
+        for ($suffix = 2; $suffix < 1000; $suffix++) {
+            $candidate = "{$id}-{$suffix}";
+
+            if (!isset($taken[$candidate])) {
+                return $candidate;
+            }
+        }
+
+        return $id . '-' . substr(md5($id), 0, 6);
     }
 }

@@ -1,0 +1,49 @@
+{
+    "corrupt": false,
+    "before_node_count": 6,
+    "after_node_count": 6,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [
+        {
+            "path": "root>section[0]",
+            "keys": [
+                "image_position",
+                "style",
+                "title_breakpoint",
+                "title_position",
+                "title_rotation",
+                "vertical_align",
+                "width"
+            ]
+        },
+        {
+            "path": "root>section[0]>row[0]>column[0]",
+            "keys": [
+                "image_position",
+                "position_sticky_breakpoint"
+            ]
+        },
+        {
+            "path": "root>section[0]>row[0]>column[0]>headline[0]",
+            "keys": [
+                "image_align",
+                "image_margin",
+                "title_element"
+            ]
+        },
+        {
+            "path": "root>section[0]>row[0]>column[0]>text[1]",
+            "keys": [
+                "column_breakpoint",
+                "margin_bottom",
+                "margin_top"
+            ]
+        }
+    ],
+    "layout_version_before": null,
+    "layout_version_after": ""
+}

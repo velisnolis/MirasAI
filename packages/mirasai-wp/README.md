@@ -2,7 +2,7 @@
 
 This package is the WordPress host plugin for the MirasAI multi-platform architecture.
 
-Current internal version: `0.8.2`.
+Current internal version: `0.9.0`.
 
 It is not a wrapper around Novamira or the WordPress MCP Adapter. It implements the MirasAI Host MCP Contract directly so the local `@miras/mirasai-mcp` router can treat WordPress and Joomla hosts consistently.
 
@@ -22,7 +22,7 @@ npm run build:zip
 The ZIP is written to:
 
 ```text
-dist/mirasai-wp-0.8.2.zip
+dist/mirasai-wp-0.9.0.zip
 ```
 
 Authenticate with:
@@ -174,6 +174,29 @@ source packages registered by the active theme/plugins. `template/element-source
 summarizes existing element bindings from `source`, `props.source`, or
 `source_extended` without exposing the raw payload unless `include_raw:true` is
 passed.
+
+`template/read` and `template/element-list` accept `mode`. `full` (default) is
+unchanged. `outline` returns a nested tree of `type`, `path`, `name`/`title`,
+and `children` with no props. `bindings_only` returns only nodes with a
+Dynamic Source binding, using the same summary as `template/element-source-read`.
+The etag is always the full layout.
+
+Both modes carry `status` on an element the Builder keeps but does not output,
+and `outline` adds `has_source_binding`; each is omitted when the element
+renders and carries no binding. `bindings_only` is flat, so it also reports
+`disabled_by`, the nearest self-or-ancestor that is disabled.
+
+`template/element-source-set` also takes a batch form: `leaves` instead of
+`path`, several bindings under one `if_match`. Each entry is
+`{match: {path|query_path}, set: {keep|source_name|query_arguments|field_mappings|source}}`.
+It is fail-closed on the whole set — an entry that does not resolve to exactly
+one bound node refuses the call without writing — and `set` values are deltas,
+so moving a query argument leaves the field mappings beside it alone. The
+preview reports every bound node in the layout with a `state` of `rebound`,
+`kept`, `untouched`, or `skipped_disabled`, which is how a leaf nobody
+remembered to name becomes visible before the write. A binding under a disabled
+ancestor is refused with `rebind_disabled_blocked` unless `rebind_disabled` is
+set, because a source left on a disabled row is usually a placeholder.
 
 `template/element-source-preview`, `template/element-source-set`, and
 `template/element-source-delete` are guarded Dynamic Source write tools.

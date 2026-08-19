@@ -12,6 +12,8 @@ php "${ROOT_DIR}/docker/test-file-read-denylist.php"
 php "${ROOT_DIR}/docker/test-sandbox-execute-php-contract.php"
 php "${ROOT_DIR}/docker/test-yootheme-summary.php"
 php "${ROOT_DIR}/docker/test-yootheme-elements.php"
+php "${ROOT_DIR}/docker/test-yootheme-read-modes.php"
+php "${ROOT_DIR}/docker/test-yootheme-source-batch.php"
 
 find "${ROOT_DIR}/packages/mirasai-joomla" -name '*.php' -print0 \
   | xargs -0 -n 1 php -l >/dev/null

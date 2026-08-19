@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The latest published release is [`0.8.1`](https://github.com/velisnolis/MirasAI/releases/tag/v0.8.1); `0.8.2` is prepared and not yet published. MirasAI includes:
+The latest published release is [`0.8.2`](https://github.com/velisnolis/MirasAI/releases/tag/v0.8.2); `0.9.0` is prepared and not yet published. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -68,12 +68,12 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.8.2` | `0.8.2` | `0.8.2` |
+| Version | `0.9.0` | `0.9.0` | `0.9.0` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password + `manage_options`; MirasAI token fallback | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
-| Automatic updates | XML feed serves published `0.8.1` | JSON feed serves published `0.8.1` | No feed; install the release tarball |
-| Last live canary | Joomla 6.1.2 + YOOtheme Pro 5.0.37 (`0.7.0`) | WordPress 7.0.4 + PHP 8.4 + YOOtheme Pro 5.0.40 child theme (`0.8.2`) | Guarded Style compile/write and provenance readback exercised against Indústria Viva on 2026-08-17 |
+| Automatic updates | XML feed serves published `0.8.2` | JSON feed serves published `0.8.2` | No feed; install the release tarball |
+| Last live canary | Joomla 5 + YOOtheme Pro 5.0.40 lab (`0.9.0`) | WordPress 7.0.4 + PHP 8.4 + YOOtheme Pro 5.0.40 (`0.9.0`) | Guarded Style compile/write and provenance readback exercised against Indústria Viva on 2026-08-17 |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
 | YOOtheme Styles | Read, sources, guarded update | Read, sources, guarded create/update | Pinned-worker preview, update, and verification |
@@ -258,7 +258,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.8.2.zip
+packages/mirasai-wp/dist/mirasai-wp-0.9.0.zip
 ```
 
 The WordPress admin dashboard includes:
@@ -315,6 +315,30 @@ Common workflow:
 3. `template/element-read`
 4. `template/element-schema` if a write needs runtime prop schema
 5. write with `if_match` and either `dry_run:true` or `confirm_guarded_write:true`
+
+`template/read` and `template/element-list` accept `mode`. `full` (default) is
+the current payload. `outline` returns a nested tree of `type`, `path`,
+`name`/`title`, and `children` with no props. `bindings_only` returns only
+nodes with a Dynamic Source binding, using the same summary as
+`template/element-source-read`. The etag is always the full layout.
+
+Both modes carry `status` on an element the Builder keeps but does not output,
+and `outline` adds `has_source_binding`; each is omitted when the element
+renders and carries no binding. Because `bindings_only` is flat, it also
+reports `disabled_by`: the nearest self-or-ancestor that is disabled, so a
+placeholder binding left inside a disabled row is not mistaken for a live one.
+
+`template/element-source-set` also takes a batch form: `leaves` instead of
+`path`, several bindings under one `if_match`. Each entry is
+`{match: {path|query_path}, set: {keep|source_name|query_arguments|field_mappings|source}}`.
+It is fail-closed on the whole set — an entry that does not resolve to exactly
+one bound node refuses the call without writing — and `set` values are deltas,
+so moving a query argument leaves the field mappings beside it alone. The
+preview reports every bound node in the layout with a `state` of `rebound`,
+`kept`, `untouched`, or `skipped_disabled`, which is how a leaf nobody
+remembered to name becomes visible before the write. A binding under a disabled
+ancestor is refused with `rebind_disabled_blocked` unless `rebind_disabled` is
+set, because a source left on a disabled row is usually a placeholder.
 
 Element tools include add, update props, move, clone, delete, Dynamic Source preview/set/delete, and translation-oriented reads.
 

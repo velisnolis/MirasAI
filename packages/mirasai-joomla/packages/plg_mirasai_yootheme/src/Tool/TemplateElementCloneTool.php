@@ -15,7 +15,7 @@ class TemplateElementCloneTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Clones one YOOtheme Builder layout element. The copy lands as the next sibling of the source unless before_path or after_path places it elsewhere. Supports templates, article layouts, and Builder modules. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
+        return 'Clones one YOOtheme Builder layout element. The copy lands as the next sibling of the source unless before_path or after_path places it elsewhere. Supports templates, article layouts, and Builder modules. Requires if_match and uses dry_run/confirm_guarded_write before writing. A props.id that would collide with the layout is renamed on the copy and reported as renamed_ids; #anchors inside the copy follow the rename.';
     }
 
     public function getInputSchema(): array
@@ -79,6 +79,10 @@ class TemplateElementCloneTool extends AbstractTemplateElementWriteTool
             if ($placement !== 'next_sibling') {
                 $response['reference_path'] = $beforePath !== '' ? $beforePath : $afterPath;
                 $response['parent_path'] = $result['reference_parent_path'];
+            }
+
+            if (!empty($result['renamed_ids'])) {
+                $response['renamed_ids'] = $result['renamed_ids'];
             }
 
             if ($includeElement) {

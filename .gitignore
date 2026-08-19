@@ -13,3 +13,11 @@ node_modules/
 packages/mirasai-wp/dist/
 packages/mirasai-joomla/packages/*.zip
 .work/
+
+# macOS / editor noise
+.DS_Store
+.cursor/
+
+# Third-party reference material. Read-only comparison sources; never vendored
+# into this repo (yt-builder-mcp is GPL, NovaMira is AGPL).
+yt-builder-mcp/
