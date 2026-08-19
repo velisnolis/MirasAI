@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test:local-contracts && npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:agent-playbook && npm run test:tool-arguments && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:joomla-yootheme-style-read && npm run test:yootheme-source-runtime && npm run test:yootheme-elements && npm run test:yootheme-read-modes && npm run test:yootheme-element-move && npm run test:yootheme-props && npm run test:yootheme-source-paths && npm run test:yootheme-binding-shape && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
+    "test": "npm run test:local-contracts && npm run test:contract && npm run test:mcp && npm run test:host-contract && npm run test:agent-playbook && npm run test:tool-arguments && npm run test:wp-auth && npm run test:wp-mcp-handler && npm run test:wp-yootheme-source && npm run test:wp-yootheme-post-write && npm run test:wp-yootheme-style-read && npm run test:joomla-yootheme-style-read && npm run test:yootheme-source-runtime && npm run test:yootheme-elements && npm run test:yootheme-read-modes && npm run test:yootheme-element-move && npm run test:yootheme-props && npm run test:yootheme-source-paths && npm run test:yootheme-source-batch && npm run test:yootheme-binding-shape && npm run test:db-query && npm run test:wp-sandbox && npm run lint:joomla && npm run lint:wp",
     "test:local-contracts": "bash docker/test-local-contracts.sh",
     "test:contract": "npm run test -w @miras/mirasai-contract",
     "test:mcp": "npm run test -w @miras/mirasai-mcp",
@@ -34,6 +34,7 @@
     "test:yootheme-element-move": "php docker/test-yootheme-element-move.php",
     "test:yootheme-props": "php docker/test-yootheme-props.php",
     "test:yootheme-source-paths": "php docker/test-yootheme-source-paths.php",
+    "test:yootheme-source-batch": "php docker/test-yootheme-source-batch.php",
     "test:yootheme-binding-shape": "php docker/test-yootheme-binding-shape.php"
   },
   "engines": {

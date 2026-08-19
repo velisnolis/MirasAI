@@ -186,6 +186,18 @@ and `outline` adds `has_source_binding`; each is omitted when the element
 renders and carries no binding. `bindings_only` is flat, so it also reports
 `disabled_by`, the nearest self-or-ancestor that is disabled.
 
+`template/element-source-set` also takes a batch form: `leaves` instead of
+`path`, several bindings under one `if_match`. Each entry is
+`{match: {path|query_path}, set: {keep|source_name|query_arguments|field_mappings|source}}`.
+It is fail-closed on the whole set — an entry that does not resolve to exactly
+one bound node refuses the call without writing — and `set` values are deltas,
+so moving a query argument leaves the field mappings beside it alone. The
+preview reports every bound node in the layout with a `state` of `rebound`,
+`kept`, `untouched`, or `skipped_disabled`, which is how a leaf nobody
+remembered to name becomes visible before the write. A binding under a disabled
+ancestor is refused with `rebind_disabled_blocked` unless `rebind_disabled` is
+set, because a source left on a disabled row is usually a placeholder.
+
 `template/element-source-preview`, `template/element-source-set`, and
 `template/element-source-delete` are guarded Dynamic Source write tools.
 Real writes require `if_match` plus `confirm_guarded_write:true`; `dry_run:true`

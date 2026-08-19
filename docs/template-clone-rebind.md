@@ -42,9 +42,35 @@ verifica a la resposta i no a la memòria de l'agent.
   pàgina existent **sense** clonar, que és el flux recurrent de BIT Vic quan
   arriba carpeta o CSV nou.
 
-El `leaf_map`, els `rewrites` i el tractament de `disabled` de sota segueixen
-sent el contracte d'aquella forma batch. La resta és història del disseny
-descartat.
+### Estat: implementat el 19/08
+
+`template/element-source-set` accepta `leaves[]` i `rebind_disabled`. El que ha
+aterrat del `leaf_map` de sota:
+
+| Del disseny | A la tool |
+|---|---|
+| `match.rel_path` | `match.path` (absolut; l'agent ve de `bindings_only`, que dona paths absoluts) |
+| `match.query_path` | igual, i ha de resoldre **exactament un** node |
+| `match.source_name` / `type` / `prop` | no calen: el path ja els discrimina |
+| `set.query_arguments` / `field_mappings` / `source` / `keep` | igual |
+| `set.query_path` | com a `set.source_name`, que és el que canvia de debò |
+| Regles 1–5 (fail-closed, un node una entrada, disabled, no inventar bindings, visibilitat) | totes |
+| `rewrites` | **no**. Cap cas real l'ha necessitat encara; quan n'hi hagi un, es dissenya amb ell al davant |
+
+Dues coses que el disseny no deia i la implementació sí:
+
+- El dry-run reporta **tots** els nodes amb binding del layout, no només els
+  anomenats, amb `state` `rebound` / `kept` / `untouched` / `skipped_disabled`.
+  És el que converteix «no oblidis cap fulla» en una comprovació sobre la
+  resposta en lloc d'un recordatori a l'agent.
+- Els `set` són **deltes**: el que no s'anomena sobreviu. Canviar
+  `query_arguments` no s'endú els `field_mappings` del costat, i els arguments
+  s'escriuen al mateix carrier (niat o puntejat) d'on els llegeix
+  `summarizeBinding`, perquè si no la crida sembla aplicada i el Builder
+  continua amb els vells.
+
+El tractament de `disabled` de sota segueix sent el contracte. La resta és
+història del disseny descartat.
 
 ## Per què existeix
 
@@ -281,7 +307,7 @@ binding.
 Ordre, no abans:
 
 1. ~~`status` / `has_source_binding` / `disabled_by` als read-modes~~ — fet el 19/08.
-2. Tests de forma + navigator (leaf_map, disabled, rewrite literal).
+2. ~~Forma batch `leaves[]` a `template/element-source-set` + tests de forma~~ — fet el 19/08.
 3. WP al draft **548**, mai `post_id=65`. Smoke: `element-clone`
    `section[7]` → `[8]`, després batch-rebind terms 7→9 a `fs_grid_item`
    **i** `text[1]` al mapa; section[7] intacta.

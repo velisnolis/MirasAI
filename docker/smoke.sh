@@ -81,6 +81,7 @@ main() {
   php "${ROOT_DIR}/docker/test-yootheme-summary.php"
   php "${ROOT_DIR}/docker/test-yootheme-elements.php"
   php "${ROOT_DIR}/docker/test-yootheme-read-modes.php"
+  php "${ROOT_DIR}/docker/test-yootheme-source-batch.php"
 
   echo "Smoke checks passed."
 
