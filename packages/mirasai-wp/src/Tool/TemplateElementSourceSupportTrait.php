@@ -448,7 +448,24 @@ trait TemplateElementSourceSupportTrait
      */
     protected function leafBatchInputProperties(): array
     {
-        $mappings = $this->sourceInputProperties()['field_mappings'];
+        // Spelled out rather than borrowed from the single-path schema: only the
+        // WordPress trait has sourceInputProperties(), and reaching for it made
+        // every Joomla call to this tool a fatal.
+        $mappings = [
+            'type' => 'object',
+            'description' => 'Replace the named prop mappings and keep the rest. The native visibility condition is a mapping like any other, under the reserved prop _condition.',
+            'additionalProperties' => [
+                'type' => ['string', 'object'],
+                'description' => 'A field name, or a mapping object. Date and number formatting goes in filters, not in arguments or directives.',
+                'properties' => [
+                    'name' => ['type' => 'string', 'description' => 'Source field name.'],
+                    'arguments' => ['type' => 'object', 'description' => 'Field arguments passed to the source query.'],
+                    'directives' => ['type' => 'object', 'description' => 'GraphQL directives applied to the field.'],
+                    'filters' => ['type' => 'object', 'description' => 'Output filters, for example {"date": "d/m/Y"} to format a date.'],
+                ],
+                'additionalProperties' => false,
+            ],
+        ];
 
         return [
             'leaves' => [

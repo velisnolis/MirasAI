@@ -66,6 +66,14 @@ $batch = new class {
     {
         return $this->bindingsOnlyFromLayout($navigator, $layout);
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(): array
+    {
+        return $this->leafBatchInputProperties();
+    }
 };
 
 $wpBatch = new class {
@@ -79,6 +87,14 @@ $wpBatch = new class {
     public function run(object $navigator, array $layout, array $leaves, bool $rebindDisabled = false): array
     {
         return $this->applyLeafBatch($navigator, $layout, $leaves, $rebindDisabled);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(): array
+    {
+        return $this->leafBatchInputProperties();
     }
 };
 
@@ -351,6 +367,25 @@ expectBatch(
     'a dotted binding takes arguments on the query',
     $byPath($batch->rows($joomla, $dotted['layout']))[$FRAGMENT]['binding']['query_arguments'],
     ['limit' => 5]
+);
+
+// The schema helper has to stand on the trait alone. It once borrowed
+// field_mappings from sourceInputProperties(), which only WordPress defines, and
+// every Joomla call to this tool became a 500 that no unit test saw.
+$joomlaSchema = $batch->schema();
+$wpSchema = $wpBatch->schema();
+
+expectBatch('the batch schema needs nothing outside the trait', array_keys($joomlaSchema), ['leaves', 'rebind_disabled']);
+expectBatch('both hosts publish the same batch schema', $joomlaSchema, $wpSchema);
+expectBatch(
+    'a leaf declares match and set',
+    array_keys($joomlaSchema['leaves']['items']['properties']),
+    ['match', 'set']
+);
+expectBatch(
+    'set declares every operation the batch applies',
+    array_keys($joomlaSchema['leaves']['items']['properties']['set']['properties']),
+    ['keep', 'source_name', 'query_arguments', 'field_mappings', 'source']
 );
 
 if ($failed > 0) {
