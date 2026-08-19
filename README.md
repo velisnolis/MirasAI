@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The latest published release is [`0.8.2`](https://github.com/velisnolis/MirasAI/releases/tag/v0.8.2); `0.9.0` is prepared and not yet published. MirasAI includes:
+The latest published release is [`0.9.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.9.0); `0.9.1` is prepared and not yet published. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -68,11 +68,11 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 
 | Area | Joomla host | WordPress host | Router |
 | --- | --- | --- | --- |
-| Version | `0.9.0` | `0.9.0` | `0.9.0` |
+| Version | `0.9.1` | `0.9.1` | `0.9.1` |
 | Endpoint | `/api/v1/mirasai/mcp` | `/wp-json/mirasai/v1/mcp` | stdio MCP |
 | Auth | Joomla API token, Super User gated | WordPress Application Password + `manage_options`; MirasAI token fallback | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
-| Automatic updates | XML feed serves published `0.8.2` | JSON feed serves published `0.8.2` | No feed; install the release tarball |
+| Automatic updates | XML feed serves published `0.9.0` until this tag exists | JSON feed serves published `0.9.0` until this tag exists | No feed; install the release tarball |
 | Last live canary | Joomla 5 + YOOtheme Pro 5.0.40 lab (`0.9.0`) | WordPress 7.0.4 + PHP 8.4 + YOOtheme Pro 5.0.40 (`0.9.0`) | Guarded Style compile/write and provenance readback exercised against Indústria Viva on 2026-08-17 |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
@@ -258,7 +258,7 @@ npm run build:wp
 ZIP output:
 
 ```text
-packages/mirasai-wp/dist/mirasai-wp-0.9.0.zip
+packages/mirasai-wp/dist/mirasai-wp-0.9.1.zip
 ```
 
 The WordPress admin dashboard includes:

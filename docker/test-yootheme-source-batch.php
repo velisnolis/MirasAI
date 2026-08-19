@@ -388,6 +388,28 @@ expectBatch(
     ['keep', 'source_name', 'query_arguments', 'field_mappings', 'source']
 );
 
+class TestWpSourceTraitHost
+{
+    use Mirasai\WordPress\Tool\TemplateElementSourceSupportTrait;
+}
+
+class TestWpSourceTraitChild extends TestWpSourceTraitHost
+{
+    /**
+     * @return list<string>
+     */
+    public function previewSchemaKeys(): array
+    {
+        return array_keys($this->sourceInputProperties());
+    }
+}
+
+expectBatch(
+    'a WP subclass can call trait helpers used by source-preview',
+    in_array('source_name', (new TestWpSourceTraitChild())->previewSchemaKeys(), true),
+    true
+);
+
 if ($failed > 0) {
     echo "\n{$failed} source batch test(s) failed.\n";
     exit(1);
