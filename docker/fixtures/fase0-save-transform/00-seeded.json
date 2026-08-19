@@ -1,0 +1,35 @@
+{
+  "type": "layout",
+  "children": [
+    {
+      "type": "section",
+      "props": {
+        "title": "Fase 0 section"
+      },
+      "children": [
+        {
+          "type": "row",
+          "children": [
+            {
+              "type": "column",
+              "children": [
+                {
+                  "type": "headline",
+                  "props": {
+                    "content": "Original headline"
+                  }
+                },
+                {
+                  "type": "text",
+                  "props": {
+                    "content": "Original body copy"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

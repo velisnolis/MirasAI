@@ -6,9 +6,9 @@ l'evidència que el confirma.
 
 **Per què aquí.** El projecte MirasAI és el punt de posada en comú: és l'eina que
 opera sobre sites reals i el lloc on conviuen els coneixements de WordPress i
-Joomla. Les regles d'aquí es destil·len després cap a la skill
-`yootheme-layout-json`, que és el que es carrega en el moment de generar
-layouts. Vegeu «Destil·lació» al final.
+Joomla. Les regles d'aquí es destil·len després cap a `yootheme-layout-json`
+(autoria de JSON) i `yootheme-builder-ops` (operació live via MirasAI).
+Vegeu «Destil·lació» al final.
 
 **Com afegir una entrada.** Data, versió i CMS on s'ha vist, símptoma observable,
 causa verificada (amb la ruta del template o del codi que ho demostra) i la
@@ -168,6 +168,74 @@ No és de YOOtheme, però contamina qualsevol verificació.
 - Regla: abans de reportar un defecte de reproducció, càrrega o animació,
   comprovar `visibilityState` i provar `play()` a mà.
 
+### F-013 · MirasAI 0.8.2 substitueix la recepta del navegador de F-010
+
+Publicat el 2026-08-17, poques hores després d'escriure F-010. El router
+implementa compilació **headless**: executa el `worker.js` del propi site dins
+un `vm` amb un shim de Web Worker, en un procés Node separat amb entorn buit i
+Permission Model. És el mateix compilador, la mateixa versió i els mateixos
+plugins que faria servir el Customizer.
+
+- Eines: `mirasai/style-preview`, `mirasai/style-update`, `mirasai/style-verify`.
+- Les instruccions del router deprecien explícitament les dues vies de F-010:
+  «Style CSS writes use `mirasai/style-update` here — never Customizer save()
+  and never WP-CLI/SQL config».
+- El playbook de `system/diagnose` documenta els anti-patrons amb nom propi,
+  inclosos `customizer_save_noop` i `wpcli_or_sql_style_config`, que són
+  exactament els que vaig fer servir tot el 17/08.
+
+Requisits: router local amb Node 20+, entrada a `sites.json` amb
+`style_worker_sha256` **fixat contra el `worker.js` d'aquell site**, i
+credencials. Cal tornar a fixar el hash després de cada actualització de
+YOOtheme.
+
+Trampa de CLI verificada: a mcp2cli, `--dry-run` és `store_true` i l'eina
+assumeix `dry_run=true` quan el camp s'omet. Una escriptura real necessita JSON
+per `--stdin` amb `dry_run=false` i `confirm_guarded_write=true`.
+
+Conseqüència per a F-010: la recepta del navegador passa a ser l'últim recurs,
+només quan el router no està disponible. La resta del contingut de F-010 (modes
+de fallada silenciosa, verificació pel segell del CSS) segueix sent vàlida i
+és el que explica per què calia el router.
+
+### F-014 · Sense child theme, el Custom LESS no sobreviu a una actualització
+
+`mirasai/style-verify` avisa: «No child theme is active. Custom styles and
+portable brand Less have nowhere version-controllable to live, and would not
+survive a theme update.»
+
+A Agència Nord tot el sistema de disseny viu a `theme_mods_yootheme` del tema
+pare. `DESIGN.md` secció 13 ja deia de crear un estil derivat abans de tocar
+LESS, i no es va fer. L'eina `template/style-create` crea el child theme.
+
+Ordre correcte: crear el child ABANS d'acumular-hi LESS, perquè després cal
+migrar-lo. I compte amb l'anti-loop `child_theme_parent_mods`: amb un child
+actiu, la configuració viu a `theme_mods_<child>` i escriure la fila del pare
+provoca un avortament per CAS.
+
+### F-015 · La cau de secrets del router mor amb el procés
+
+`packages/mirasai-mcp/src/secrets.mjs`: `const secretCache = new Map()`. És una
+cau **dins del procés**. Cada invocació de `mcp2cli --mcp-stdio` arrenca un Node
+nou, la cau neix buida i torna a cridar `op read`, amb el prompt d'1Password
+corresponent. Amb desenes de crides per sessió, és insuportable.
+
+`secret_ttl_seconds` no ho arregla: `DEFAULT_SECRET_TTL_SECONDS = 3600` ja
+s'aplica encara que el camp no hi sigui, i el procés mor molt abans que
+l'hora. Pujar el TTL no canvia res.
+
+Pal·liatiu que funciona avui: sessió persistent de mcp2cli
+(`--session-start` i `--session`), que manté viu un sol procés del router.
+Mesurat: primera crida 11,1 s amb prompt, següents 2,7 s sense. Compromís: el
+dimoni manté la credencial desxifrada en memòria mentre viu.
+
+**Proposta per a MirasAI:** cau de secrets que sobrevisqui entre processos,
+amb el mateix patró que els wrappers `~/.config/ai/env.sh` d'aquest entorn:
+1Password com a font de veritat i un mirall al Keychain de macOS amb TTL, de
+manera que una invocació per crida tampoc no torni a demanar autorització. Això
+sí que faria que el TTL fos una palanca real, i llavors tindria sentit
+preguntar-lo o configurar-lo per site.
+
 ---
 
 ## Destil·lació cap a les skills
@@ -181,12 +249,18 @@ El repartiment proposat, seguint la separació que ja tenen les referències de
 | F-005, F-006, F-007, F-008, F-009 | `references/html-uikit-and-css.md` | són fets de render i de CSS contra la sortida de YOOtheme |
 | F-010, F-011 | `references/mirasai-runtime.md` | són operació sobre un site real, que és el que cobreix aquesta referència |
 | F-012 | guia de `browse`/`qa` i memòria | no és de YOOtheme; és límit de l'eina de verificació |
+| F-018 + workflows live (add / bind / clone+rebind / `stale_etag` / canal Style) | skill `yootheme-builder-ops` | no és autoria de JSON; és el camí MirasAI. Apunta a aquest registre i a `docs/agent-routes.md`; no els duplica |
 
 ### Estat de la destil·lació
 
 Aplicada el 2026-08-17. F-001 a F-004 a `core-builder.md`, F-005 a F-009 a
 `html-uikit-and-css.md`, F-010 i F-011 a `mirasai-runtime.md`. F-012 a memòria,
 perquè no és de YOOtheme. El `SKILL.md` recull la convenció del registre.
+
+Skill d'operació live el 2026-08-18: canònic
+`~/.codex/skills/yootheme-builder-ops` (mateixos enllaços que
+`yootheme-layout-json`). Recull casos de clone+rebind en aquest fitxer.
+Disseny del write atòmic (no implementat): `docs/template-clone-rebind.md`.
 
 ### Unificació de la skill — RESOLTA el 2026-08-17
 
@@ -217,3 +291,205 @@ idèntica als originals abans d'esborrar-los.
 
 Les altres dues skills de yootheme (`yootheme-joomla-translation` i
 `yootheme-wpml-translation`) ja seguien aquesta convenció des del principi.
+
+### F-016
+
+**Data:** 18/08/2026 · **Versió:** YOOtheme Pro 5.0.40, UIkit 3.25.21, WordPress 7.0.4 · **CMS:** WordPress
+
+**Símptoma.** Una barra de modalitats enllaça amb `href="#servicios=ftl"` per obrir
+la pestanya corresponent d'un Switcher que viu molt més avall. En clicar-hi, la
+pestanya canvia correctament però la pàgina no es mou. Com que la secció de
+destinació és a uns 4.300 px, l'usuari no veu absolutament res i conclou que
+l'enllaç està trencat.
+
+**Causa verificada.** L'href no és una àncora. El navegador cerca un element amb
+l'id sencer `servicios=ftl`, i `document.getElementById('servicios=ftl')` retorna
+`null`. No hi ha destinació, per tant no hi ha salt. Un `href` que codifica estat
+com a `#ancora=valor` **mai** produeix desplaçament natiu, encara que existeixi un
+element amb l'id `ancora`. Mesurat a la pàgina: després del clic, `window.scrollY`
+= 46 amb `#servicios` situat a 4314 px.
+
+Codi que ho demostra, `wp-content/mu-plugins/agencia-nord-service-deeplink.php`
+v1.3.0: el gestor de clic evitava deliberadament `preventDefault()` amb el comentari
+«el salt a #servicios ha de seguir funcionant». La premissa era falsa.
+
+**Per què va passar el QA.** Es va validar carregant l'URL amb el hash ja posat,
+que entra pel camí `fromHash()` i sí que desplaça explícitament. El camí que fa
+servir l'usuari real —clicar des de la mateixa pàgina— no es va provar mai.
+
+**Regla accionable.** Si es codifica estat al hash amb la forma `#ancora=valor`,
+el desplaçament és responsabilitat del script: cridar `preventDefault()`, fer
+`history.pushState()` per mantenir l'URL compartible i desplaçar a mà. Fer servir
+`pushState` i no assignar `location.hash` evita disparar `hashchange` i que el
+salt es faci dues vegades. La navegació enrere continua coberta perquè entre
+estats de hash sí que hi ha `hashchange`.
+
+**Regla de verificació, més general.** Provar una interacció des de totes les vies
+d'entrada, no només de la que s'acaba d'implementar. En un deep link n'hi ha tres i
+són codi diferent: càrrega amb hash, clic amb la pàgina ja oberta, i enrere/endavant.
+
+### F-017
+
+**Data:** 18/08/2026 · **Eina:** navegador integrat (pestanya automatitzada) · **CMS:** indiferent
+
+**Símptoma.** `element.scrollIntoView({behavior:'smooth'})` no desplaça res. Ni a
+l'instant ni un segon i mig després. Sembla que el codi no s'executi.
+
+**Causa verificada.** La pestanya reporta `document.visibilityState === 'hidden'`
+encara que se la posi en primer pla amb `tabs_select`. Chrome no executa animacions
+de desplaçament en un context ocult. Prova discriminant a la mateixa pàgina i el
+mateix element: `behavior:'auto'` porta `scrollY` a 3407, i `behavior:'smooth'`
+el deixa a 0. La diferència és exclusivament el mode d'animació.
+
+Del mateix origen: `requestAnimationFrame` queda escanyat a uns pocs fotogrames
+per segon, de manera que qualsevol mesura de durada feta amb rAF en aquest entorn
+és brossa (mesurat: 3 fotogrames en 3.589 ms). És la mateixa causa que fa que un
+vídeo amb `autoplay` aparegui pausat, cosa que ja havia produït un fals positiu.
+
+**Regla accionable.** En aquest navegador no es pot verificar res que depengui
+d'animació o de temps real: desplaçament suau, transicions, autoplay, durades amb
+rAF. Es pot verificar l'estat final amb `behavior:'auto'`, que sí que s'aplica.
+Davant d'un «no es mou», fer sempre la prova discriminant auto/smooth abans de
+tocar el codi. El que no es pugui separar així, s'ha de mirar amb ulls humans i
+dir-ho clarament en lloc de donar-ho per verificat.
+
+**Conseqüència de disseny.** Si una interacció depèn només de `behavior:'smooth'`,
+en un context sense animació no passa absolutament res i l'usuari es queda on era.
+Convé una xarxa: si passats uns centenars de mil·lisegons `scrollY` és exactament
+el d'abans, fer el salt instantani. Comparar amb la posició exacta de partida, i no
+amb una franja, evita estirar l'usuari que hagi començat a desplaçar-se pel seu
+compte.
+
+---
+
+## 2026-08-18 · YOOtheme Pro 5.0.24 · Joomla 5.4.5 · lab LXC 103
+
+Projecte: experiment Fase 0 (decisor de prioritat post-revisió YT Builder).
+Write path MirasAI 0.8.2 (JSON directe, sense `Builder::load(context:save)`).
+El Customizer de page templates desa per `TemplateController::saveTemplate`,
+que és exactament `Builder::withParams(['context'=>'save'])->load(...)`.
+No es va clicar la UI Vue; es va invocar aquest camí PHP, que és el que
+persistiria el layout després d'un Save. Diffs crus:
+`docker/fixtures/fase0-save-transform/`.
+
+### F-018 · El save transform omple defaults; no treu nodes al nostre flux
+
+**Símptoma esperat (no observat).** WootsUp cita corrupció si s'escriu JSON
+sense el transform de `context:save`. Al lab, després d'un write MirasAI,
+tornar a passar el layout per aquest transform no perd nodes, no canvia
+`type` i no buida `content`.
+
+**Escenari 1 — edició quirúrgica.** Template ja normalitzat pel primer save.
+`template/element-update-props` canvia el `content` d'un `headline`. El save
+posterior és idempotent: 6 nodes abans i després, zero claus noves.
+Evidència: `04-compare-scenario1.json`.
+
+**Escenari 2 — subarbre nou amb props mínims.** `template/element-add` d'un
+`headline` amb només `{content:"minimal add"}`. El save afegeix
+`image_align`, `image_margin`, `title_element`; el node i el text es queden.
+Evidència: `06-compare-scenario2.json`, `06-after-add-then-save.json`.
+
+**Escenari 3 — migració 5.0.24 → 5.0.40.** Instal·lar el zip no muta el JSON.
+El save transform de 5.0.40 sobre el layout escrit a 5.0.24 no perd nodes ni
+canvia types; només omple els mateixos defaults que 5.0.24 (el `headline`
+afegit per MCP amb props mínims). Evidència: `12-compare-scenario3.json`.
+
+**Sonda extra — type desconegut.** Un node `mirasai_unknown_probe` sobreviu
+al save (ni el treu ni li canvia el type). Això **no** demostra que packs
+de tercers (Flart, YOOessentials) siguin igual de inerts: només que un type
+inventat no activa un prune. Evidència: `08-unknown-type-after.json`.
+
+**Què sí que fa el primer save** sobre JSON cru (el que escriuria un agent
+sense Customizer previ): omple defaults de secció/columna/headline/text
+(`style: default`, `title_element: h1`, `width: default`, etc.) i posa
+`layout.version` a string buit. Això encaixa amb F-001 (absent ≠ buit): el
+Customizer omple el que nosaltres ometem. No és corrupció segons el criteri
+acordat (pèrdua de nodes / canvi de type / props que trenquen el render).
+
+**Límits.** Només elements natius. No hi ha round-trip de la UI Vue (ids/names
+que el JS pugui afegir abans del POST). `SaveBuilderLayouts` del Customizer
+de tema només toca footer/menu, no page templates. Articles (`PageController`)
+fan el mateix `load(context:save)` però no s'han exercitat aquí.
+
+**Regla accionable.** Amb el flux habitual (arbre ja normalitzat +
+`element-update-props` / `element-add` natiu), el save del Customizer no
+corromp el JSON de MirasAI en 5.0.24. El transform continua sent hardening
+útil (omple defaults, alinea amb el que el Customizer escriuria), no un
+fix urgent de corrupció. Si s'implementa, l'invariant de no-pèrdua-de-nodes
+es queda: un type de tercer que sí que es prunegi seria el vector, no la
+cura.
+
+### Cas clone-rebind 1 · BIT Vic (comunitat.congresbit.cat)
+
+**Data:** 2026-08-18 · **CMS:** Joomla 6.1.3 · **YOOtheme:** 5.0.40 ·
+**MirasAI:** 0.8.2 (MCP `article_id`, sense `mode=` al host live)
+
+**Flux confirmat (no és un clone a mitges).** Es duplica tota la pàgina de
+l'edició anterior. Les files que encara no tenen material es deixen amb
+`props.status=disabled` (i el botó d'àncora corresponent també). El Dynamic
+Source vell es queda de placeholder; quan hi ha carpeta/CSV/galeria nova,
+només es canvia el source.
+
+**Exemple:** article 28 «BIT Vic 2026», etag vist
+`373c7c973105472c012de5e8383ecee10dacba3581a334914c6a9064f8dcf481`.
+
+| Path | Source / estat |
+|---|---|
+| `root>section[0]>row[3]>…>grid_item[0]` | CSV `csv013C3D.records` → `title=nom_i_cognom`, `meta=company` |
+| `root>section[0]>row[4]>…>fragment[1]` | DOCman `edicio-2026-vic-pres` |
+| `root>section[0]>row[5]>…>gallery_item[0]` | DOCman `edicio-2026-vic-pos` |
+| `root>section[0]>row[6]` (`id=visual`) | `status=disabled`; gallery encara `docmansource` `edicio-2024-vic-vt` |
+| `root>section[0]>row[2]>…>button_item[3]` | «Visual Thinking» `status=disabled`, `link=#visual` |
+| `root>section[0]>row[7]>…>gallery_item[0]` | `files` `images/galeries-de-fotos/congres-bit-vic/edicio-2026-vic/*` |
+| `root>section[0]>row[8]` Vídeos | sense list-source YouTube (a 2024/2025 sí `youtubeChannel1C7D1A.videos`) |
+
+**Implicació per `clone-rebind`.** Ha de clonar pàgina (no una sola secció),
+preservar `status=disabled` i no «arreglar» sources de nodes disabled. El
+`leaf_map` útil és carpeta/CSV/pattern per edició (`edicio-YYYY-vic-*`,
+`csv….records`), no un rebind ceg d'un únic `query_path`.
+
+### Cas clone-rebind 2 · Indústria Viva (draft, no la portada)
+
+**Data:** 2026-08-18 · **CMS:** WordPress 7.0.4 · **YOOtheme:** 5.0.40 ·
+**MirasAI:** 0.8.2 WP · Flart `fs_grid` / `fs_table`
+
+**Setup.** Portada `post_id=65` (`inici`, `page_on_front`) duplicada amb
+WP-CLI `--from-post` a draft **548** `mirasai-lab-clone-portada`. Backup:
+`/home/industriaviva/mirasai-backups/20260818-clone-rebind-lab-20260818T182935Z`.
+La 65 no s'ha mutat (267215 bytes). REST anònim 503 (`industria_viva_site_locked`);
+MCP autenticat 200.
+
+**Prova MCP al draft.** `template/element-clone` de
+`root>section[7]` («Cursos · Instal·lacions») → `root>section[8]`. Després
+`template/element-source-set` amb `source` cru (query nested + `slice`):
+`ivCurss.customIvCurss` `terms: [7]` → `[9]`. Field mappings intactes
+(`title`, `iv_ambitString`, `iv_municipiString`). Dry-run → confirm amb
+`if_match`. La secció 7 del draft continua a `terms: [7]`.
+
+**Fulles extra.** El text buit `…>text[1]` (`_condition: #index`) no es va
+rebindejar: un `clone-rebind` ha d'incloure també les fulles de visibilitat,
+no només l'`fs_grid_item` de la llista.
+
+**Implicació.** Segon cas real: clonar **secció** (no pàgina) + un
+`query_arguments.terms` de CPT ACF. El write atòmic hauria d'acceptar un
+`leaf_map` per arguments de query (terms/carpeta), no només canviar
+`source_name`. Contracte: `docs/template-clone-rebind.md`.
+
+### Read-modes desplegats · 2026-08-18
+
+`template/read` i `template/element-list` accepten `mode=full|outline|bindings_only`.
+L'etag continua sent del layout complet. `bindings_only` no porta `raw_source`.
+
+| Host | Estat |
+|---|---|
+| industriaviva.cat (WP, plugin a disc) | desplegat; smoke `post_id=548` outline + bindings_only (64 bindings) |
+| lab LXC 103 Joomla | desplegat; smoke `key=mirasai-fase0` outline (tree, sense layout) i bindings_only (0, el fixture no té sources) |
+| lets.cat / comunitat.congresbit.cat | **no** desplegat |
+
+Bug de desplegament WP: `bindingsOnlyFromLayout` era `private` al trait usat
+pel pare `TemplateReadTool`; `TemplateElementListTool` (fill) no hi podia
+cridar. Corregit a `protected` als dos CMS.
+
+`outline` no exposa `props.status`; per veure files disabled cal
+`element-list` full o `element-read` fins que clone-rebind existeixi
+(`skipped_disabled` al dry-run).

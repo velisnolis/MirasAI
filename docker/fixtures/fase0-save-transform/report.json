@@ -1,0 +1,56 @@
+{
+  "lab": "joomla-lxc-103",
+  "yootheme": "5.0.24",
+  "joomla": "5.4.5",
+  "mirasai": "0.8.2",
+  "customizer_path": "Builder::withParams(context=save)->load, same as TemplateController::saveTemplate",
+  "scenario1_surgical_update": {
+    "corrupt": false,
+    "before_node_count": 6,
+    "after_node_count": 6,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [],
+    "layout_version_before": "",
+    "layout_version_after": ""
+  },
+  "scenario2_minimal_add": {
+    "corrupt": false,
+    "before_node_count": 7,
+    "after_node_count": 7,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [
+      {
+        "path": "root>section[0]>row[0]>column[0]>headline[2]",
+        "keys": [
+          "image_align",
+          "image_margin",
+          "title_element"
+        ]
+      }
+    ],
+    "layout_version_before": "",
+    "layout_version_after": ""
+  },
+  "unknown_type_probe": {
+    "corrupt": false,
+    "before_node_count": 7,
+    "after_node_count": 7,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [],
+    "layout_version_before": "",
+    "layout_version_after": ""
+  },
+  "scenario3_version_migration": "untested_no_older_zip"
+}

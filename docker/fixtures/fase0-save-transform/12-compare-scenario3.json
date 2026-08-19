@@ -1,0 +1,22 @@
+{
+    "corrupt": false,
+    "before_node_count": 7,
+    "after_node_count": 7,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [
+        {
+            "path": "root>section[0]>row[0]>column[0]>headline[2]",
+            "keys": [
+                "image_align",
+                "image_margin",
+                "title_element"
+            ]
+        }
+    ],
+    "layout_version_before": "",
+    "layout_version_after": ""
+}

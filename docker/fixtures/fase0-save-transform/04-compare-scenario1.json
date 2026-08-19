@@ -1,0 +1,13 @@
+{
+    "corrupt": false,
+    "before_node_count": 6,
+    "after_node_count": 6,
+    "lost_nodes": [],
+    "type_changes": [],
+    "props_null": [],
+    "content_dropped": [],
+    "added_nodes": [],
+    "added_prop_keys": [],
+    "layout_version_before": "",
+    "layout_version_after": ""
+}

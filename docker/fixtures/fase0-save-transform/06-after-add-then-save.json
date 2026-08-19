@@ -1,0 +1,62 @@
+{
+    "type": "layout",
+    "children": [
+        {
+            "type": "section",
+            "props": {
+                "image_position": "center-center",
+                "style": "default",
+                "title": "Fase 0 section",
+                "title_breakpoint": "xl",
+                "title_position": "top-left",
+                "title_rotation": "left",
+                "vertical_align": "middle",
+                "width": "default"
+            },
+            "children": [
+                {
+                    "type": "row",
+                    "children": [
+                        {
+                            "type": "column",
+                            "children": [
+                                {
+                                    "type": "headline",
+                                    "props": {
+                                        "content": "Fase0 surgical edit",
+                                        "image_align": "left",
+                                        "image_margin": "xsmall",
+                                        "title_element": "h1"
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "props": {
+                                        "column_breakpoint": "m",
+                                        "content": "Original body copy",
+                                        "margin_bottom": "default",
+                                        "margin_top": "default"
+                                    }
+                                },
+                                {
+                                    "type": "headline",
+                                    "props": {
+                                        "content": "minimal add",
+                                        "image_align": "left",
+                                        "image_margin": "xsmall",
+                                        "title_element": "h1"
+                                    }
+                                }
+                            ],
+                            "props": {
+                                "image_position": "center-center",
+                                "position_sticky_breakpoint": "m"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "version": ""
+}

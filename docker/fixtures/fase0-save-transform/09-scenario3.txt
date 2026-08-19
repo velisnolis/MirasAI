@@ -1,0 +1,3 @@
+Not tested. Lab has a single YOOtheme Pro package (5.0.24). No older zip is
+available to pin, so a real upgrade cycle cannot be run. Not simulated by
+hand-editing version fields.
