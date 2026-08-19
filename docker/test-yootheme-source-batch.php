@@ -257,6 +257,14 @@ expectBatch(
 
 expectBatch('an empty batch is refused', $batch->run($joomla, $layout, [])['code'] ?? null, 'invalid_leaves');
 
+expectBatch(
+    'keep alongside a change is refused rather than silently kept',
+    $batch->run($joomla, $layout, [
+        ['match' => ['path' => $GRID], 'set' => ['keep' => true, 'query_arguments' => ['terms' => [9]]]],
+    ])['code'] ?? null,
+    'invalid_leaf'
+);
+
 // query_path as a matcher, and its ambiguity guard.
 $viaQueryPath = $batch->run($joomla, $layout, [
     ['match' => ['query_path' => 'docmansource.edicio-2025-vic-pres'], 'set' => ['source_name' => 'docmansource.edicio-2026-vic-pres']],

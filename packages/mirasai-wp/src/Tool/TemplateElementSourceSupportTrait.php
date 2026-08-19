@@ -568,11 +568,22 @@ trait TemplateElementSourceSupportTrait
             }
 
             $keep = !empty($set['keep']);
-            $changes = array_diff(array_keys($set), ['keep']);
+            $changes = array_values(array_diff(array_keys($set), ['keep']));
 
             if (!$keep && $changes === []) {
                 return [
                     'error' => "leaves[{$index}] changes nothing. Pass set.keep=true to assert it, or one of source_name, query_arguments, field_mappings, source.",
+                    'code' => 'invalid_leaf',
+                ];
+            }
+
+            // keep means "this leaf must be here and must not move". Honouring
+            // it while a sibling key asks for a change would report the leaf as
+            // kept and drop the change without saying so, which is the exact
+            // silent miss this contract exists to prevent.
+            if ($keep && $changes !== []) {
+                return [
+                    'error' => "leaves[{$index}] passes set.keep with " . implode(', ', $changes) . '. keep asserts a leaf without touching it; drop keep to change it.',
                     'code' => 'invalid_leaf',
                 ];
             }
