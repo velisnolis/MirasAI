@@ -4,7 +4,7 @@
  * Plugin Name: MirasAI
  * Plugin URI: https://miras.pro
  * Description: MirasAI host endpoint for WordPress. Exposes a small MCP-compatible HTTP surface for the local MirasAI router.
- * Version: 0.8.2
+ * Version: 0.9.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: Miras
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MIRASAI_WP_VERSION', '0.8.2');
+define('MIRASAI_WP_VERSION', '0.9.0');
 define('MIRASAI_WP_CONTRACT_VERSION', '1');
 define('MIRASAI_WP_PLUGIN_FILE', __FILE__);
 define('MIRASAI_WP_PLUGIN_DIR', __DIR__);
