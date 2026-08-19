@@ -9,7 +9,7 @@ trait TemplateElementSourceSupportTrait
     /**
      * @return array<string, array<string, mixed>>
      */
-    private function sourceInputProperties(): array
+    protected function sourceInputProperties(): array
     {
         return [
             'source' => [
@@ -54,7 +54,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $node
      * @return array<string, mixed>
      */
-    private function summarizeBinding(array $node): array
+    protected function summarizeBinding(array $node): array
     {
         $carrier = $this->resolveBindingCarrier($node);
 
@@ -135,7 +135,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $query
      * @param array<string, mixed> $queryField
      */
-    private function queryPath(array $query, array $queryField): ?string
+    protected function queryPath(array $query, array $queryField): ?string
     {
         $name = is_string($query['name'] ?? null) ? trim((string) $query['name']) : '';
 
@@ -152,7 +152,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $node
      * @return array{0: string, 1: array<string, mixed>}|null
      */
-    private function resolveBindingCarrier(array $node): ?array
+    protected function resolveBindingCarrier(array $node): ?array
     {
         $props = is_array($node['props'] ?? null) ? $node['props'] : [];
 
@@ -183,7 +183,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $arguments
      * @return array<string, mixed>|array{error: string, code: string}
      */
-    private function normalizeSourceArgument(array $arguments): array
+    protected function normalizeSourceArgument(array $arguments): array
     {
         if (isset($arguments['source'])) {
             if (!is_array($arguments['source'])) {
@@ -241,7 +241,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $arguments
      * @return array<string, mixed>|array{error: string, code: string}
      */
-    private function buildSourceFromShorthand(array $arguments): array
+    protected function buildSourceFromShorthand(array $arguments): array
     {
         $sourceName = trim((string) ($arguments['source_name'] ?? ''));
         $fieldMappings = $arguments['field_mappings'] ?? null;
@@ -324,7 +324,7 @@ trait TemplateElementSourceSupportTrait
      * @param mixed $value
      * @return mixed
      */
-    private function sanitizeSourceValue($value, int $depth = 0)
+    protected function sanitizeSourceValue($value, int $depth = 0)
     {
         if ($depth > 6) {
             return '[max_depth]';
@@ -424,7 +424,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, true> $disabled
      * @param array<string, string|null> $parents
      */
-    private function nearestDisabledAncestor(string $path, array $disabled, array $parents): ?string
+    protected function nearestDisabledAncestor(string $path, array $disabled, array $parents): ?string
     {
         $current = $path;
         $seen = [];
@@ -691,7 +691,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $binding
      * @return array<string, mixed>
      */
-    private function leafReportBinding(array $binding): array
+    protected function leafReportBinding(array $binding): array
     {
         unset($binding['raw_source']);
 
@@ -704,7 +704,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, array<string, mixed>> $bindings
      * @return array{path: string}|array{error: string, code: string}
      */
-    private function resolveLeafMatch(array $match, array $meta, array $bindings, int $index): array
+    protected function resolveLeafMatch(array $match, array $meta, array $bindings, int $index): array
     {
         $path = trim((string) ($match['path'] ?? ''));
         $queryPath = trim((string) ($match['query_path'] ?? ''));
@@ -769,7 +769,7 @@ trait TemplateElementSourceSupportTrait
      * @param array<string, mixed> $set
      * @return array<string, mixed>|array{error: string, code: string}
      */
-    private function applyLeafSet(array $source, array $set, int $index): array
+    protected function applyLeafSet(array $source, array $set, int $index): array
     {
         if (isset($set['source'])) {
             if (!is_array($set['source'])) {
