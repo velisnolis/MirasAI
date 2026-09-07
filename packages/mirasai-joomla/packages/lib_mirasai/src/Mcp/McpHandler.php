@@ -99,7 +99,7 @@ class McpHandler
             . '   - YOOtheme articles: pass translated_title + yootheme_text_replacements '
             . '(use the replacement_key from step 2 as the key, translated text as the value).'
             . "\n"
-            . '   The tool handles article creation, menu item, language associations, and asset permissions.'
+            . '   Run dry_run=true first. Apply the identical request with dry_run=false, the preview etag as if_match, and confirm_guarded_write=true. New articles default to unpublished; menus require create_menu or menu_id.'
             . "\n"
             . '5. content/audit-multilingual — verify completeness across all languages.'
             . "\n\n"
@@ -190,6 +190,10 @@ class McpHandler
 
         if ($rejection !== null) {
             return $this->wrapToolResult($rejection, true);
+        }
+
+        if (in_array($toolName, ['content/translate', 'content/translate-batch', 'content/check-links'], true) && !array_key_exists('dry_run', $arguments)) {
+            $arguments['dry_run'] = true;
         }
 
         // Environment guard: block dangerous_exec tools on production unless elevated.

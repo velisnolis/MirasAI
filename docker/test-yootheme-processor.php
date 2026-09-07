@@ -137,7 +137,7 @@ echo "\n=== replaceText() ===\n";
 
 // Build path for the content field
 // Layout path: root>section[0]>column[0]>text[0].content
-$firstNode = $nodesFromArray[0] ?? null;
+$firstNode = array_values(array_filter($nodesFromArray, fn($node) => $node['field'] === 'content'))[0] ?? null;
 if ($firstNode) {
     $replacements = [
         $firstNode['path'] . '.' . $firstNode['field'] => 'Translated text',

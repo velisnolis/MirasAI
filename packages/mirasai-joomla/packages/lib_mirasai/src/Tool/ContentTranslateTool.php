@@ -8,6 +8,7 @@ use Joomla\Database\ParameterType;
 
 class ContentTranslateTool extends AbstractTool
 {
+    private array $translationEffects = [];
     public function getName(): string
     {
         return 'content/translate';
@@ -19,7 +20,7 @@ class ContentTranslateTool extends AbstractTool
             . 'this tool does NOT auto-translate. For standard articles: provide translated_title + translated_introtext '
             . '(and translated_fulltext if the source has fulltext). For YOOtheme Builder articles: provide translated_title + '
             . 'yootheme_text_replacements (a map of replacement_key → translated text, obtained from content/read). '
-            . 'The tool handles article creation, menu item, category mapping, language associations, and asset permissions.';
+            . 'Defaults to preview. Apply requires the preview if_match and confirm_guarded_write. New articles are unpublished; menus require explicit selection.';
     }
 
     public function getInputSchema(): array
@@ -27,6 +28,16 @@ class ContentTranslateTool extends AbstractTool
         return [
             'type' => 'object',
             'properties' => [
+                'dry_run' => ['type' => 'boolean', 'default' => true, 'description' => 'Preview destinations and return an ETag without writing.'],
+                'if_match' => ['type' => 'string', 'description' => 'ETag of the identical content/translate preview, including source, target and context. Required on apply.'],
+                'confirm_guarded_write' => ['type' => 'boolean', 'description' => 'Required true with dry_run=false.'],
+                'target_id' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Explicit existing target article in target_language; requires overwrite. Refuses conflicting associations.'],
+                'state' => ['type' => 'integer', 'enum' => [-2, 0, 1, 2], 'description' => 'New default 0; updates preserve current state. Publication requires verified fallback and parity.'],
+                'create_menu' => ['type' => 'boolean', 'default' => false, 'description' => 'Create a menu explicitly; mutually exclusive with menu_id.'],
+                'menu_id' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Explicit target-language menu to repoint, preserving alias, access and structure.'],
+                'source_menu_id' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Choose the source menu when more than one points to the source article.'],
+                'target_menutype' => ['type' => 'string', 'description' => 'Existing site menu type for create_menu.'],
+                'target_parent_id' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Parent for a new menu; defaults to Joomla menu root (1).'],
                 'source_id' => [
                     'type' => 'integer',
                     'description' => 'ID of the source article to translate.',
@@ -41,11 +52,11 @@ class ContentTranslateTool extends AbstractTool
                 ],
                 'translated_alias' => [
                     'type' => 'string',
-                    'description' => 'URL alias for the translated article. Auto-generated from title if omitted.',
+                    'description' => 'New articles derive alias from title; existing targets preserve alias when omitted.',
                 ],
                 'translated_introtext' => [
                     'type' => 'string',
-                    'description' => 'Translated introtext HTML. If omitted and article has YOOtheme, introtext is cleared for re-render.',
+                    'description' => 'Translated introtext HTML for standard articles. Builder fallback is rendered in-process; an unverified fallback permits only a partial unpublished save.',
                 ],
                 'translated_fulltext' => [
                     'type' => 'string',
@@ -62,15 +73,15 @@ class ContentTranslateTool extends AbstractTool
                 ],
                 'translated_metadesc' => [
                     'type' => 'string',
-                    'description' => 'Translated meta description for SEO. If omitted, left empty.',
+                    'description' => 'Translated meta description for SEO. If omitted, new articles use empty text and existing targets preserve their value.',
                 ],
                 'translated_metakey' => [
                     'type' => 'string',
-                    'description' => 'Translated meta keywords. If omitted, left empty.',
+                    'description' => 'Translated meta keywords. If omitted, new articles use empty text and existing targets preserve their value.',
                 ],
                 'translated_page_title' => [
                     'type' => 'string',
-                    'description' => 'Translated page title (shown in browser tab). If omitted, uses translated_title.',
+                    'description' => 'Explicit browser page title for the selected menu. Requires create_menu=true or menu_id; existing menu parameters are otherwise preserved.',
                 ],
                 'require_translated_meta_if_source_has_meta' => [
                     'type' => 'boolean',
@@ -88,180 +99,296 @@ class ContentTranslateTool extends AbstractTool
     public function getPermissions(): array
     {
         return [
-            'risk_level' => self::RISK_SAFE_WRITE,
+            'risk_level' => self::RISK_GUARDED_WRITE,
             'idempotent' => false,
         ];
     }
 
     public function handle(array $arguments): array
     {
+        $dryRun = ($arguments['dry_run'] ?? true) === true;
+        $inTransaction = false;
+        $articleId = null;
+        $lockName = null;
+        $this->translationEffects = [];
+        $effects = &$this->translationEffects;
+        try {
+            if (!$dryRun) {
+                if (($arguments['confirm_guarded_write'] ?? false) !== true || empty($arguments['if_match'])) {
+                    return ['error' => 'Preview first; apply requires confirm_guarded_write=true and the preview if_match.', 'code' => 'confirmation_required', 'write_performed' => false];
+                }
+                $lockName = $this->acquireTranslationLock((int) ($arguments['source_id'] ?? 0));
+                $this->beginTranslation();
+                $inTransaction = true;
+            }
+            $plan = $this->planTranslation($arguments, !$dryRun);
+            if ($dryRun) {
+                return ['dry_run' => true, 'write_performed' => false, 'etag' => $plan['etag'], 'preview' => $plan['preview']];
+            }
+            if (!hash_equals($plan['etag'], (string) $arguments['if_match'])) {
+                throw new \InvalidArgumentException('stale_etag: source, target, associations, menu, category or request changed. Preview again.');
+            }
+            $fields = $plan['fields'];
+            $fallback = ['status' => 'not_required'];
+            if ($plan['builder']) {
+                $rendered = $this->renderTranslation($fields['fulltext'], $fields['language']);
+                $fallback = $rendered['result'];
+                if (($fallback['status'] ?? '') === 'success') {
+                    $fields['introtext'] = $rendered['introtext'];
+                    $fields['fulltext'] = $rendered['fulltext'];
+                }
+            }
+            $partial = $plan['parity_warnings'] !== [] || !in_array($fallback['status'], ['success', 'not_required'], true);
+            if ((int) $fields['state'] === 1 && $partial) {
+                throw new \InvalidArgumentException('publication_unverified: fallback or editorial parity requires review. Save explicitly with state=0, then reconcile before publishing.');
+            }
+            $articleId = $plan['target']['id'] ?? null;
+            $effects['article'] = ['id' => $articleId, 'action' => $plan['target'] ? 'update_attempted' : 'insert_attempted'];
+            if ($articleId) {
+                $articleId = (int) $articleId;
+                $this->updateArticle($articleId, $fields);
+            } else {
+                $articleId = $this->duplicateArticle($plan['source'], $fields);
+            }
+            $effects['article'] = ['id' => $articleId, 'action' => $plan['target'] ? 'updated' : 'created'];
+            $effects['fallback'] = $fallback;
+            $effects['associations'] = ['status' => 'attempted', 'source_id' => (int) $plan['source']['id'], 'target_id' => $articleId];
+            if (!$plan['associated']) {
+                $this->createAssociation((int) $plan['source']['id'], $articleId);
+            }
+            $effects['associations'] = ['source_id' => (int) $plan['source']['id'], 'target_id' => $articleId];
+            $this->ensureWorkflowAssociation($articleId, 'com_content.article');
+            $effects['workflow'] = ['status' => 'checked'];
+            // Joomla nested-set Table locks can commit implicitly. Persist the association
+            // before asset/menu Table writes so a partial create remains discoverable on retry.
+            if (!$plan['target'] || (int) ($plan['target']['asset_id'] ?? 0) <= 0) {
+                $this->createAssetForContent($articleId, $fields['title']);
+                if ((int) ($this->loadArticle($articleId)['asset_id'] ?? 0) <= 0) {
+                    throw new \RuntimeException('Article asset creation could not be verified.');
+                }
+                $effects['asset'] = ['status' => 'verified', 'id' => (int) $this->loadArticle($articleId)['asset_id']];
+            }
+
+            $effects['menu'] = $this->applyTranslationMenu($plan['menu'], $articleId, $fields, $arguments);
+            $this->commitTranslation();
+            $inTransaction = false;
+            $stored = $this->loadArticle($articleId);
+            foreach ($fields as $field => $expected) {
+                if (!$stored || (string) ($stored[$field] ?? '') !== (string) $expected) {
+                    throw new \RuntimeException('Post-write verification failed for article field: ' . $field);
+                }
+            }
+            $effects['verification'] = ['article_fields' => 'verified_after_commit'];
+            return [
+                'action' => $plan['target'] ? 'updated' : 'created', 'article_id' => $articleId,
+                'source_id' => (int) $plan['source']['id'], 'target_language' => $fields['language'],
+                'title' => $fields['title'], 'state' => (int) $fields['state'],
+                'status' => $partial ? 'partial' : 'complete', 'write_performed' => true,
+                'effects' => $effects, 'menu_item' => $effects['menu'], 'introtext_regenerated' => $fallback,
+                'parity_warnings' => $plan['parity_warnings'],
+                'recovery' => $partial ? 'Keep article_id. Review missing parity/fallback; update this target with a fresh preview. Never repeat creation blindly.' : null,
+            ];
+        } catch (\Throwable $e) {
+            $rollback = 'not_needed';
+            if ($inTransaction) {
+                try { $this->rollbackTranslation(); $rollback = 'requested'; }
+                catch (\Throwable $ignored) { $rollback = 'failed'; }
+            }
+            // An attempted Table write or failed COMMIT is not proof of rollback.
+            $persisted = null;
+            if ($articleId !== null) {
+                try { $persisted = $this->loadArticle($articleId) !== null; }
+                catch (\Throwable $ignored) { /* Unknown outcome remains explicit. */ }
+            }
+            return [
+                'error' => $e->getMessage(), 'code' => str_starts_with($e->getMessage(), 'stale_etag:') ? 'stale_etag' : 'translation_failed',
+                'status' => $effects === [] ? 'rejected' : 'needs_reconciliation',
+                'article_id' => $articleId, 'article_exists_after_error' => $persisted,
+                'attempted_effects' => $effects, 'rollback' => $rollback,
+                'write_performed' => $effects === [] ? false : null,
+                'recovery' => $effects === [] ? null : 'Read the returned IDs, associations and menu before retrying. A rollback request does not prove all side effects were undone.',
+            ];
+        } finally {
+            if ($lockName !== null) {
+                try { $this->releaseTranslationLock($lockName); }
+                catch (\Throwable $ignored) { /* MySQL releases it when the connection closes. */ }
+            }
+        }
+    }
+
+    /** Serialize this tool's writers independently of Table's implicit commits. */
+    protected function acquireTranslationLock(int $sourceId): string
+    {
+        $database = (string) $this->db->setQuery('SELECT DATABASE()')->loadResult();
+        $name = 'mirasai-translate-' . substr(hash('sha256', $database . ':' . $this->db->replacePrefix('#__content') . ':' . $sourceId), 0, 44);
+        if ((int) $this->db->setQuery('SELECT GET_LOCK(' . $this->db->quote($name) . ', 0)')->loadResult() !== 1) {
+            throw new \RuntimeException('Translation for this source is busy. Wait, then obtain a fresh preview.');
+        }
+        return $name;
+    }
+
+    protected function releaseTranslationLock(string $name): void
+    {
+        $this->db->setQuery('SELECT RELEASE_LOCK(' . $this->db->quote($name) . ')')->loadResult();
+    }
+
+    protected function beginTranslation(): void
+    {
+        $tables = array_map(fn($name) => $this->db->quote($this->db->replacePrefix('#__' . $name)),
+            ['content', 'assets', 'associations', 'menu', 'workflow_associations']);
+        $engines = $this->db->setQuery('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()'
+            . ' AND TABLE_NAME IN (' . implode(',', $tables) . ')')->loadColumn();
+        if (count($engines) !== count($tables) || array_filter($engines, static fn($engine) => strcasecmp((string) $engine, 'InnoDB') !== 0)) {
+            throw new \RuntimeException('Translation apply requires InnoDB for all affected Joomla tables.');
+        }
+        $this->db->transactionStart();
+    }
+    protected function commitTranslation(): void { $this->db->transactionCommit(); }
+    protected function rollbackTranslation(): void { $this->db->transactionRollback(); }
+
+    /** Resolve every write destination before mutation. Apply resolves it under row locks. */
+    protected function planTranslation(array $arguments, bool $lock): array
+    {
         $sourceId = (int) ($arguments['source_id'] ?? 0);
-        $targetLang = $arguments['target_language'] ?? '';
-        $overwrite = !empty($arguments['overwrite']);
-
-        if ($sourceId <= 0 || $targetLang === '') {
-            return ['error' => 'source_id and target_language are required.'];
+        $lang = (string) ($arguments['target_language'] ?? '');
+        $title = trim((string) ($arguments['translated_title'] ?? ''));
+        $source = $this->loadArticle($sourceId, $lock);
+        if (!$source || $title === '' || !$this->languageExists($lang)) {
+            throw new \InvalidArgumentException('Valid source_id, translated_title and published target_language are required.');
         }
-
-        // Read source article
-        $source = $this->loadArticle($sourceId);
-
-        if (!$source) {
-            return ['error' => "Source article {$sourceId} not found."];
+        if (in_array($source['language'], ['*', $lang], true)) {
+            throw new \InvalidArgumentException('Source must have a specific language different from target_language.');
         }
-
-        // Check target language exists
-        if (!$this->languageExists($targetLang)) {
-            return ['error' => "Language {$targetLang} is not installed or not published."];
+        $group = $this->translationAssociationGroup($sourceId, 'com_content.item', $lock);
+        $matches = array_values(array_filter($group, static fn($row) => ($row['language'] ?? null) === $lang));
+        if (count($matches) > 1) { throw new \InvalidArgumentException('Ambiguous target association. Repair the group first.'); }
+        $associatedId = (int) ($matches[0]['id'] ?? 0);
+        $targetId = (int) ($arguments['target_id'] ?? $associatedId);
+        if ($associatedId && $targetId !== $associatedId) {
+            throw new \InvalidArgumentException('target_id conflicts with the existing language association.');
         }
-
-        // Check for existing translation
-        $existing = $this->findTranslation($sourceId, $targetLang);
-
-        if ($existing && !$overwrite) {
-            return [
-                'error' => "Translation already exists for {$targetLang} (article ID: {$existing}).",
-                'existing_id' => $existing,
-                'hint' => 'Set overwrite: true to replace the existing translation.',
-            ];
+        $target = $targetId ? $this->loadArticle($targetId, $lock) : null;
+        if ($targetId && (!$target || $target['language'] !== $lang || $targetId === $sourceId)) {
+            throw new \InvalidArgumentException('target_id must be an existing article in target_language.');
         }
-
-        // Determine target category
-        $targetCatId = $this->resolveTargetCategory(
-            (int) $source['catid'],
-            $targetLang,
-            $arguments['target_category_id'] ?? null,
-        );
-
-        // Build translated content
-        $translatedTitle = $arguments['translated_title'];
-        $translatedAlias = $arguments['translated_alias']
-            ?? $this->generateAlias($translatedTitle);
-
+        if ($target && empty($arguments['overwrite'])) {
+            throw new \InvalidArgumentException('An existing target requires overwrite=true.');
+        }
+        $targetGroup = $target ? $this->translationAssociationGroup($targetId, 'com_content.item', $lock) : [];
+        if ($targetGroup !== [] && !$associatedId) {
+            throw new \InvalidArgumentException('target_id belongs to another association group. Groups are never merged implicitly.');
+        }
+        $state = $arguments['state'] ?? (int) ($target['state'] ?? 0);
+        if (!is_int($state) || !in_array($state, [-2, 0, 1, 2], true)) {
+            throw new \InvalidArgumentException('state must be one of -2, 0, 1, 2.');
+        }
+        $categoryId = isset($arguments['target_category_id']) ? (int) $arguments['target_category_id']
+            : ($target ? (int) $target['catid'] : $this->resolveTargetCategory((int) $source['catid'], $lang, null));
+        $category = $this->translationRow('#__categories', $categoryId, $lock);
+        if (!$category || $category['extension'] !== 'com_content' || !in_array($category['language'], ['*', $lang], true)) {
+            throw new \InvalidArgumentException('Choose a content category in target_language or shared language *.');
+        }
         $metaValidation = $this->validateTranslatedMetaRequirements($source, $arguments);
-
-        if ($metaValidation !== null) {
-            return $metaValidation;
+        if ($metaValidation !== null) { throw new \InvalidArgumentException($metaValidation['error']); }
+        $processor = new YooThemeLayoutProcessor();
+        $builder = $processor->detectLayout((string) ($source['fulltext'] ?? ''));
+        if ($builder && empty($arguments['translated_fulltext']) && empty($arguments['yootheme_text_replacements'])) {
+            throw new \InvalidArgumentException('Builder articles require translated_fulltext or yootheme_text_replacements.');
         }
-
-        if ((new YooThemeLayoutProcessor())->detectLayout((string) ($source['fulltext'] ?? ''))
-            && empty($arguments['translated_fulltext'])
-            && empty($arguments['yootheme_text_replacements'])) {
-            return [
-                'error' => 'YOOtheme articles require translated_fulltext or yootheme_text_replacements. Refusing to copy the source layout unchanged.',
-            ];
+        if (!$builder) {
+            foreach (['introtext', 'fulltext'] as $field) {
+                if (trim((string) ($source[$field] ?? '')) !== '' && !array_key_exists('translated_' . $field, $arguments)) {
+                    throw new \InvalidArgumentException('Missing translated_' . $field . '. Refusing to copy source text.');
+                }
+            }
         }
-
-        $translatedIntrotext = $arguments['translated_introtext'] ?? '';
-        $translatedFulltext = $this->buildTranslatedFulltext(
-            $source,
-            $arguments,
-        );
-
-        // SEO metadata
-        $metadesc = $arguments['translated_metadesc'] ?? '';
-        $metakey = $arguments['translated_metakey'] ?? '';
-
-        if ($existing && $overwrite) {
-            // Update existing
-            $updateFields = [
-                'title' => $translatedTitle,
-                'alias' => $translatedAlias,
-                'introtext' => $translatedIntrotext,
-                'fulltext' => $translatedFulltext,
-                'catid' => $targetCatId,
-            ];
-
-            if ($metadesc !== '') {
-                $updateFields['metadesc'] = $metadesc;
-            }
-
-            if ($metakey !== '') {
-                $updateFields['metakey'] = $metakey;
-            }
-
-            $this->updateArticle($existing, $updateFields);
-            $this->ensureWorkflowAssociation($existing, 'com_content.article', $sourceId);
-
-            $introtextResult = $this->regenerateIntrotext($existing);
-            $linkWarnings = $this->checkInternalLinks($existing, $targetLang);
-
-            $result = [
-                'action' => 'updated',
-                'article_id' => $existing,
-                'source_id' => $sourceId,
-                'target_language' => $targetLang,
-                'title' => $translatedTitle,
-                'introtext_regenerated' => $introtextResult,
-            ];
-
-            if (!empty($linkWarnings)) {
-                $result['link_warnings'] = $linkWarnings;
-            }
-
-            return $result;
-        }
-
-        // Create new article
-        $overrides = [
-            'title' => $translatedTitle,
-            'alias' => $translatedAlias,
-            'language' => $targetLang,
-            'introtext' => $translatedIntrotext,
-            'fulltext' => $translatedFulltext,
-            'catid' => $targetCatId,
+        $fields = [
+            'title' => $title, 'alias' => $arguments['translated_alias'] ?? ($target['alias'] ?? $this->generateAlias($title)),
+            'language' => $lang, 'state' => $state, 'catid' => $categoryId,
+            'introtext' => (string) ($arguments['translated_introtext'] ?? ''),
+            'fulltext' => $this->buildTranslatedFulltext($source, $arguments),
+            'metadesc' => $arguments['translated_metadesc'] ?? ($target['metadesc'] ?? ''),
+            'metakey' => $arguments['translated_metakey'] ?? ($target['metakey'] ?? ''),
         ];
-
-        if ($metadesc !== '') {
-            $overrides['metadesc'] = $metadesc;
+        $menu = $this->planTranslationMenu($sourceId, $targetId, $lang, $fields, $arguments, $lock);
+        $sourceFields = $this->translationCustomFields($sourceId, $lock);
+        $targetFields = $target ? $this->translationCustomFields($targetId, $lock) : [];
+        $warnings = [];
+        foreach (['metadesc', 'metakey'] as $seo) {
+            if (trim((string) ($source[$seo] ?? '')) !== '' && trim((string) $fields[$seo]) === '') {
+                $warnings[] = ['code' => 'missing_translated_metadata', 'field' => $seo];
+            }
         }
-
-        if ($metakey !== '') {
-            $overrides['metakey'] = $metakey;
+        if ($sourceFields !== []) {
+            $warnings[] = ['code' => 'custom_fields_require_review', 'source_fields' => $sourceFields, 'target_fields' => $targetFields,
+                'hint' => 'Classify text, shared values and references explicitly. This tool does not copy custom fields.'];
         }
-
-        $newId = $this->duplicateArticle($source, $overrides);
-
-        // Create association
-        $this->createAssociation($sourceId, $newId);
-        $this->ensureWorkflowAssociation($newId, 'com_content.article', $sourceId);
-
-        // Create menu item if the source article has one
-        $menuResult = $this->createMenuItemForTranslation(
-            $sourceId,
-            $newId,
-            $targetLang,
-            $translatedTitle,
-            $translatedAlias,
-        );
-
-        // Update menu item page_title if provided
-        $pageTitle = $arguments['translated_page_title'] ?? '';
-        if ($pageTitle !== '' && isset($menuResult['menu_item_id'])) {
-            $this->updateMenuItemPageTitle($menuResult['menu_item_id'], $pageTitle);
+        if ($builder) {
+            $layout = json_decode($processor->extractJson($source['fulltext']) ?? '', true);
+            $warnings = array_merge($warnings, $processor->getTranslationCoverageWarnings($layout ?? []));
         }
+        // Hash values too, but do not expose custom-field values in the preview.
+        $request = $arguments;
+        unset($request['dry_run'], $request['if_match'], $request['confirm_guarded_write']);
+        $snapshot = [$source, $target, $group, $targetGroup, $category, $menu, $sourceFields, $targetFields, $request];
+        $canonical = static function ($value) use (&$canonical) {
+            if (is_array($value)) {
+                if (!array_is_list($value)) { ksort($value); }
+                return array_map($canonical, $value);
+            }
+            return $value;
+        };
+        $etag = hash('sha256', json_encode($canonical($snapshot), JSON_THROW_ON_ERROR));
+        $before = $target ? array_intersect_key($target, $fields) : null;
+        $after = $fields;
+        unset($after['introtext'], $after['fulltext']);
+        if ($before) { unset($before['introtext'], $before['fulltext']); }
+        $preview = ['action' => $target ? 'update_existing' : 'create_new', 'source_id' => $sourceId, 'target_id' => $targetId ?: null,
+            'before' => $before, 'after' => $after, 'menu' => $menu,
+            'preserved_editorial' => array_intersect_key($target ?? $source, array_flip(['created', 'created_by', 'created_by_alias', 'access', 'publish_up', 'publish_down'])),
+            'associations' => ['source_group' => $group, 'target_group' => $targetGroup, 'will_associate' => !$associatedId],
+            'parity_warnings' => $warnings, 'fallback' => $builder ? 'render_and_verify_before_write' : 'not_required'];
+        return ['source' => $source, 'target' => $target, 'associated' => $associatedId > 0, 'fields' => $fields,
+            'menu' => $menu, 'builder' => $builder, 'parity_warnings' => $warnings, 'etag' => $etag, 'preview' => $preview];
+    }
 
-        // Regenerate introtext via YOOtheme Builder if article has YOOtheme layout
-        $introtextResult = $this->regenerateIntrotext($newId);
+    protected function translationRow(string $table, int $id, bool $lock = false): ?array
+    {
+        return $this->db->setQuery('SELECT * FROM ' . $this->db->quoteName($table) . ' WHERE id = ' . $id . ($lock ? ' FOR UPDATE' : ''))->loadAssoc();
+    }
 
-        // Check for internal links without translated destinations
-        $linkWarnings = $this->checkInternalLinks($newId, $targetLang);
+    protected function translationAssociationGroup(int $id, string $context, bool $lock = false): array
+    {
+        $table = $context === 'com_menus.item' ? '#__menu' : '#__content';
+        $q = 'SELECT a.id, a.' . $this->db->quoteName('key') . ', c.language FROM ' . $this->db->quoteName('#__associations') . ' a'
+            . ' LEFT JOIN ' . $this->db->quoteName($table) . ' c ON c.id = a.id'
+            . ' WHERE a.context = ' . $this->db->quote($context) . ' AND a.' . $this->db->quoteName('key')
+            . ' IN (SELECT ' . $this->db->quoteName('key') . ' FROM ' . $this->db->quoteName('#__associations')
+            . ' WHERE id = ' . $id . ' AND context = ' . $this->db->quote($context) . ') ORDER BY a.id';
+        return $this->db->setQuery($q . ($lock ? ' FOR UPDATE' : ''))->loadAssocList();
+    }
 
-        $result = [
-            'action' => 'created',
-            'article_id' => $newId,
-            'source_id' => $sourceId,
-            'target_language' => $targetLang,
-            'title' => $translatedTitle,
-            'menu_item' => $menuResult,
-            'introtext_regenerated' => $introtextResult,
-        ];
+    protected function translationCustomFields(int $id, bool $lock): array
+    {
+        $rows = $this->db->setQuery('SELECT v.field_id, v.value, f.name, f.type FROM ' . $this->db->quoteName('#__fields_values') . ' v'
+            . ' INNER JOIN ' . $this->db->quoteName('#__fields') . ' f ON f.id = v.field_id'
+            . ' WHERE f.context = ' . $this->db->quote('com_content.article') . ' AND v.item_id = ' . $this->db->quote((string) $id)
+            . ' ORDER BY v.field_id, v.value' . ($lock ? ' FOR UPDATE' : ''))->loadAssocList();
+        return array_map(static function ($row) {
+            $classification = match ($row['type']) {
+                'text', 'textarea', 'editor' => 'text',
+                'calendar', 'integer', 'color' => 'shared',
+                'media', 'user', 'usergrouplist', 'articles', 'subform' => 'reference',
+                default => 'review',
+            };
+            return ['field_id' => (int) $row['field_id'], 'name' => $row['name'], 'type' => $row['type'],
+                'classification' => $classification, 'value_hash' => hash('sha256', (string) $row['value'])];
+        }, $rows);
+    }
 
-        if (!empty($linkWarnings)) {
-            $result['link_warnings'] = $linkWarnings;
-        }
-
-        return $result;
+    protected function renderTranslation(string $fulltext, ?string $language = null): array
+    {
+        return YooThemeTranslationRenderer::render($fulltext, $language);
     }
 
     /**
@@ -302,17 +429,10 @@ class ContentTranslateTool extends AbstractTool
     /**
      * @return array<string, mixed>|null
      */
-    private function loadArticle(int $id): ?array
+    protected function loadArticle(int $id, bool $lock = false): ?array
     {
-        $query = $this->db->getQuery(true)
-            ->select('*')
-            ->from($this->db->quoteName('#__content'))
-            ->where('id = :id')
-            ->bind(':id', $id, ParameterType::INTEGER);
-
-        return $this->db->setQuery($query)->loadAssoc();
+        return $this->translationRow('#__content', $id, $lock);
     }
-
 
     // findTranslation() is now in AbstractTool
 
@@ -348,15 +468,22 @@ class ContentTranslateTool extends AbstractTool
      */
     private function buildTranslatedFulltext(array $source, array $arguments): string
     {
-        // Option 1: Direct translated_fulltext provided
+        $processor = new YooThemeLayoutProcessor();
+        $builder = $processor->detectLayout((string) ($source['fulltext'] ?? ''));
+        // Empty text and "0" are explicit plain-content values, not missing translations.
+        if (!$builder && array_key_exists('translated_fulltext', $arguments)) {
+            return (string) $arguments['translated_fulltext'];
+        }
+        // Full-layout submissions have the same editorial write boundary as maps.
         if (!empty($arguments['translated_fulltext'])) {
-            $ft = $arguments['translated_fulltext'];
-
-            // If it's raw JSON (not wrapped in comment), wrap it
-            if (str_starts_with(trim($ft), '{')) {
-                return '<!-- ' . $ft . ' -->';
+            $ft = (string) $arguments['translated_fulltext'];
+            if (str_starts_with(trim($ft), '{')) { $ft = '<!-- ' . $ft . ' -->'; }
+            if ($builder) {
+                $original = json_decode($processor->extractJson($source['fulltext']) ?? '', true);
+                $translated = json_decode($processor->extractJson($ft) ?? '', true);
+                if (!is_array($original) || !is_array($translated)) { throw new \InvalidArgumentException('Malformed Builder layout.'); }
+                $processor->validateTranslatedLayout($original, $translated);
             }
-
             return $ft;
         }
 
@@ -385,12 +512,11 @@ class ContentTranslateTool extends AbstractTool
      * @param  array<string, mixed> $source
      * @param  array<string, mixed> $overrides
      */
-    private function duplicateArticle(array $source, array $overrides): int
+    protected function duplicateArticle(array $source, array $overrides): int
     {
         $fields = array_merge($source, $overrides);
         unset($fields['id'], $fields['asset_id'], $fields['checked_out'], $fields['checked_out_time']);
 
-        $fields['created'] = date('Y-m-d H:i:s');
         $fields['modified'] = date('Y-m-d H:i:s');
         $fields['hits'] = 0;
         $fields['version'] = 1;
@@ -416,15 +542,12 @@ class ContentTranslateTool extends AbstractTool
 
         $newId = (int) $this->db->insertid();
 
-        // Create asset for the new article (required for Joomla ACL)
-        $this->createAssetForContent($newId, $overrides['title'] ?? 'Untitled');
-
         return $newId;
     }
 
     // createAsset → now createAssetForContent in AbstractTool
 
-    private function updateArticle(int $id, array $fields): void
+    protected function updateArticle(int $id, array $fields): void
     {
         $fields['modified'] = date('Y-m-d H:i:s');
         $sets = [];
@@ -442,341 +565,130 @@ class ContentTranslateTool extends AbstractTool
 
     // createAssociation → now in AbstractTool (with context parameter)
 
-    /**
-     * Regenerate introtext by calling the YOOtheme Builder via the standalone script.
-     *
-     * @return array{status: string, introtext_length?: int, message?: string}
-     */
-    private function regenerateIntrotext(int $articleId): array
+    protected function planTranslationMenu(int $sourceId, int $targetId, string $lang, array $fields, array $arguments, bool $lock): array
     {
-        $script = JPATH_ROOT . '/regenerate-introtext.php';
-
-        if (!file_exists($script)) {
-            return ['status' => 'skipped', 'message' => 'regenerate-introtext.php not found'];
+        $create = ($arguments['create_menu'] ?? false) === true;
+        $menuId = (int) ($arguments['menu_id'] ?? 0);
+        if ($create && $menuId) { throw new \InvalidArgumentException('Choose create_menu or menu_id, never both.'); }
+        if (!$create && !$menuId) {
+            if (isset($arguments['translated_page_title']) || isset($arguments['source_menu_id']) || isset($arguments['target_menutype']) || isset($arguments['target_parent_id'])) {
+                throw new \InvalidArgumentException('Menu options require create_menu=true or menu_id.');
+            }
+            return ['action' => 'none'];
         }
-
-        $cmd = sprintf(
-            'cd %s && php %s %d 2>&1',
-            escapeshellarg(JPATH_ROOT),
-            escapeshellarg($script),
-            $articleId,
-        );
-
-        $output = shell_exec($cmd);
-
-        if (!$output) {
-            return ['status' => 'error', 'message' => 'No output from regenerate script'];
+        $sourceMenus = $this->translationSourceMenus($sourceId, $lock);
+        if (isset($arguments['source_menu_id'])) {
+            $sourceMenus = array_values(array_filter($sourceMenus, static fn($m) => (int) $m['id'] === (int) $arguments['source_menu_id']));
         }
-
-        $result = json_decode($output, true);
-
-        if (!$result || !isset($result['results'][0])) {
-            return ['status' => 'error', 'message' => 'Invalid output: ' . substr($output, 0, 200)];
+        if (count($sourceMenus) !== 1) { throw new \InvalidArgumentException('Choose a unique source_menu_id pointing to the source article.'); }
+        $sourceMenu = $sourceMenus[0];
+        $sourceGroup = $this->translationAssociationGroup((int) $sourceMenu['id'], 'com_menus.item', $lock);
+        $targetAssociations = array_values(array_filter($sourceGroup, static fn($m) => ($m['language'] ?? null) === $lang));
+        if (count($targetAssociations) > 1 || ($targetAssociations && (int) $targetAssociations[0]['id'] !== $menuId)) {
+            throw new \InvalidArgumentException('Source menu already has a different target-language association.');
         }
-
-        return $result['results'][0];
+        if ($menuId) {
+            if (isset($arguments['target_menutype']) || isset($arguments['target_parent_id'])) {
+                throw new \InvalidArgumentException('Existing menus preserve menutype and parent.');
+            }
+            $menu = $this->translationRow('#__menu', $menuId, $lock);
+            if (!$menu || $menu['language'] !== $lang || (int) $menu['client_id'] !== 0 || $menu['type'] !== 'component' || (int) $menu['published'] < 0) {
+                throw new \InvalidArgumentException('menu_id must be a non-trashed site component menu in target_language.');
+            }
+            $linked = $this->translationArticleIdFromLink((string) $menu['link']);
+            // Explicit selection permits repairing ES -> CA and a genuinely missing article.
+            if ($linked === null || (!in_array($linked, [$sourceId, $targetId], true) && $this->loadArticle($linked))) {
+                throw new \InvalidArgumentException('Selected menu points to another live article or a different component.');
+            }
+            $targetGroup = $this->translationAssociationGroup($menuId, 'com_menus.item', $lock);
+            if ($targetGroup !== [] && !$targetAssociations) { throw new \InvalidArgumentException('Selected menu belongs to another association group.'); }
+            return ['action' => 'repoint', 'source' => $sourceMenu, 'target' => $menu, 'source_group' => $sourceGroup,
+                'target_group' => $targetGroup, 'associated' => $targetAssociations !== [], 'target_article_id' => $targetId ?: 'new'];
+        }
+        $menuType = (string) ($arguments['target_menutype'] ?? $this->findMenuTypeForLanguage($lang) ?? '');
+        if ($menuType === '') { throw new \InvalidArgumentException('Specify target_menutype: no unique target language menu found.'); }
+        $parentId = (int) ($arguments['target_parent_id'] ?? 1);
+        $parent = $this->translationRow('#__menu', $parentId, $lock);
+        if (!$parent || ($parentId !== 1 && ($parent['menutype'] !== $menuType || !in_array($parent['language'], [$lang, '*'], true)))) {
+            throw new \InvalidArgumentException('target_parent_id does not belong to the target menu/language.');
+        }
+        $type = $this->db->setQuery('SELECT * FROM ' . $this->db->quoteName('#__menu_types') . ' WHERE menutype = ' . $this->db->quote($menuType) . ($lock ? ' FOR UPDATE' : ''))->loadAssoc();
+        if (!$type || (int) ($type['client_id'] ?? 0) !== 0) { throw new \InvalidArgumentException('target_menutype must be an existing site menu.'); }
+        $collision = $this->db->setQuery('SELECT id FROM ' . $this->db->quoteName('#__menu') . ' WHERE parent_id = ' . $parentId
+            . ' AND alias = ' . $this->db->quote($fields['alias']) . ' AND client_id = 0' . ($lock ? ' FOR UPDATE' : ''))->loadResult();
+        if ($collision) { throw new \InvalidArgumentException('Menu alias collision. Select an eligible menu_id explicitly; aliases never prove orphan status.'); }
+        return ['action' => 'create', 'source' => $sourceMenu, 'source_group' => $sourceGroup, 'menutype' => $menuType,
+            'menu_type' => $type, 'parent' => $parent, 'parent_id' => $parentId, 'associated' => false];
     }
 
-    /**
-     * Scan a translated article for internal links pointing to articles
-     * that don't have a translation in the target language yet.
-     *
-     * @return list<array{type: string, target_article_id: int, target_title: string, link: string}>
-     */
-    private function checkInternalLinks(int $articleId, string $targetLang): array
+    protected function translationSourceMenus(int $articleId, bool $lock): array
     {
-        // Load the translated article content
-        $query = $this->db->getQuery(true)
-            ->select(['introtext', $this->db->quoteName('fulltext', 'fulltext_raw')])
-            ->from($this->db->quoteName('#__content'))
-            ->where('id = :id')
-            ->bind(':id', $articleId, ParameterType::INTEGER);
+        $rows = $this->db->setQuery('SELECT * FROM ' . $this->db->quoteName('#__menu')
+            . ' WHERE client_id = 0 AND published >= 0 AND type = ' . $this->db->quote('component')
+            . ' AND link LIKE ' . $this->db->quote('%option=com_content%') . ' ORDER BY id' . ($lock ? ' FOR UPDATE' : ''))->loadAssocList();
+        return array_values(array_filter($rows, fn($row) => $this->translationArticleIdFromLink($row['link']) === $articleId));
+    }
 
-        $row = $this->db->setQuery($query)->loadAssoc();
+    protected function translationArticleIdFromLink(string $link): ?int
+    {
+        $link = html_entity_decode($link, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $parts = parse_url($link);
+        if (!is_array($parts) || isset($parts['host']) || isset($parts['scheme'])
+            || !in_array($parts['path'] ?? '', ['', 'index.php', '/index.php'], true)) { return null; }
+        $raw = $parts['query'] ?? '';
+        if (preg_match_all('/(?:^|&)id=/', $raw) !== 1 || !preg_match('/(?:^|&)id=\d+(?::[^&]*)?(?:&|$)/', $raw)) { return null; }
+        parse_str($raw, $query);
+        if (($query['option'] ?? null) !== 'com_content' || ($query['view'] ?? null) !== 'article'
+            || !is_string($query['id'] ?? null) || !preg_match('/^(\d+)(?::[^&]*)?$/', $query['id'], $match)) { return null; }
+        return (int) $match[1];
+    }
 
-        if (!$row) {
-            return [];
-        }
-
-        // Collect all referenced article IDs from the content
-        $referencedIds = [];
-
-        // 1. Scan HTML links in introtext and fulltext
-        $htmlContent = ($row['introtext'] ?? '') . ' ' . ($row['fulltext_raw'] ?? '');
-        $this->extractArticleIdsFromHtml($htmlContent, $referencedIds);
-
-        // 2. Scan YOOtheme layout JSON for link props
-        $fulltext = trim($row['fulltext_raw'] ?? '');
-        if (str_starts_with($fulltext, '<!-- {')) {
-            $end = strrpos($fulltext, ' -->');
-            if ($end !== false) {
-                $json = substr($fulltext, 5, $end - 5);
-                $layout = json_decode($json, true);
-                if ($layout) {
-                    $this->extractArticleIdsFromLayout($layout, $referencedIds);
+    protected function applyTranslationMenu(array $plan, int $articleId, array $fields, array $arguments): array
+    {
+        if ($plan['action'] === 'none') { return ['action' => 'unchanged']; }
+        if ($plan['action'] === 'repoint') {
+            $id = (int) $plan['target']['id'];
+            if ($this->translationRow('#__menu', $id) !== $plan['target']) {
+                throw new \RuntimeException('Selected menu changed after preview validation; reconcile the article before retrying.');
+            }
+            $link = $plan['target']['link'];
+            // Preserve query order, numeric menu IDs, extra parameters and fragment.
+            $link = preg_replace('/([?&](?:amp;)?id=)\d+(?::[^&#]*)?/', '${1}' . $articleId, $link, 1);
+            if ($link !== $plan['target']['link']) {
+                $this->db->setQuery('UPDATE ' . $this->db->quoteName('#__menu') . ' SET link = ' . $this->db->quote($link) . ' WHERE id = ' . $id
+                    . ' AND BINARY link = BINARY ' . $this->db->quote($plan['target']['link']))->execute();
+                if ($this->db->getAffectedRows() !== 1) { throw new \RuntimeException('Concurrent menu link change.'); }
+            }
+        } else {
+            $table = \Joomla\CMS\Table\Table::getInstance('Menu', 'JTable', ['dbo' => $this->db]);
+            foreach (['type', 'component_id', 'access', 'params', 'note', 'img', 'template_style_id', 'browserNav'] as $key) {
+                $table->$key = $plan['source'][$key];
+            }
+            $table->menutype = $plan['menutype'];
+            $table->title = $fields['title'];
+            $table->alias = $fields['alias'];
+            $table->link = 'index.php?option=com_content&view=article&id=' . $articleId;
+            $table->published = $fields['state'] === 1 ? 1 : 0;
+            $table->home = 0;
+            $table->language = $fields['language'];
+            $table->client_id = 0;
+            $table->parent_id = $plan['parent_id'];
+            $table->setLocation($plan['parent_id'], 'last-child');
+            try {
+                if (!$table->check() || !$table->store()) { throw new \RuntimeException('Menu Table write failed: ' . $table->getError()); }
+            } finally {
+                if ((int) $table->id > 0) {
+                    $this->translationEffects['menu'] = ['action' => 'create_attempted', 'menu_item_id' => (int) $table->id];
                 }
             }
+            $id = (int) $table->id;
         }
-
-        if (empty($referencedIds)) {
-            return [];
+        $this->translationEffects['menu'] = ['action' => $plan['action'], 'menu_item_id' => $id, 'association_status' => 'pending'];
+        if (!$plan['associated']) { $this->createMenuAssociation((int) $plan['source']['id'], $id); }
+        if (array_key_exists('translated_page_title', $arguments)) {
+            $this->updateMenuItemPageTitle($id, $arguments['translated_page_title']);
         }
-
-        // Remove the article itself and deduplicate
-        $referencedIds = array_unique($referencedIds);
-        $referencedIds = array_filter($referencedIds, fn($id) => $id !== $articleId);
-
-        if (empty($referencedIds)) {
-            return [];
-        }
-
-        // Check which referenced articles have a translation in the target language
-        $warnings = [];
-
-        foreach ($referencedIds as $refId) {
-            $translation = $this->findTranslation($refId, $targetLang);
-
-            if ($translation !== null) {
-                continue; // Has translation — OK
-            }
-
-            // Get the title of the untranslated article
-            $query = $this->db->getQuery(true)
-                ->select(['title', 'language'])
-                ->from($this->db->quoteName('#__content'))
-                ->where('id = :id')
-                ->bind(':id', $refId, ParameterType::INTEGER);
-
-            $ref = $this->db->setQuery($query)->loadAssoc();
-
-            if ($ref) {
-                $warnings[] = [
-                    'type' => 'missing_translation',
-                    'target_article_id' => $refId,
-                    'target_title' => $ref['title'],
-                    'target_language' => $ref['language'],
-                    'missing_in' => $targetLang,
-                    'hint' => "Article \"{$ref['title']}\" (ID:{$refId}) has no {$targetLang} translation. Links to it will 404.",
-                ];
-            }
-        }
-
-        return $warnings;
-    }
-
-    /**
-     * Extract article IDs from HTML href attributes.
-     *
-     * @param  list<int> &$ids
-     */
-    private function extractArticleIdsFromHtml(string $html, array &$ids): void
-    {
-        // Match Joomla SEF URLs like /ca/coneix-nos or /es/conocenos
-        // and non-SEF like index.php?option=com_content&view=article&id=2
-        if (preg_match_all('/[?&]id=(\d+)/', $html, $matches)) {
-            foreach ($matches[1] as $id) {
-                $ids[] = (int) $id;
-            }
-        }
-
-        // Match menu item links (Itemid)
-        if (preg_match_all('/Itemid=(\d+)/', $html, $matches)) {
-            foreach ($matches[1] as $itemId) {
-                $articleId = $this->getArticleIdFromMenuItem((int) $itemId);
-                if ($articleId) {
-                    $ids[] = $articleId;
-                }
-            }
-        }
-    }
-
-    /**
-     * Extract article IDs from YOOtheme layout link props.
-     *
-     * @param  array<string, mixed> $node
-     * @param  list<int>            &$ids
-     */
-    private function extractArticleIdsFromLayout(array $node, array &$ids): void
-    {
-        $props = $node['props'] ?? [];
-
-        // Check link-related props
-        foreach (['link', 'button_link', 'image_link', 'title_link', 'href'] as $prop) {
-            $val = $props[$prop] ?? null;
-            if (is_string($val) && $val !== '') {
-                $this->extractArticleIdsFromHtml($val, $ids);
-            }
-        }
-
-        // Recurse into children
-        foreach ($node['children'] ?? [] as $child) {
-            if (is_array($child)) {
-                $this->extractArticleIdsFromLayout($child, $ids);
-            }
-        }
-    }
-
-    private function getArticleIdFromMenuItem(int $menuItemId): ?int
-    {
-        $query = $this->db->getQuery(true)
-            ->select('link')
-            ->from($this->db->quoteName('#__menu'))
-            ->where('id = :id')
-            ->bind(':id', $menuItemId, ParameterType::INTEGER);
-
-        $link = $this->db->setQuery($query)->loadResult();
-
-        if ($link && preg_match('/[?&]id=(\d+)/', $link, $m)) {
-            return (int) $m[1];
-        }
-
-        return null;
-    }
-
-    /**
-     * Creates a menu item for the translated article if the source article has one.
-     *
-     * @return array{action: string, menu_item_id?: int, source_menu_item_id?: int, note?: string}
-     */
-    private function createMenuItemForTranslation(
-        int $sourceArticleId,
-        int $newArticleId,
-        string $targetLang,
-        string $title,
-        string $alias,
-    ): array {
-        // Find menu item(s) pointing to the source article (include unpublished/hidden)
-        $query = $this->db->getQuery(true)
-            ->select('*')
-            ->from($this->db->quoteName('#__menu'))
-            ->where('link LIKE ' . $this->db->quote('%option=com_content&view=article&id=' . $sourceArticleId))
-            ->where('client_id = 0')
-            ->where('published >= 0');  // include unpublished (0) but not trashed (-2)
-
-        $sourceMenuItem = $this->db->setQuery($query)->loadAssoc();
-
-        if (!$sourceMenuItem) {
-            return [
-                'action' => 'skipped',
-                'note' => 'Source article has no menu item. No menu item created for translation.',
-            ];
-        }
-
-        // Find the target menu type for this language
-        $targetMenuType = $this->findMenuTypeForLanguage($targetLang);
-
-        if (!$targetMenuType) {
-            return [
-                'action' => 'skipped',
-                'note' => "No menu found for language {$targetLang}. Create a menu for this language first.",
-            ];
-        }
-
-        // Check if a menu item already exists for this translated article (by article link).
-        $query = $this->db->getQuery(true)
-            ->select('id')
-            ->from($this->db->quoteName('#__menu'))
-            ->where('link LIKE ' . $this->db->quote('%option=com_content&view=article&id=' . $newArticleId))
-            ->where('client_id = 0');
-
-        $existingMenuItemId = $this->db->setQuery($query)->loadResult();
-
-        if ($existingMenuItemId) {
-            return [
-                'action' => 'exists',
-                'menu_item_id' => (int) $existingMenuItemId,
-                'note' => 'Menu item already exists for this translated article.',
-            ];
-        }
-
-        // Check if a menu item with the same alias already exists in the target language.
-        // This can happen when a previously existing article was deleted from #__content
-        // but its menu item was left behind (orphaned). Reuse it by updating its link.
-        $query = $this->db->getQuery(true)
-            ->select('id')
-            ->from($this->db->quoteName('#__menu'))
-            ->where('alias = ' . $this->db->quote($alias))
-            ->where('language = ' . $this->db->quote($targetLang))
-            ->where('client_id = 0')
-            ->where('menutype = ' . $this->db->quote($targetMenuType));
-
-        $orphanedMenuItemId = (int) ($this->db->setQuery($query)->loadResult() ?: 0);
-
-        if ($orphanedMenuItemId) {
-            // Reuse the orphaned item: point it to the new article.
-            $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
-            $updateQuery = $this->db->getQuery(true)
-                ->update($this->db->quoteName('#__menu'))
-                ->set('link = ' . $this->db->quote($link))
-                ->set('title = ' . $this->db->quote($title))
-                ->where('id = ' . $orphanedMenuItemId);
-            $this->db->setQuery($updateQuery)->execute();
-
-            // Remove any stale association before creating the new one.
-            $delAssocQuery = $this->db->getQuery(true)
-                ->delete($this->db->quoteName('#__associations'))
-                ->where('context = ' . $this->db->quote('com_menus.item'))
-                ->where('id = ' . $orphanedMenuItemId);
-            $this->db->setQuery($delAssocQuery)->execute();
-
-            $this->createMenuAssociation((int) $sourceMenuItem['id'], $orphanedMenuItemId);
-
-            return [
-                'action' => 'reused_orphan',
-                'menu_item_id' => $orphanedMenuItemId,
-                'source_menu_item_id' => (int) $sourceMenuItem['id'],
-                'note' => 'Reused existing orphaned menu item (same alias, updated link to new article).',
-            ];
-        }
-
-        // Create a new menu item using Joomla\CMS\Table\Menu to preserve nested set integrity.
-        $link = 'index.php?option=com_content&view=article&id=' . $newArticleId;
-
-        /** @var \Joomla\CMS\Table\Menu $menuTable */
-        $menuTable = \Joomla\CMS\Table\Table::getInstance('Menu', 'JTable', ['dbo' => $this->db]);
-
-        $menuTable->menutype          = $targetMenuType;
-        $menuTable->title             = $title;
-        $menuTable->alias             = $alias;
-        $menuTable->path              = $alias;
-        $menuTable->link              = $link;
-        $menuTable->type              = $sourceMenuItem['type'] ?: 'component';
-        $menuTable->published         = (int) $sourceMenuItem['published'];
-        $menuTable->component_id      = (int) $sourceMenuItem['component_id'];
-        $menuTable->access            = (int) $sourceMenuItem['access'];
-        $menuTable->params            = $sourceMenuItem['params'] ?: '{}';
-        $menuTable->home              = (int) $sourceMenuItem['home'];
-        $menuTable->language          = $targetLang;
-        $menuTable->client_id         = 0;
-        $menuTable->note              = $sourceMenuItem['note'] ?? '';
-        $menuTable->img               = $sourceMenuItem['img'] ?? '';
-        $menuTable->template_style_id = (int) ($sourceMenuItem['template_style_id'] ?? 0);
-        $menuTable->browserNav        = (int) ($sourceMenuItem['browserNav'] ?? 0);
-
-        // Find the root item for the target menu to use as parent.
-        $rootQuery = $this->db->getQuery(true)
-            ->select('id')
-            ->from($this->db->quoteName('#__menu'))
-            ->where('menutype = ' . $this->db->quote($targetMenuType))
-            ->where('parent_id = 1')
-            ->where('client_id = 0')
-            ->setLimit(1);
-
-        $parentMenuId = (int) ($this->db->setQuery($rootQuery)->loadResult() ?: 1);
-        $menuTable->setLocation($parentMenuId, 'last-child');
-
-        $menuTable->store();
-
-        $newMenuItemId = (int) $menuTable->id;
-
-        // Create menu item association
-        $this->createMenuAssociation((int) $sourceMenuItem['id'], $newMenuItemId);
-
-        return [
-            'action' => 'created',
-            'menu_item_id' => $newMenuItemId,
-            'source_menu_item_id' => (int) $sourceMenuItem['id'],
-        ];
+        return ['action' => $plan['action'], 'menu_item_id' => $id, 'source_menu_item_id' => (int) $plan['source']['id']];
     }
 
     /**
@@ -794,7 +706,8 @@ class ContentTranslateTool extends AbstractTool
             ->where('published = 1')
             ->bind(':lang', $targetLang);
 
-        return $this->db->setQuery($query)->loadResult() ?: null;
+        $types = array_values(array_unique($this->db->setQuery($query)->loadColumn()));
+        return count($types) === 1 ? (string) $types[0] : null;
     }
 
     private function updateMenuItemPageTitle(int $menuItemId, string $pageTitle): void

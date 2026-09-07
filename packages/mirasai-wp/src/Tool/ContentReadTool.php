@@ -104,6 +104,8 @@ class ContentReadTool extends AbstractTool
                 ? (new YoothemeLayoutSummarizer())->summarize($layoutTarget['layout'])
                 : null,
             'yootheme_translatable_nodes' => $yoothemeNodes,
+            'translation_coverage_warnings' => $layoutTarget !== null
+                ? (new YoothemeLayoutProcessor())->getTranslationCoverageWarnings($layoutTarget['layout']) : [],
         ];
     }
 

@@ -93,6 +93,7 @@ class ContentReadTool extends AbstractTool
                     $result['yootheme_layout'] = $layout;
                     $result['yootheme_layout_summary'] = (new YooThemeLayoutSummarizer())->summarize($layout);
                     $result['yootheme_translatable_nodes'] = $processor->findTranslatableNodes($layout);
+                    $result['translation_coverage_warnings'] = $processor->getTranslationCoverageWarnings($layout);
                 }
             }
         } else {

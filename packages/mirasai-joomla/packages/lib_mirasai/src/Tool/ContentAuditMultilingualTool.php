@@ -195,7 +195,7 @@ class ContentAuditMultilingualTool extends AbstractTool
                         'source_title' => $item['title'],
                         'missing_in' => $targetLang,
                         'hint' => "Menu item \"{$item['title']}\" has no equivalent in {$targetLang}.",
-                        'fix' => null, // Created automatically by content/translate
+                        'fix' => null, // Requires explicit menu selection in content/translate preview
                     ];
                 }
             }
