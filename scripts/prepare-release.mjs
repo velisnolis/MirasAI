@@ -2,7 +2,7 @@
 
 import { execFileSync, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync, readdirSync, existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -168,14 +168,17 @@ const installUrls = `# MirasAI ${version} Install URLs
 `;
 
 writeFileSync(join(releaseDir, 'install-urls.md'), installUrls);
-writeFileSync(join(releaseDir, 'release-notes.md'), `${installUrls}
+const releaseNotesSource = join(rootDir, 'docs', 'releases', `${version}.md`);
+const releaseNotes = existsSync(releaseNotesSource)
+  ? readFileSync(releaseNotesSource, 'utf8').replace(/\]\((\.{1,2}\/[^)]+)\)/g,
+    (_, path) => `](${new URL(path, `https://github.com/${repoSlug}/blob/${tag}/docs/releases/`).href})`)
+  : `## Notes
 
-## Notes
-
-- Joomla sites use the XML update feed above for automatic updates.
-- WordPress sites use the JSON update feed above through the bundled MirasAI updater.
+- Joomla sites use the XML update feed below for automatic updates.
+- WordPress sites use the JSON update feed below through the bundled MirasAI updater.
 - The local MCP router is shipped as an npm tarball release asset.
-`);
+`;
+writeFileSync(join(releaseDir, 'release-notes.md'), `${releaseNotes.trim()}\n\n${installUrls}`);
 
 console.log(`Prepared ${tag}`);
 console.log(`Release assets: ${releaseDir}`);

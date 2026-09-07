@@ -4,154 +4,65 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Tool;
 
+/** Each item keeps its own preview token and complete recovery result. */
 class ContentTranslateBatchTool extends AbstractTool
 {
-    public function getName(): string
-    {
-        return 'content/translate-batch';
-    }
-
+    public function getName(): string { return 'content/translate-batch'; }
     public function getDescription(): string
     {
-        return 'Translates multiple articles to a target language in a single call. '
-            . 'Each article in the array requires translated_title. For standard articles, also provide translated_introtext '
-            . '(and translated_fulltext if the source has fulltext). For YOOtheme articles, provide yootheme_text_replacements instead. '
-            . 'Returns per-article results with any link warnings. After all translations, runs check-links to fix internal links automatically.';
+        return 'Previews or applies up to 25 article translations. Each item uses the content/translate contract and its own if_match. Defaults to dry_run=true; never fixes links across the site. Partial results retain their IDs and effects.';
     }
-
     public function getInputSchema(): array
     {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'target_language' => [
-                    'type' => 'string',
-                    'description' => 'Target language code (e.g. en-GB).',
-                ],
-                'articles' => [
-                    'type' => 'array',
-                    'description' => 'Array of articles to translate.',
-                    'items' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'source_id' => [
-                                'type' => 'integer',
-                                'description' => 'Source article ID.',
-                            ],
-                            'translated_title' => [
-                                'type' => 'string',
-                                'description' => 'Translated title.',
-                            ],
-                            'translated_alias' => [
-                                'type' => 'string',
-                                'description' => 'URL alias (auto-generated if omitted).',
-                            ],
-                            'yootheme_text_replacements' => [
-                                'type' => 'object',
-                                'description' => 'Map of "path.field" => "translated text".',
-                                'additionalProperties' => ['type' => 'string'],
-                            ],
-                        ],
-                        'required' => ['source_id', 'translated_title'],
-                    ],
-                ],
-                'overwrite' => [
-                    'type' => 'boolean',
-                    'description' => 'If true, overwrites existing translations. Default: false.',
-                ],
-                'fix_links' => [
-                    'type' => 'boolean',
-                    'description' => 'If true, runs check-links in fix mode after all translations. Default: true.',
-                ],
-            ],
-            'required' => ['target_language', 'articles'],
-        ];
+        $item = (new \ReflectionClass(ContentTranslateTool::class))->newInstanceWithoutConstructor()->getInputSchema();
+        unset($item['properties']['target_language'], $item['properties']['dry_run'], $item['properties']['confirm_guarded_write']);
+        $item['required'] = ['source_id', 'translated_title'];
+        return ['type' => 'object', 'properties' => [
+            'target_language' => ['type' => 'string'],
+            'articles' => ['type' => 'array', 'minItems' => 1, 'maxItems' => 25, 'items' => $item],
+            'overwrite' => ['type' => 'boolean', 'default' => false],
+            'dry_run' => ['type' => 'boolean', 'default' => true],
+            'confirm_guarded_write' => ['type' => 'boolean'],
+            'fix_links' => ['type' => 'boolean', 'enum' => [false], 'description' => 'Legacy false only. Preview and apply link changes separately with an explicit article scope.'],
+        ], 'required' => ['target_language', 'articles']];
     }
-
-    public function getPermissions(): array
-    {
-        return [
-            'risk_level' => self::RISK_SAFE_WRITE,
-            'idempotent' => false,
-        ];
-    }
-
+    public function getPermissions(): array { return ['risk_level' => self::RISK_GUARDED_WRITE, 'idempotent' => false]; }
+    protected function translationTool(): ContentTranslateTool { return new ContentTranslateTool(); }
     public function handle(array $arguments): array
     {
-        $targetLang = $arguments['target_language'] ?? '';
-        $articles = $arguments['articles'] ?? [];
-        $overwrite = !empty($arguments['overwrite']);
-        $fixLinks = $arguments['fix_links'] ?? true;
-
-        if ($targetLang === '' || empty($articles)) {
-            return ['error' => 'target_language and articles are required.'];
+        $items = $arguments['articles'] ?? [];
+        $lang = $arguments['target_language'] ?? '';
+        $dryRun = ($arguments['dry_run'] ?? true) === true;
+        if (!is_array($items) || $items === [] || count($items) > 25 || $lang === '' || !empty($arguments['fix_links'])) {
+            return ['error' => 'Provide target_language and 1–25 articles; automatic site-wide fix_links is no longer supported.'];
         }
-
-        $translateTool = new ContentTranslateTool();
+        if (!$dryRun && ($arguments['confirm_guarded_write'] ?? false) !== true) {
+            return ['error' => 'Batch apply requires confirm_guarded_write=true.'];
+        }
+        $ids = [];
+        foreach ($items as $item) {
+            if (!is_array($item) || empty($item['source_id']) || isset($ids[$item['source_id']])) {
+                return ['error' => 'Each item needs a unique source_id. No items were executed.'];
+            }
+            $ids[$item['source_id']] = true;
+            if (!$dryRun && empty($item['if_match'])) {
+                return ['error' => 'Every apply item requires its own preview if_match. No items were executed.'];
+            }
+        }
+        $tool = $this->translationTool();
         $results = [];
-        $succeeded = 0;
-        $failed = 0;
-
-        foreach ($articles as $i => $article) {
-            $translateArgs = [
-                'source_id' => $article['source_id'] ?? 0,
-                'target_language' => $targetLang,
-                'translated_title' => $article['translated_title'] ?? '',
-                'overwrite' => $overwrite,
-            ];
-
-            if (!empty($article['translated_alias'])) {
-                $translateArgs['translated_alias'] = $article['translated_alias'];
-            }
-
-            if (!empty($article['yootheme_text_replacements'])) {
-                $translateArgs['yootheme_text_replacements'] = $article['yootheme_text_replacements'];
-            }
-
-            $result = $translateTool->handle($translateArgs);
-
-            if (isset($result['error'])) {
-                $failed++;
-                $results[] = [
-                    'source_id' => $article['source_id'] ?? 0,
-                    'status' => 'error',
-                    'error' => $result['error'],
-                ];
-            } else {
-                $succeeded++;
-                $results[] = [
-                    'source_id' => $article['source_id'] ?? 0,
-                    'status' => 'ok',
-                    'article_id' => $result['article_id'] ?? null,
-                    'title' => $result['title'] ?? '',
-                    'action' => $result['action'] ?? '',
-                    'menu_item' => $result['menu_item'] ?? null,
-                    'link_warnings_count' => count($result['link_warnings'] ?? []),
-                ];
-            }
+        $counts = ['previewed' => 0, 'complete' => 0, 'partial' => 0, 'failed' => 0];
+        foreach ($items as $item) {
+            $args = $item + ['overwrite' => ($arguments['overwrite'] ?? false) === true];
+            $args['target_language'] = $lang;
+            $args['dry_run'] = $dryRun;
+            $args['confirm_guarded_write'] = ($arguments['confirm_guarded_write'] ?? false) === true;
+            $result = $tool->handle($args);
+            $result['source_id'] = (int) $item['source_id'];
+            $key = isset($result['error']) ? 'failed' : ($dryRun ? 'previewed' : ($result['status'] ?? 'partial'));
+            $counts[$key]++;
+            $results[] = $result;
         }
-
-        // Run check-links in fix mode
-        $checkLinksResult = null;
-
-        if ($fixLinks && $succeeded > 0) {
-            $checkLinksTool = new ContentCheckLinksTool();
-            $checkLinksResult = $checkLinksTool->handle([
-                'language' => $targetLang,
-                'fix' => true,
-            ]);
-        }
-
-        return [
-            'target_language' => $targetLang,
-            'total' => count($articles),
-            'succeeded' => $succeeded,
-            'failed' => $failed,
-            'results' => $results,
-            'check_links' => $checkLinksResult ? [
-                'fixed' => $checkLinksResult['total_fixed'] ?? 0,
-                'broken' => $checkLinksResult['total_broken_links'] ?? 0,
-            ] : null,
-        ];
+        return ['target_language' => $lang, 'dry_run' => $dryRun, 'total' => count($items), 'counts' => $counts, 'results' => $results];
     }
 }

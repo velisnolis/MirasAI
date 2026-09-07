@@ -19,6 +19,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
         'content', 'title', 'meta', 'subtitle', 'text', 'video_title',
         'link_text', 'label', 'description', 'caption', 'alt',
         'button_text', 'heading', 'footer', 'header', 'placeholder',
+        'headline', 'html', 'image_alt', 'link_aria_label', 'home_text',
     ];
 
     /** @var list<string> */
@@ -26,7 +27,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
         'title_position', 'title_style', 'title_element', 'title_decoration',
         'image_position', 'image_effect', 'meta_align', 'id', 'class',
         'title_rotation', 'title_breakpoint', 'heading_style', 'height',
-        'width', 'style', 'animation', 'name', 'status', 'source',
+        'width', 'style', 'animation', 'name', 'status', 'source', 'css',
     ];
 
     /** @var list<string> */
@@ -88,6 +89,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             return $content;
         }
 
+        $this->validateReplacements($layout, $replacements);
         $this->applyReplacements($layout, $replacements);
 
         $newJson = json_encode($layout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -119,7 +121,11 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             return $content;
         }
 
-        $this->walkNode($layout, 'root', $visitor);
+        $replacements = [];
+        foreach ($this->findTranslatableNodes($layout) as $entry) {
+            $replacements[$entry['replacement_key']] = $visitor($entry['path'], $entry['field'], $entry['text']);
+        }
+        $layout = $this->patchLayoutArray($layout, $replacements);
 
         $newJson = json_encode($layout, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -177,13 +183,14 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
      * @param array<string, mixed> $layout
      * @return list<array{path: string, node_type: string, field: string, replacement_key: string, text: string, format: string}>
      */
-    public function findTranslatableNodes(array $layout, string $path = 'root'): array
+    public function findTranslatableNodes(array $layout, string $path = 'root', ?string $disabledBy = null): array
     {
         $results = [];
         $nodeType = is_string($layout['type'] ?? null) ? $layout['type'] : 'unknown';
         $props = is_array($layout['props'] ?? null) ? $layout['props'] : [];
         $sourceProps = is_array($layout['source']['props'] ?? null) ? $layout['source']['props'] : [];
         $dynamicPropKeys = array_keys($sourceProps);
+        if (($props['status'] ?? null) === 'disabled') { $disabledBy = $path; }
 
         foreach ($props as $key => $value) {
             if (!is_string($value) || !$this->isTranslatableString((string) $key, $value)) {
@@ -211,6 +218,11 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             );
         }
 
+        if ($disabledBy !== null) {
+            foreach ($results as &$entry) { $entry['disabled_by'] = $disabledBy; }
+            unset($entry);
+        }
+
         foreach ($layout['children'] ?? [] as $index => $child) {
             if (!is_array($child)) {
                 continue;
@@ -219,7 +231,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             $childType = is_string($child['type'] ?? null) ? $child['type'] : 'unknown';
             $results = array_merge(
                 $results,
-                $this->findTranslatableNodes($child, "{$path}>{$childType}[{$index}]"),
+                $this->findTranslatableNodes($child, "{$path}>{$childType}[{$index}]", $disabledBy),
             );
         }
 
@@ -235,6 +247,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
      */
     public function patchLayoutArray(array $layout, array $replacements): array
     {
+        $this->validateReplacements($layout, $replacements);
         $this->applyReplacements($layout, $replacements);
 
         return $layout;
@@ -246,31 +259,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
 
     private function isTranslatableString(string $field, string $value): bool
     {
-        $trimmed = trim($value);
-
-        if ($trimmed === '' || mb_strlen($trimmed) < 2) {
-            return false;
-        }
-
-        if (in_array($field, self::CONFIG_PROPS, true)) {
-            return false;
-        }
-
-        if (preg_match('/^(http|\/|#|images\/|uk-|el-)/', $trimmed)) {
-            return false;
-        }
-
-        if (preg_match('/^\{.+\}$/', $trimmed) || str_contains($trimmed, '{{')) {
-            return false;
-        }
-
-        if (in_array($field, self::TEXT_PROPS, true)) {
-            return true;
-        }
-
-        return mb_strlen($trimmed) > 15
-            && str_contains($trimmed, ' ')
-            && !preg_match('/(px|vh|vw|%)/', $trimmed);
+        return trim($value) !== '' && in_array($field, self::TEXT_PROPS, true);
     }
 
     private function detectTextFormat(string $value): string
@@ -280,25 +269,7 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
 
     private function isPotentialSourceText(string $field, string $value): bool
     {
-        $trimmed = trim($value);
-
-        if ($trimmed === '' || mb_strlen($trimmed) < 2) {
-            return false;
-        }
-
-        if (preg_match('/^(http|\/|#|images\/|uk-|el-)/', $trimmed)) {
-            return false;
-        }
-
-        if (preg_match('/^\{.+\}$/', $trimmed) || str_contains($trimmed, '{{')) {
-            return false;
-        }
-
-        if (in_array($field, self::SOURCE_TEXT_KEYS, true)) {
-            return true;
-        }
-
-        return $this->isTranslatableString($field, $value);
+        return trim($value) !== '' && in_array($field, ['before', 'after', 'prefix', 'suffix'], true);
     }
 
     /**
@@ -313,7 +284,8 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             $field = (string) $key;
 
             if (is_string($value)) {
-                if ($this->isPotentialSourceText($field, $value)) {
+                if (preg_match('/\.source\.props\.[^.]+\.filters(?:\.|$)/', $path)
+                    && $this->isPotentialSourceText($field, $value)) {
                     $results[] = [
                         'path' => $path,
                         'node_type' => $nodeType,
@@ -423,5 +395,79 @@ class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
             }
             unset($child);
         }
+    }
+
+    /** Full layouts may change the same editorial leaves as replacement maps. */
+    public function validateTranslatedLayout(array $source, array $translated): array
+    {
+        $candidate = array_column($this->findTranslatableNodes($translated), 'text', 'replacement_key');
+        $changes = [];
+        foreach ($this->findTranslatableNodes($source) as $entry) {
+            $key = $entry['replacement_key'];
+            if (array_key_exists($key, $candidate)) {
+                $changes[$key] = $candidate[$key];
+            }
+        }
+        if ($this->patchLayoutArray($source, $changes) != $translated) {
+            throw new \InvalidArgumentException('Translated layout changes non-editorial structure or bindings.');
+        }
+        return $translated;
+    }
+
+    /** Coverage gaps are review items, never additional writable properties. */
+    public function getTranslationCoverageWarnings(array $layout, string $path = 'root'): array
+    {
+        $warnings = [];
+        $props = is_array($layout['props'] ?? null) ? $layout['props'] : [];
+        foreach ($props as $key => $value) {
+            if (is_string($value) && !in_array($key, self::TEXT_PROPS, true)
+                && !in_array($key, self::CONFIG_PROPS, true)
+                && (preg_match('/(?:text|title|label|caption|description|alt)$/', (string) $key)
+                    || (mb_strlen($value) > 15 && str_contains($value, ' ') && !preg_match('/^(?:https?:|\/|#)/', $value)))
+                && trim($value) !== '') {
+                $warnings[] = ['code' => 'unknown_text_field', 'path' => $path . '.' . $key];
+            }
+        }
+        if (($layout['type'] ?? '') === 'breadcrumbs' && empty($props['home_text'])) {
+            $warnings[] = ['code' => 'implicit_home_text', 'path' => $path . '.home_text'];
+        }
+        foreach ($layout['children'] ?? [] as $index => $child) {
+            if (is_array($child)) {
+                $type = $child['type'] ?? 'unknown';
+                $warnings = array_merge($warnings, $this->getTranslationCoverageWarnings($child, "{$path}>{$type}[{$index}]"));
+            }
+        }
+        return $warnings;
+    }
+
+    /** Validate the entire map before changing any value. */
+    private function validateReplacements(array $layout, array $replacements): void
+    {
+        $eligible = array_column($this->findTranslatableNodes($layout), 'text', 'replacement_key');
+        foreach ($replacements as $key => $value) {
+            if (!is_string($value) || !array_key_exists($key, $eligible)) {
+                throw new \InvalidArgumentException('Non-editorial or unknown translation replacement: ' . $key);
+            }
+            if ($this->translationSignature($eligible[$key]) !== $this->translationSignature($value)) {
+                throw new \InvalidArgumentException('Translation changes HTML, URLs or placeholders: ' . $key);
+            }
+        }
+    }
+
+    /** Immutable markup and placeholders; editorial text/attributes may change. */
+    private function translationSignature(string $text): array
+    {
+        preg_match_all('/\{\{.*?\}\}|\{[\w.:-]+\}|%(?:\d+\$)?[sdf]|https?:\/\/[^\s<>"\x27]+/u', $text, $matches);
+        $tokens = $matches[0];
+        sort($tokens);
+        preg_match_all('/<!--.*?-->|<(script|style)\b[^>]*>.*?<\/\1\s*>|<[^>]+>/is', $text, $matches);
+        $markup = array_map(static function (string $tag): string {
+            if (preg_match('/^<!--|^<(?:script|style)\b/i', $tag)) {
+                return $tag;
+            }
+            // Preserve attribute names and delimiters, allow only visible attribute values.
+            return preg_replace('/(\s(?:alt|title|aria-label|placeholder)\s*=\s*)(["\x27]).*?\2/is', '$1$2$2', $tag);
+        }, $matches[0]);
+        return [$markup, $tokens];
     }
 }

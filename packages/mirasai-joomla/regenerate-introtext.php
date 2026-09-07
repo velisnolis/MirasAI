@@ -115,8 +115,8 @@ function regenerateIntrotext(
             ->withParams(['context' => 'content'])
             ->render($normalizedLayoutJson, ['prefix' => 'page']);
 
-        if ($introtext === null) {
-            $introtext = '';
+        if (!is_string($introtext) || trim($introtext) === '') {
+            return ['article_id' => $articleId, 'status' => 'error', 'message' => 'Empty fallback HTML; article unchanged.'];
         }
 
         $newFulltext = '<!-- ' . $normalizedLayoutJson . ' -->';
@@ -128,12 +128,16 @@ function regenerateIntrotext(
             ->set($db->quoteName('fulltext') . ' = :fulltext')
             ->set($db->quoteName('modified') . ' = :modified')
             ->where('id = :id')
+            ->where('BINARY ' . $db->quoteName('fulltext') . ' = BINARY ' . $db->quote($row['fulltext_raw']))
             ->bind(':introtext', $introtext)
             ->bind(':fulltext', $newFulltext)
             ->bind(':modified', date('Y-m-d H:i:s'))
             ->bind(':id', $articleId, \Joomla\Database\ParameterType::INTEGER);
 
         $db->setQuery($query)->execute();
+        if ($db->getAffectedRows() !== 1) {
+            return ['article_id' => $articleId, 'status' => 'error', 'message' => 'Concurrent change or no verified write; reread before retrying.'];
+        }
 
         return [
             'article_id' => $articleId,

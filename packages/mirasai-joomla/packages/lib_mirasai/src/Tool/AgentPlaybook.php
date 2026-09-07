@@ -153,7 +153,7 @@ class AgentPlaybook
             [
                 'id' => 'content',
                 'do' => 'Read or translate articles/categories.',
-                'best' => 'content/list, content/read, then content/translate with the source if_match. MirasAI does not auto-translate. For Builder articles, use yootheme_translatable_nodes[].replacement_key.',
+                'best' => 'content/list, content/read, then content/translate with dry_run=true. Apply the identical request with dry_run=false, preview etag as if_match and confirm_guarded_write=true. New articles default to state=0; updates preserve alias/state. Select target_id for an unassociated target and create_menu or menu_id for menu changes. Inspect status=partial and keep returned IDs before any retry. MirasAI does not auto-translate. For Builder articles, use yootheme_translatable_nodes[].replacement_key.',
                 'ssh' => 'Unnecessary unless debugging language associations outside MCP.',
             ],
             [

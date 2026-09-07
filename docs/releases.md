@@ -34,7 +34,10 @@ Each release should contain:
 
 ## Prepare A Release Locally
 
-1. Bump all package and CMS manifest versions.
+1. Bump all package and CMS manifest versions. Write version-specific changes,
+   migration instructions and validation limits in `docs/releases/<version>.md`.
+   The preparation script includes that document in generated release notes
+   before the install URLs, and resolves relative links against the release tag.
 2. Run:
 
 ```bash

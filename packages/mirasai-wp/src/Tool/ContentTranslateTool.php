@@ -37,7 +37,7 @@ class ContentTranslateTool extends AbstractTool
                 'source_id' => ['type' => 'integer', 'description' => 'ID of the source post/page to translate.'],
                 'target_language' => ['type' => 'string', 'description' => 'Target WPML/Polylang language code.'],
                 'translated_title' => ['type' => 'string', 'description' => 'Translated post title.'],
-                'translated_slug' => ['type' => 'string', 'description' => 'Optional translated slug. Auto-generated from title if omitted.'],
+                'translated_slug' => ['type' => 'string', 'description' => 'Optional translated slug. New translations derive it from title; updates preserve it when omitted.'],
                 'translated_content' => ['type' => 'string', 'description' => 'Translated post content for non-YOOtheme posts.'],
                 'translated_excerpt' => ['type' => 'string', 'description' => 'Optional translated excerpt.'],
                 'translated_layout' => [
@@ -197,7 +197,7 @@ class ContentTranslateTool extends AbstractTool
             : (is_int($existingId) && $existingId > 0 ? (string) get_post_status($existingId) : 'draft');
         $translatedSlug = isset($arguments['translated_slug']) && is_string($arguments['translated_slug'])
             ? sanitize_title($arguments['translated_slug'])
-            : sanitize_title($translatedTitle);
+            : (is_int($existingId) && $existingId > 0 ? (string) get_post($existingId)->post_name : sanitize_title($translatedTitle));
         $translatedExcerpt = isset($arguments['translated_excerpt']) && is_string($arguments['translated_excerpt'])
             ? $arguments['translated_excerpt']
             : '';
@@ -285,7 +285,7 @@ class ContentTranslateTool extends AbstractTool
             'status' => $status,
             'title' => $translatedTitle,
             'slug' => get_post_field('post_name', $targetId),
-            'link' => get_permalink($targetId),
+            'link' => $this->translations->postPermalink($targetId, $targetLanguage),
             'has_yootheme_builder' => $layoutTarget !== null,
             'layout_written' => $translatedLayout !== null,
             'terms_copied' => !empty($arguments['copy_terms']),
@@ -303,40 +303,44 @@ class ContentTranslateTool extends AbstractTool
      */
     private function resolveTranslatedLayout(array $sourceLayout, array $arguments): array
     {
-        if (isset($arguments['translated_layout'])) {
-            $translatedLayout = $arguments['translated_layout'];
+        try {
+            if (isset($arguments['translated_layout'])) {
+                $translatedLayout = $arguments['translated_layout'];
 
-            if (is_string($translatedLayout)) {
-                $decoded = json_decode($translatedLayout, true);
+                if (is_string($translatedLayout)) {
+                    $decoded = json_decode($translatedLayout, true);
 
-                if (!is_array($decoded)) {
-                    return ['error' => 'translated_layout must be valid JSON.', 'code' => 'invalid_translated_layout'];
+                    if (!is_array($decoded)) {
+                        return ['error' => 'translated_layout must be valid JSON.', 'code' => 'invalid_translated_layout'];
+                    }
+
+                    return ['layout' => (new YoothemeLayoutProcessor())->validateTranslatedLayout($sourceLayout, $decoded)];
                 }
 
-                return ['layout' => $decoded];
+                if (is_array($translatedLayout)) {
+                    return ['layout' => (new YoothemeLayoutProcessor())->validateTranslatedLayout($sourceLayout, $translatedLayout)];
+                }
+
+                return ['error' => 'translated_layout must be an object or JSON string.', 'code' => 'invalid_translated_layout'];
             }
 
-            if (is_array($translatedLayout)) {
-                return ['layout' => $translatedLayout];
+            $replacements = $this->normalizeReplacements($arguments['yootheme_text_replacements'] ?? null);
+
+            if (isset($replacements['error'])) {
+                return $replacements;
             }
 
-            return ['error' => 'translated_layout must be an object or JSON string.', 'code' => 'invalid_translated_layout'];
+            if ($replacements === []) {
+                return [
+                    'error' => 'YOOtheme Builder posts require translated_layout or yootheme_text_replacements. Refusing to copy the source layout unchanged.',
+                    'code' => 'missing_yootheme_translation',
+                ];
+            }
+
+            return ['layout' => (new YoothemeLayoutProcessor())->patchLayoutArray($sourceLayout, $replacements)];
+        } catch (\InvalidArgumentException $e) {
+            return ['error' => $e->getMessage(), 'code' => 'invalid_translation'];
         }
-
-        $replacements = $this->normalizeReplacements($arguments['yootheme_text_replacements'] ?? null);
-
-        if (isset($replacements['error'])) {
-            return $replacements;
-        }
-
-        if ($replacements === []) {
-            return [
-                'error' => 'YOOtheme Builder posts require translated_layout or yootheme_text_replacements. Refusing to copy the source layout unchanged.',
-                'code' => 'missing_yootheme_translation',
-            ];
-        }
-
-        return ['layout' => (new YoothemeLayoutProcessor())->patchLayoutArray($sourceLayout, $replacements)];
     }
 
     /**

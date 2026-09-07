@@ -204,6 +204,22 @@ foreach (['leaves', 'rebind_disabled'] as $batchProperty) {
     expect("joomla element-source-set schema exposes {$batchProperty}", array_key_exists($batchProperty, $sourceSetProperties), true);
 }
 
+require_once $libSrc . '/Tool/ContentTranslateTool.php';
+require_once $libSrc . '/Tool/ContentTranslateBatchTool.php';
+$translate = schemaForToolWithoutConstructor(\Mirasai\Library\Tool\ContentTranslateTool::class);
+foreach (['dry_run', 'if_match', 'confirm_guarded_write', 'target_id', 'state', 'create_menu', 'menu_id', 'source_menu_id'] as $field) {
+    expect("joomla translate exposes {$field}", isset($translate['properties'][$field]), true);
+}
+expect('joomla translate defaults to preview', $translate['properties']['dry_run']['default'], true);
+$batch = schemaForToolWithoutConstructor(\Mirasai\Library\Tool\ContentTranslateBatchTool::class);
+expect('joomla batch carries per-item CAS', isset($batch['properties']['articles']['items']['properties']['if_match']), true);
+expect('joomla batch refuses site-wide fix_links', $batch['properties']['fix_links']['enum'], [false]);
+
+require_once $libSrc . '/Tool/ContentCheckLinksTool.php';
+$links = schemaForToolWithoutConstructor(\Mirasai\Library\Tool\ContentCheckLinksTool::class);
+expect('joomla links defaults to preview', $links['properties']['dry_run']['default'], true);
+expect('joomla links exposes scoped CAS', isset($links['properties']['if_match']), true);
+
 if ($failed > 0) {
     echo "\n{$failed} schema test(s) failed.\n";
     exit(1);

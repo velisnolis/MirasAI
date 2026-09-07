@@ -75,6 +75,22 @@ class WordPressTranslationHelper
         return false;
     }
 
+    /** Resolve the selected post instead of WPML's translation in the request language. */
+    public function postPermalink(int $postId, string $language): string|false
+    {
+        if ($this->provider()['name'] !== 'wpml') {
+            return get_permalink($postId);
+        }
+
+        $previousLanguage = apply_filters('wpml_current_language', null);
+        try {
+            do_action('wpml_switch_language', $language);
+            return get_permalink($postId);
+        } finally {
+            do_action('wpml_switch_language', $previousLanguage);
+        }
+    }
+
     public function postLanguage(int $postId, string $postType): ?string
     {
         $provider = $this->provider()['name'];

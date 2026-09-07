@@ -86,6 +86,7 @@ class TemplateReadTool extends AbstractTool
             'params' => is_array($template['params'] ?? null) ? $template['params'] : [],
             'layout' => $layout,
             'translatable_nodes' => $translatableNodes,
+            'translation_coverage_warnings' => (new \Mirasai\Library\Tool\YooThemeLayoutProcessor())->getTranslationCoverageWarnings($layout ?? []),
             'raw_template' => $template,
         ];
 

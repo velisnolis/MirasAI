@@ -77,6 +77,8 @@ class TemplateReadTool extends AbstractTool
             $response['translatable_nodes'] = $nodes;
         }
 
+        $response['translation_coverage_warnings'] = (new YoothemeLayoutProcessor())->getTranslationCoverageWarnings($target['layout']);
+
         if ($mode['mode'] === 'full') {
             return $response;
         }

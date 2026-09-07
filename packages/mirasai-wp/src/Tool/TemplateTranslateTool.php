@@ -289,44 +289,48 @@ class TemplateTranslateTool extends AbstractTool
      */
     private function resolveTranslatedLayout(array $sourceLayout, array $arguments, bool $hasStaticText): array
     {
-        if (isset($arguments['translated_layout'])) {
-            $translatedLayout = $arguments['translated_layout'];
+        try {
+            if (isset($arguments['translated_layout'])) {
+                $translatedLayout = $arguments['translated_layout'];
 
-            if (is_string($translatedLayout)) {
-                $decoded = json_decode($translatedLayout, true);
+                if (is_string($translatedLayout)) {
+                    $decoded = json_decode($translatedLayout, true);
 
-                if (!is_array($decoded)) {
-                    return ['error' => 'translated_layout must be valid JSON.', 'code' => 'invalid_translated_layout'];
+                    if (!is_array($decoded)) {
+                        return ['error' => 'translated_layout must be valid JSON.', 'code' => 'invalid_translated_layout'];
+                    }
+
+                    return ['layout' => (new YoothemeLayoutProcessor())->validateTranslatedLayout($sourceLayout, $decoded)];
                 }
 
-                return ['layout' => $decoded];
+                if (is_array($translatedLayout)) {
+                    return ['layout' => (new YoothemeLayoutProcessor())->validateTranslatedLayout($sourceLayout, $translatedLayout)];
+                }
+
+                return ['error' => 'translated_layout must be an object or JSON string.', 'code' => 'invalid_translated_layout'];
             }
 
-            if (is_array($translatedLayout)) {
-                return ['layout' => $translatedLayout];
+            $replacements = $this->normalizeReplacements($arguments['yootheme_text_replacements'] ?? null);
+
+            if (isset($replacements['error'])) {
+                return $replacements;
             }
 
-            return ['error' => 'translated_layout must be an object or JSON string.', 'code' => 'invalid_translated_layout'];
+            if (!empty($replacements)) {
+                return ['layout' => (new YoothemeLayoutProcessor())->patchLayoutArray($sourceLayout, $replacements)];
+            }
+
+            if ($hasStaticText) {
+                return [
+                    'error' => 'Templates with fixed text require translated_layout or yootheme_text_replacements.',
+                    'code' => 'missing_template_translation',
+                ];
+            }
+
+            return ['layout' => $sourceLayout];
+        } catch (\InvalidArgumentException $e) {
+            return ['error' => $e->getMessage(), 'code' => 'invalid_translation'];
         }
-
-        $replacements = $this->normalizeReplacements($arguments['yootheme_text_replacements'] ?? null);
-
-        if (isset($replacements['error'])) {
-            return $replacements;
-        }
-
-        if (!empty($replacements)) {
-            return ['layout' => (new YoothemeLayoutProcessor())->patchLayoutArray($sourceLayout, $replacements)];
-        }
-
-        if ($hasStaticText) {
-            return [
-                'error' => 'Templates with fixed text require translated_layout or yootheme_text_replacements.',
-                'code' => 'missing_template_translation',
-            ];
-        }
-
-        return ['layout' => $sourceLayout];
     }
 
     /**

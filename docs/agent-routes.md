@@ -4,6 +4,17 @@ Call `system/diagnose` and read `playbook`. Do not invent a Customizer, WP-CLI, 
 
 This document matches the MCP playbook on both hosts (`playbook.version` 3). Production agents never see the git repo; the live source of truth is `system/diagnose.playbook`.
 
+## Joomla article translation from 0.10.0
+
+Use `content/read`, prepare the translated text, then call `content/translate`
+with `dry_run=true`. Apply the identical request with `dry_run=false`, the
+translation preview's `etag` as `if_match`, and `confirm_guarded_write=true`.
+New articles default to unpublished; updates preserve alias and state. Menus
+require `create_menu` or `menu_id`. Reconcile returned IDs after a partial result
+before retrying. Batches need one token per article and no longer accept
+`fix_links=true`. See the [migration notes](releases/0.10.0.md) for the full
+contract and the limits of dynamic fallback. WordPress keeps its own schema.
+
 ## Detect the channel from tools you can see
 
 | You have | How you know | Style compiler? |
