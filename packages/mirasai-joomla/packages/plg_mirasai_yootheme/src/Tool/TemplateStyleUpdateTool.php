@@ -152,11 +152,19 @@ class TemplateStyleUpdateTool extends AbstractTool
             return ['error' => 'style_id is invalid.', 'code' => 'invalid_style_id'];
         }
 
+        // A site with no active style has no family yet, so there are no family
+        // overrides to carry into the new one: assigning the first family is not
+        // a switch. Stored overrides without a family are ambiguous and still
+        // need the explicit reset policy.
+        $initialAssignment = false;
         if ($styleId !== $active['style_id']) {
-            return [
-                'error' => 'This first guarded writer only updates the active style family. Switching style families needs an explicit override-reset policy.',
-                'code' => 'style_switch_not_supported',
-            ];
+            if ($active['style_id'] !== '' || $helper->overrides($config)['customised']) {
+                return [
+                    'error' => 'This first guarded writer only updates the active style family. Switching style families needs an explicit override-reset policy.',
+                    'code' => 'style_switch_not_supported',
+                ];
+            }
+            $initialAssignment = true;
         }
 
         $available = array_column($helper->availableStyles(), null, 'id');
@@ -214,6 +222,7 @@ class TemplateStyleUpdateTool extends AbstractTool
                 'from' => $active['raw'],
                 'to' => $candidateConfig['style'],
             ],
+            'style_assignment' => $initialAssignment ? 'initial' : 'active_family',
             'patch' => [
                 'set_vars' => array_keys($vars),
                 'unset_vars' => array_values($unsetVars),
