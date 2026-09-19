@@ -365,6 +365,42 @@ check(
         && $GLOBALS['test_update_option_calls'] === $beforeDryRunWrites
 );
 
+// Family assignment policy: a site with no active style may get its first
+// family, but only when nothing is stored that a switch would have to reset.
+$familyUpdate = static function (): array {
+    return (new TemplateStyleUpdateTool())->handle([
+        'if_match' => (new TemplateStyleReadTool())->handle([])['etag'],
+        'style_id' => 'fuse',
+        'compiled_css' => $GLOBALS['dryRunCss'],
+        'compiled_rtl' => $GLOBALS['dryRunRtl'],
+        'compiled_css_sha256' => hash('sha256', $GLOBALS['dryRunCss']),
+        'compiled_rtl_sha256' => hash('sha256', $GLOBALS['dryRunRtl']),
+        'dry_run' => true,
+    ]);
+};
+$policyConfig = $GLOBALS['test_config'];
+
+$switchUpdate = $familyUpdate();
+check('style-update still rejects switching away from an active family', ($switchUpdate['code'] ?? null) === 'style_switch_not_supported');
+
+$GLOBALS['test_config'] = ['style' => '', 'less' => [], 'custom_less' => '', 'version' => '5.0.37', 'yootheme_apikey' => $GLOBALS['test_apikey']];
+$initialUpdate = $familyUpdate();
+check('style-update assigns the first family on a site without a style', ($initialUpdate['action'] ?? null) === 'preview');
+check('style-update reports an initial family assignment', ($initialUpdate['style_assignment'] ?? null) === 'initial' && ($initialUpdate['style']['to'] ?? null) === 'fuse');
+check('style-update initial assignment dry-run writes nothing', $GLOBALS['test_update_option_calls'] === $beforeDryRunWrites);
+
+$GLOBALS['test_config']['less'] = ['@global-color' => '#111111'];
+$orphanVars = $familyUpdate();
+check('style-update rejects a first family when variables are stored without a style', ($orphanVars['code'] ?? null) === 'style_switch_not_supported');
+
+$GLOBALS['test_config']['less'] = [];
+$GLOBALS['test_config']['custom_less'] = '.x { color: red; }';
+$orphanLess = $familyUpdate();
+check('style-update rejects a first family when custom Less is stored without a style', ($orphanLess['code'] ?? null) === 'style_switch_not_supported');
+
+$GLOBALS['test_config'] = $policyConfig;
+check('style-update reports updates within the active family', ($dryRun['style_assignment'] ?? null) === 'active_family');
+
 $createTarget = $root . '/wp-content/themes/yootheme-brand';
 $createArguments = [
     'if_match' => $currentRead['etag'],

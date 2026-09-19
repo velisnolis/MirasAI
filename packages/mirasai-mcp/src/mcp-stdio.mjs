@@ -147,7 +147,7 @@ export function routerTools() {
         type: 'object',
         properties: {
           site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
-          style_id: { type: 'string', description: 'Active style id. Switching style families is not supported by this first guarded writer.' },
+          style_id: { type: 'string', description: 'Active style id. Switching families is not supported; a site with no active style and no stored variables or custom Less may be given its first family.' },
           variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
           vars: {
             type: 'object',

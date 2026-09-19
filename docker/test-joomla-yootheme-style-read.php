@@ -238,6 +238,25 @@ foreach ([
     );
 }
 
+// The Joomla update tool needs a live DB to run, so pin its family policy to
+// the WordPress twin, which the WP Style test exercises end to end.
+$familyPolicy = static function (string $path): string {
+    $source = (string) file_get_contents(dirname(__DIR__) . $path);
+    $start = strpos($source, '$initialAssignment = false;');
+    $end = strpos($source, '$available = ', (int) $start);
+
+    return $start === false || $end === false ? '' : substr($source, $start, $end - $start);
+};
+$joomlaPolicy = $familyPolicy('/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/TemplateStyleUpdateTool.php');
+checkJoomlaStyle(
+    'style-update allows only an initial family assignment without stored overrides',
+    str_contains($joomlaPolicy, "\$active['style_id'] !== '' || \$helper->overrides(\$config)['customised']")
+);
+checkJoomlaStyle(
+    'style-update family policy matches the WordPress twin',
+    $joomlaPolicy !== '' && $joomlaPolicy === $familyPolicy('/packages/mirasai-wp/src/Tool/TemplateStyleUpdateTool.php')
+);
+
 removeFixture($fixture);
 
 if ($failed > 0) {
