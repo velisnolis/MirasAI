@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "checks": [
+    "initial_preview",
+    "preview_unchanged",
+    "confirmation_required",
+    "initial_write",
+    "snapshot_created",
+    "readback_etag",
+    "http_css_hashes",
+    "stale_etag_rejected",
+    "family_switch_rejected",
+    "rejections_unchanged"
+  ],
+  "before_etag": "f6736365d72569d519ef752741d49cbb",
+  "after_etag": "cc3f339d1c8838b454a2afd551b6f256",
+  "snapshot_id": "joomla-style-12-20260919-125108-86659de2",
+  "served": [
+    {
+      "path": "templates/yootheme/css/theme.12.css",
+      "bytes": 479245,
+      "sha256": "6b9387e60afa3a5d8e6911a66c4590c39cfe413ab97bbb8cffb38aefb52bc789"
+    },
+    {
+      "path": "templates/yootheme/css/theme.12.rtl.css",
+      "bytes": 479540,
+      "sha256": "fa763335cff16b4812495f95f9e37c4f9f858e2f8c1b0d9e0baef8e3e76f960a"
+    }
+  ]
+}

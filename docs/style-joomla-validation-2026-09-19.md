@@ -70,3 +70,12 @@ aquí la prova de lliurament són els hashes HTTP i la relectura.
 
 El clon queda aturat en acabar, amb `fuse` i la correcció conservats per reproduir
 la prova. Còpies i runners auxiliars: `/root/mirasai-style-20260919/`.
+
+## Verificació del paquet 0.10.1
+
+En preparar la release s'ha instal·lat el ZIP complet `pkg_mirasai-0.10.1.zip`
+amb l'instal·lador CLI de Joomla, executat com a `www-data`: instal·lació correcta.
+`system/diagnose` per HTTP retorna `mirasai_version=0.10.1`. La mateixa prova
+d'integració s'ha repetit després d'inicialitzar de nou la fixture aïllada i
+passen totes les comprovacions. Vegeu
+[l'evidència del paquet](qa/style-joomla-2026-09-19/release-package-evidence.json).
