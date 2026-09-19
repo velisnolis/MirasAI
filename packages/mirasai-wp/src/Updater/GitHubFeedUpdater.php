@@ -8,13 +8,21 @@ class GitHubFeedUpdater
 {
     private const SLUG = 'mirasai';
     private const FEED_CACHE_KEY = 'mirasai_wp_update_feed';
-    private const FEED_CACHE_TTL = 6 * HOUR_IN_SECONDS;
+    private const FEED_CACHE_TTL = HOUR_IN_SECONDS;
+    private const DOWNLOAD_TIMEOUT = 300;
 
     public static function register(): void
     {
         add_filter('pre_set_site_transient_update_plugins', [self::class, 'checkForUpdates']);
         add_filter('plugins_api', [self::class, 'pluginInformation'], 10, 3);
+        add_filter('upgrader_pre_download', [self::class, 'verifyPackageDownload'], 10, 4);
         add_action('upgrader_process_complete', [self::class, 'clearCache']);
+        // Anything that throws away the update_plugins transient (wp-admin, WP-CLI
+        // `wp transient delete update_plugins --network`, wp_clean_plugins_cache())
+        // wants a fresh check, so the feed cache must not outlive it.
+        add_action('delete_site_transient_update_plugins', [self::class, 'clearCache']);
+        // "Check again" on Dashboard > Updates. Runs before core's wp_update_plugins (priority 10).
+        add_action('load-update-core.php', [self::class, 'clearCacheOnForcedCheck'], 1);
     }
 
     /**
@@ -85,6 +93,97 @@ class GitHubFeedUpdater
         delete_site_transient(self::FEED_CACHE_KEY);
     }
 
+    public static function clearCacheOnForcedCheck(): void
+    {
+        if (!empty($_GET['force-check'])) {
+            self::clearCache();
+        }
+    }
+
+    /**
+     * Downloads this plugin's release ZIP and refuses it unless it matches the
+     * sha256 published in the update feed. Other packages are left untouched.
+     *
+     * @param mixed $reply
+     * @param mixed $package
+     * @param mixed $upgrader
+     * @param mixed $hookExtra
+     * @return mixed
+     */
+    public static function verifyPackageDownload($reply, $package, $upgrader = null, $hookExtra = [])
+    {
+        if ($reply !== false || !is_string($package) || !preg_match('#^https?://#i', $package)) {
+            return $reply;
+        }
+
+        $expected = self::expectedChecksum($package);
+        $isOwnPlugin = is_array($hookExtra) && ($hookExtra['plugin'] ?? null) === self::pluginBasename();
+
+        if ($expected === null && !$isOwnPlugin) {
+            return $reply;
+        }
+
+        if ($expected === null || preg_match('/^[a-f0-9]{64}$/', $expected) !== 1) {
+            return new \WP_Error(
+                'mirasai_package_checksum_missing',
+                'MirasAI update refused: the update feed has no valid sha256 for this package.'
+            );
+        }
+
+        if (is_object($upgrader) && isset($upgrader->skin) && is_object($upgrader->skin) && method_exists($upgrader->skin, 'feedback')) {
+            $upgrader->skin->feedback('downloading_package', $package);
+        }
+
+        if (!function_exists('download_url')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        $file = download_url($package, self::DOWNLOAD_TIMEOUT);
+        if (is_wp_error($file)) {
+            return $file;
+        }
+
+        $actual = hash_file('sha256', $file);
+        if (!is_string($actual) || !hash_equals($expected, strtolower($actual))) {
+            @unlink($file);
+
+            return new \WP_Error(
+                'mirasai_package_checksum_mismatch',
+                sprintf(
+                    'MirasAI update refused: package sha256 %s does not match the update feed (%s).',
+                    is_string($actual) ? $actual : 'unavailable',
+                    $expected
+                )
+            );
+        }
+
+        return $file;
+    }
+
+    /**
+     * Returns null when the package is not one of ours, and '' when it is ours
+     * but no checksum was published. The feed is checked first; the
+     * update_plugins entry covers an offer built from an older feed that has
+     * since moved on to a newer release.
+     */
+    private static function expectedChecksum(string $package): ?string
+    {
+        $feed = self::fetchFeed();
+        if ($feed !== null && (string) ($feed['download_url'] ?? '') === $package) {
+            return strtolower(trim((string) ($feed['sha256'] ?? '')));
+        }
+
+        $updates = get_site_transient('update_plugins');
+        $offer = is_object($updates) && isset($updates->response) && is_array($updates->response)
+            ? ($updates->response[self::pluginBasename()] ?? null)
+            : null;
+        if (is_object($offer) && ($offer->package ?? '') === $package) {
+            return strtolower(trim((string) ($offer->sha256 ?? '')));
+        }
+
+        return null;
+    }
+
     /**
      * @param array<string, mixed> $feed
      */
@@ -96,6 +195,7 @@ class GitHubFeedUpdater
             'new_version' => (string) ($feed['version'] ?? MIRASAI_WP_VERSION),
             'url' => (string) ($feed['homepage'] ?? 'https://github.com/velisnolis/MirasAI'),
             'package' => (string) ($feed['download_url'] ?? ''),
+            'sha256' => (string) ($feed['sha256'] ?? ''),
             'requires' => (string) ($feed['requires'] ?? '6.0'),
             'tested' => (string) ($feed['tested'] ?? ''),
             'requires_php' => (string) ($feed['requires_php'] ?? '8.0'),
