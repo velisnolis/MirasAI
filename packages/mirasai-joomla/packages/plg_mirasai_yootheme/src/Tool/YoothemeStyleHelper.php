@@ -594,6 +594,11 @@ class YoothemeStyleHelper
         $paramsConfig = is_string($params['config'] ?? null)
             ? json_decode($params['config'], true)
             : null;
+        // A newly installed YOOtheme template can have no config yet. Match
+        // loadConfig() for this empty state, but keep malformed data rejected.
+        if (!array_key_exists('config', $params) || $params['config'] === '') {
+            $paramsConfig = [];
+        }
         if (!is_array($paramsConfig) || $paramsConfig !== $writeConfig) {
             foreach ($staged as $temporary) {
                 @unlink($temporary);
