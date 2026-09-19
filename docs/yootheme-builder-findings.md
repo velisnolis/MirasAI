@@ -257,6 +257,13 @@ Aplicada el 2026-08-17. F-001 a F-004 a `core-builder.md`, F-005 a F-009 a
 `html-uikit-and-css.md`, F-010 i F-011 a `mirasai-runtime.md`. F-012 a memòria,
 perquè no és de YOOtheme. El `SKILL.md` recull la convenció del registre.
 
+2026-09-19, F-024 a F-035 (llucsanchez.com):
+- A `yootheme-builder-ops`, workflow 1 i «Capçalera, logo i peu»: F-024 a F-028.
+- A `core-builder.md`: F-029.
+- A `html-uikit-and-css.md`: F-029 a F-034.
+- A `mirasai-runtime.md`: F-027, F-034 i F-035.
+F-022 i F-023 (del 19/08) ja eren a `html-uikit-and-css.md` («Scrollspy Animations»).
+
 Skill d'operació live el 2026-08-18: canònic
 `~/.codex/skills/yootheme-builder-ops` (mateixos enllaços que
 `yootheme-layout-json`). Recull casos de clone+rebind en aquest fitxer.
@@ -585,3 +592,240 @@ sol canvi, i només els seus `terms`.
 **Regla accionable.** Després de clonar i rebindejar, no et refiïs de mirar la
 pàgina: compara els arguments de totes les fulles que comparteixen `query_path`
 a la secció copiada. Un rebind a mitges no es queixa mai.
+
+### F-022
+
+**Data:** 19/08/2026 · **Versió:** YOOtheme Pro 5.0.40, UIkit 3.25.21 · **CMS:** WordPress
+
+**Símptoma.** S'aplica el prop natiu `animation` a un conjunt de seccions. En
+comprovar-ho al DOM, dues seccions no tenen `uk-scrollspy` i sembla que l'escriptura
+hi hagi fallat. Els props, però, hi són desats correctament.
+
+**Causa verificada.** Les dues seccions tenen imatge de fons. A
+`packages/builder/elements/section/templates/template.php` la línia 9 bifurca segons
+`$props['image'] || $props['video']`, i amb imatge la secció renderitza un embolcall
+exterior addicional. El `uk-scrollspy` que posa la línia 62 va damunt d'aquest
+embolcall, i la classe `uk-section` baixa a un node interior. Buscar l'atribut amb
+`.uk-section[uk-scrollspy]` no el troba mai. L'animació funciona perfectament.
+
+**Regla accionable.** No verificar la presència de `uk-scrollspy` filtrant per
+`.uk-section`. Comptar `document.querySelectorAll('[uk-scrollspy]')` i comparar amb
+el nombre de seccions amb el prop desat. És la mateixa família que F-008: consultar
+el nivell de DOM equivocat.
+
+**Segona causa de descompte.** Una secció amb `status: "disabled"` conserva els props
+i accepta escriptures, però no renderitza. Sortiran menys scrollspy que seccions
+escrites sense que hi hagi cap error.
+
+### F-023
+
+**Data:** 19/08/2026 · **Versió:** UIkit 3.25.21 · **CMS:** indiferent
+
+**Símptoma.** Cap. Precisament aquest és el problema: les animacions d'entrada
+`uk-animation-*` es reprodueixen igualment per a qui té activat «reduir moviment»
+al sistema, i res no ho delata si no es busca.
+
+**Causa verificada.** UIkit 3.25.21 no inclou cap `@media (prefers-reduced-motion:
+reduce)` per a les seves animacions. Comprovat enumerant `document.styleSheets` del
+site: les úniques regles dins d'aquell media query provenien de la barra
+d'administració de WordPress i de Contact Form 7.
+
+**Regla accionable.** En qualsevol projecte que activi animacions d'scrollspy de
+YOOtheme, afegir la guarda al Less personalitzat. No n'hi ha prou d'anul·lar
+`animation`: scrollspy amaga l'objectiu amb opacitat fins que entra a la finestra,
+de manera que cal forçar també `opacity: 1` i `transform: none` als elements amb
+`[uk-scrollspy-class]`. Sense això el risc no és que es vegi lleig, és deixar
+contingut invisible.
+
+## 2026-09-19 · YOOtheme Pro 5.0.43 · WordPress · llucsanchez.com
+
+Projecte: portada nova (pàgina 9) construïda des d'una maqueta HTML aprovada,
+amb elements natius via MirasAI 0.10.1 (`mcp2cli` contra el router local), Style
+Line Gallery `white-green` compilat pel router, capçalera i peu de YOOtheme.
+Tema fill `yootheme-child`. Les rutes de template són relatives a
+`wp-content/themes/yootheme/`.
+
+### F-024 · `element-add` accepta un subarbre sencer
+
+**Símptoma.** Cap. És una manera de treballar que la documentació no deia i que
+estalvia molt: el primer pla era afegir fila, columnes i elements un per un.
+
+**Evidència.** `template/element-add` amb `element` =
+`section > row > column > elements`, i fins a tres nivells de fills, passa el
+dry-run i escriu tot l'arbre. Set seccions (63 elements) en 14 crides (dry-run +
+confirmació per secció). `template/read mode=outline` després ho confirma: cada
+`section[i]` té els fills esperats. El help ho diu en una línia («props and
+children are optional»).
+
+**Regla accionable.** Per construir una pàgina nova, genera cada secció completa
+i fes una escriptura per secció. Rellegeix l'etag entre seccions: cada escriptura
+el canvia.
+
+### F-025 · Una pàgina nova no té layout i `element-add` no la pot crear
+
+**Símptoma.** `template/read` i `element-add` sobre una pàgina acabada de crear
+amb WP-CLI tornen `post_layout_missing`.
+
+**Causa verificada.** `packages/mirasai-wp/src/Tool/YoothemeWpHelper.php`:
+`loadPostLayout()` (l. 335) busca a la meta de YOOtheme i, si no, un comentari
+`<!-- {json} -->` a `post_content` (`extractCommentLayout()`, l. 480). Una
+pàgina buida no té cap de les dues coses. `writePostLayout()` només substitueix
+un comentari existent: no en crea cap.
+
+**Regla accionable.** Només en una pàgina nova i buida, escriu primer
+`<!-- {"type":"layout","children":[],"version":"<versió YOOtheme>"} -->` a
+`post_content` (`wp post update <id> --post_content=…`) i, després, construeix
+amb `element-add` des de `root`. Recorda F-011: l'HTML renderitzat de
+`post_content` queda buit fins que algú desa la pàgina al Builder.
+
+### F-026 · Una escriptura sense resposta pot no haver passat
+
+**Símptoma.** La setena `element-add` torna `remote_tool_call_failed: Host … could
+not be reached: fetch failed` després de sis escriptures correctes.
+
+**Evidència.** El `template/read` posterior mostra sis seccions: aquesta no s'havia
+escrit. En un altre cas podria haver-se escrit sense arribar la resposta.
+
+**Regla accionable.** Davant un error de transport en una escriptura, no
+reintentis a cegues: rellegeix l'esquema i reenvia només el que falti.
+
+### F-027 · Capçalera, logo i peu viuen al `config` de l'Style, però no són Style
+
+**Símptoma.** `template/list` no mostra el peu (Footer Builder), i la norma
+«no escriure `theme_mods` via WP-CLI» empeny a posar-lo en un widget de
+`bottom`, que no és on va.
+
+**Causa verificada.**
+- El Footer Builder es renderitza des de `config.footer.content`, un objecte
+  `layout` (`footer.php`, l. 32-34; `packages/theme/updates.php`, l. 172 l'esborra
+  si no té `children`).
+- El logo de text és `config.logo.text` (`templates/header-logo.php`, l. 69), per
+  a escriptori i mòbil.
+- La frescor de l'Style només depèn de `style`, `less` i `custom_less`
+  (`packages/mirasai-wp/src/Tool/YoothemeStyleHelper.php`, `configHash()`,
+  l. 460). Canviar `logo` o `footer` mou l'etag, però no fa l'Style `stale`:
+  verificat, `config_freshness` segueix sent `fresh` després de tots dos canvis.
+
+**Regla accionable.** Les claus del `config` que no són Style es poden editar
+amb WP-CLI: còpia de `theme_mods_<stylesheet>` (conté `yootheme_apikey`, desa-la
+amb `chmod 600`), `json_decode`, modificar només la clau, `wp_json_encode`,
+`set_theme_mod`, i comprovar que la resta de claus són idèntiques. La prohibició
+de WP-CLI es manté per a `style`, `less` i `custom_less`. MirasAI encara no
+té cap eina per a `footer.content`.
+
+### F-028 · Sense menú ni logo, YOOtheme no pinta la capçalera
+
+**Símptoma.** La pàgina comença directament pel hero: no hi ha `.tm-header` al DOM.
+
+**Evidència.** Abans d'assignar el menú, el DOM no tenia `.tm-header`, i tant
+`config.header` com `config.logo` eren `null`. Després de `wp menu location assign
+<menu> navbar` apareixen `.tm-header` i `.tm-header-mobile`. `header.php`
+inclou sempre `templates/header`: la condició que el deixa buit no s'ha
+localitzat línia a línia.
+
+**Regla accionable.** Si la capçalera no surt, abans de sospitar del CSS mira
+si hi ha menú assignat a `navbar` o `dialog-mobile` i `logo.text`.
+
+### F-029 · `width_expand` de la secció no fa res amb `width: expand`
+
+**Símptoma.** Secció amb `width: expand` i `width_expand: right` per tenir el text
+alineat al contenidor i la foto a sang a la dreta: surt `uk-container-expand` a
+les dues bandes.
+
+**Causa verificada.** `packages/builder/elements/section/templates/template.php`,
+l. 164: `'uk-container-expand-{width_expand} {@width} {@!width:expand}'`. La
+classe d'expansió cap a un costat només s'emet quan `width` NO és `expand`.
+El mateix passa amb `padding_remove_horizontal` (l. 163).
+
+**Regla accionable.** Per expandir cap a un sol costat: `width: default` (o
+`large`…) i `width_expand: left|right`. Per treure el padding lateral en una
+secció a sang, el prop no serveix amb `width: expand`: cal CSS.
+
+### F-030 · Les utilitats de UIkit porten `!important` i guanyen el Less propi
+
+**Símptoma.** `.ls-intro { padding-bottom: … }` al Custom Less no té efecte: el
+padding calculat és 0.
+
+**Causa verificada.** CSS compilat: `.uk-padding-remove-bottom{padding-bottom:0!important}`
+i `*+.uk-margin{margin-top:20px!important}`. YOOtheme emet aquestes classes des
+dels props `padding_*: none` i `margin_*`.
+
+**Regla accionable.** Si l'espaiat es controla des del Less, no posis el prop
+equivalent al Builder, o porta `!important` al Less. Diagnostica-ho sempre amb
+l'estil calculat, no llegint el Less.
+
+### F-031 · Un contenidor niat perd el padding però la graella no
+
+**Símptoma.** La caixa superposada de la secció de xerrades surt a `left: -30px`
+en mòbil: el text toca la vora de la pantalla o en surt.
+
+**Causa verificada.** Fila amb `width` propi dins d'una secció `width: expand`:
+YOOtheme emet un `.uk-container` dins d'un altre. UIkit:
+`.uk-container .uk-container{padding-left:0;padding-right:0}`, però la
+`.uk-grid` de dins manté el `margin-left` negatiu del gutter.
+
+**Regla accionable.** En aquest patró, retorna el padding al contenidor de
+dins i posa `margin-left: 0` a la seva graella, o evita la fila amb `width`
+dins de secció `expand`.
+
+### F-032 · El `padding-left` d'una columna és la separació de la graella
+
+**Símptoma.** Una columna amb fons (`.ls-fisica { padding: 0 }`) queda enganxada a
+la del costat a escriptori i arriba fins a la vora de la pantalla en mòbil.
+
+**Causa verificada.** A UIkit el gutter de `.uk-grid` és el `padding-left` de cada
+fill més el `margin-left` negatiu de la graella. Mesurat: la columna sense padding
+a `left: 0`; la germana amb el padding per defecte, a `left: 15`
+(`uk-grid-small`).
+
+**Regla accionable.** No posis fons ni padding propi a una columna de graella. Si
+la columna ha de tenir fons, posa'l als elements fills i deixa el
+`padding-left` tal com està.
+
+### F-033 · Hi ha `.uk-grid` dins d'alguns elements
+
+**Símptoma.** `.ls-hero .uk-grid { min-height: … }` estira el bloc de botons fins a
+820 px i envia els botons al peu del hero.
+
+**Causa verificada.** L'element `button` renderitza els seus ítems dins d'un
+`uk-grid` propi (`uk-flex-middle uk-grid-small uk-child-width-auto`). L'element
+`social` també (vist al mateix site).
+
+**Regla accionable.** Per apuntar a la fila del Builder, fes servir el fill directe:
+`.secció > .uk-container > .uk-grid`, mai `.secció .uk-grid`.
+
+### F-034 · El color del text del botó primari depèn de l'estil, no del fons
+
+**Símptoma.** Després de posar `@global-primary-background: #1F3FD4`, els botons
+primaris tenen text `#1B2032` sobre blau: contrast insuficient.
+
+**Causa verificada.**
+`vendor/assets/uikit-themes/master-line-gallery/_import.less`, l. 186:
+`@button-primary-color: @global-color;`. Line Gallery té un primari clar (verd
+a `white-green`) i hi fa anar text fosc.
+
+**Regla accionable.** Després de canviar `@global-primary-background`, comprova el
+contrast dels botons primaris (i de l'offcanvas i les seccions `primary`) al
+DOM. Corregeix-ho amb `@button-primary-color` o amb Custom Less. Una comprovació
+automàtica de contrast per `getComputedStyle` sobre tots els textos visibles ho
+detecta en una passada.
+
+### F-035 · Custom Less: validar-lo en local abans d'enviar-lo
+
+**Símptoma.** `mirasai/style-update` falla amb `media definitions require block
+statements after any features in custom code`, sense número de línia. Dues vegades
+l'error ni tan sols es va veure: la sortida de `mcp2cli` va morir abans.
+
+**Causa verificada.**
+- Un comentari `//` posat a mig línia al Custom Less (`… ; // nota padding-right: …; }`)
+  es menja la resta de la línia, clau de tancament inclosa. El compilador
+  només ho detecta al final del fitxer.
+- `mcp2cli` falla amb `[Errno 35] write could not complete without blocking` quan
+  la resposta és gran (≈600 KB en un error de compilació, que inclou CSS) i la
+  sortida és una pipe. Amb la sortida a fitxer no passa.
+
+**Regla accionable.** Compila el Custom Less en local abans de cada `style-update`
+(`npx -p less@4 lessc custom.less > /dev/null`): localitza la línia. Comentaris
+de línia només en línia pròpia; dins d'una regla, `/* */`. Redirigeix
+la sortida de `mcp2cli` a fitxer i tracta una resposta sense JSON com a
+resultat desconegut: rellegeix `template/style-read` abans de continuar.
