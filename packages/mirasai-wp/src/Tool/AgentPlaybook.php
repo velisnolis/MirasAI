@@ -14,7 +14,7 @@ namespace Mirasai\WordPress\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     /**
      * Short initialize text. Agents often skip long instructions; the full
@@ -26,7 +26,7 @@ class AgentPlaybook
             'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
             'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
             'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router. Its preview shows a raw Google Fonts @import; the save localizes it, so never infer a write result from a preview.',
         ]);
     }
 
@@ -216,6 +216,18 @@ class AgentPlaybook
     private static function antiLoops(): array
     {
         return [
+            [
+                'id' => 'style_preview_import_not_final',
+                'symptom' => 'The preview CSS has @import url(fonts.googleapis.com) and zero @font-face, so you conclude that applying it would make the site load fonts from Google and you refuse to write.',
+                'cause' => 'Font localization is part of the save, not of the compile. StyleController::save() in YOOtheme and prepareCompiledCss() in MirasAI both call StyleFontLoader::parse() and css() and replace the @import with the @font-face blocks before writing the file.',
+                'fix' => 'Apply it. mirasai/style-update localizes exactly like a Customizer save. Verify by counting @font-face and fonts.googleapis in the SERVED css, never in the preview. The stored file is larger than the compiled bytes the preview reports; that difference is the fonts.',
+            ],
+            [
+                'id' => 'customizer_stale_less_in_open_tab',
+                'symptom' => 'You edit a .less file on disk, save in the Customizer, and the CSS is identical except for the compiled-on header. Saving again changes nothing.',
+                'cause' => 'The Customizer read the Less into browser memory when the tab was opened. Saving recompiles from that copy, not from disk. This is not a server or CDN cache: the file on disk is already correct.',
+                'fix' => 'Reload the tab before saving. To tell this apart from a real compile problem in two minutes, compile the same thing with mirasai/style-preview, which reads from disk: if the router gives the new value and the Customizer the old one, the browser is the stale party. Same class as the Builder holding a layout in memory.',
+            ],
             [
                 'id' => 'customizer_save_noop',
                 'symptom' => 'Customizer save() returns success; CSS compiled-on header unchanged.',

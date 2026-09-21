@@ -829,3 +829,63 @@ l'error ni tan sols es va veure: la sortida de `mcp2cli` va morir abans.
 de línia només en línia pròpia; dins d'una regla, `/* */`. Redirigeix
 la sortida de `mcp2cli` a fitxer i tracta una resposta sense JSON com a
 resultat desconegut: rellegeix `template/style-read` abans de continuar.
+
+### F-036 · La localització de fonts és part de la desada, no de la compilació
+
+**Símptoma.** El CSS que torna `mirasai/style-preview` porta
+`@import url(https://fonts.googleapis.com/...)` i zero `@font-face`, mentre que
+el CSS que serveix el site té els `@font-face` locals i cap crida a Google. Es
+dedueix que aplicar `style-update` faria que el web demanés les fonts a Google
+i es descarta el canal, o es demana a l'humà que desi al Customizer.
+
+**Causa verificada.** La deducció és falsa. El compilador no localitza fonts;
+ho fa qui rep el CSS, just abans d'escriure'l al disc:
+
+- YOOtheme: `packages/styler/src/StyleController.php`, mètode `save()`, crida
+  `StyleFontLoader::parse()` i `::css()` i fa `str_replace($import, $fonts, $data)`.
+- MirasAI: `packages/mirasai-wp/src/Tool/YoothemeStyleHelper.php`, mètode
+  `prepareCompiledCss()`, fa el mateix, amb el comentari «Match YOOtheme's native
+  StyleController::save()», i hi afegeix la mateixa capçalera
+  `/* YOOtheme Pro vX compiled on ... */`.
+
+Mesurat a industriaviva.cat el 21/09/2026 amb YOOtheme 5.0.44: el router va
+enviar **324.074 bytes** amb l'`@import`, i el fitxer servit va quedar en
+**326.385** amb set `@font-face` i zero `fonts.googleapis`. La diferència són
+les fonts, posades pel camí de desada.
+
+**Regla accionable.** `mirasai/style-update` localitza les fonts igual que una
+desada del Customizer; no cal cap pas manual. **No dedueixis el resultat d'una
+escriptura a partir del preview**: el preview ensenya la sortida del compilador,
+no el fitxer final. La verificació bona és comptar `@font-face` i
+`fonts.googleapis` al CSS **servit**. Que el fitxer desat sigui més gran que els
+bytes compilats que reporta el preview és el senyal que la localització ha anat bé.
+
+**Cost de no saber-ho.** El 21/09 es van demanar tres desades manuals a l'usuari
+i es va escriure documentació afirmant el contrari, que després es va haver de
+corregir.
+
+### F-037 · El Customizer recompila des del Less que té a memòria del navegador
+
+**Símptoma.** Canvies un fitxer `.less` al disc, deses al Customizer, i el CSS
+surt idèntic excepte la capçalera `compiled on`. Tornes a desar i passa igual.
+El fitxer del disc és correcte i el compilat no.
+
+**Causa verificada.** El Customizer va llegir el Less a memòria quan es va obrir
+la pestanya, i desar recompila des d'aquella còpia. No és cau del servidor ni
+del CDN. És el mateix problema d'estat en memòria que el Builder conservant un
+layout obert, per una altra porta: els ETags no el veuen perquè no hi ha cap
+escriptura MCP pel mig.
+
+Vist a industriaviva.cat el 21/09/2026: dues desades seguides van produir el
+mateix valor ranci; la tercera, després de recarregar la pestanya, el bo.
+
+**Regla accionable.** Recarrega la pestanya del Customizer abans de desar si
+s'ha tocat cap Less al disc. Per distingir-ho d'un problema de compilació en dos
+minuts, compila el mateix amb `mirasai/style-preview`, que llegeix del disc: si
+el router dona el valor bo i el Customizer el dolent, qui va endarrerit és el
+navegador.
+
+**No confondre amb `customizer_save_noop`.** Allà la capçalera `compiled on`
+**no** canvia perquè `dirty` era fals i `save()` no fa res. Aquí la capçalera
+**sí** que canvia, perquè la compilació passa de debò; el que és vell és
+l'entrada.

@@ -44,7 +44,8 @@ export function createRouterHandler(registry, options = {}) {
           instructions:
             'MirasAI MCP router. This process compiles YOOtheme LESS (mirasai/style-preview, mirasai/style-update, mirasai/style-verify) using each site\'s pinned worker.js. Host HTTP endpoints and mcp2cli pointed at a CMS URL do not compile.\n'
             + 'Call mirasai/host-diagnose (or system/diagnose) and follow playbook before Style work. Builder layouts stay on template/element-*. Style CSS writes use mirasai/style-update here — never Customizer save() and never WP-CLI/SQL config edits.\n'
-            + 'Use mirasai/sites-list, mirasai/sites-test, and pin style_worker_sha256 before compiling.',
+            + 'Use mirasai/sites-list, mirasai/sites-test, and pin style_worker_sha256 before compiling. default_site_id is often another site: pass site_id on every call.\n'
+            + 'Never infer a write result from a preview. style-preview returns the compiler output, with a raw Google Fonts @import and no @font-face; the save localizes it, exactly like a Customizer save. Verify by counting @font-face and fonts.googleapis in the SERVED css.',
         });
       }
 
