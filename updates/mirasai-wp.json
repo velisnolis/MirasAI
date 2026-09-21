@@ -2,17 +2,17 @@
   "name": "MirasAI",
   "slug": "mirasai",
   "plugin": "mirasai-wp/mirasai-wp.php",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "requires": "6.0",
   "tested": "",
   "requires_php": "8.0",
-  "last_updated": "2026-09-19",
+  "last_updated": "2026-09-21",
   "homepage": "https://github.com/velisnolis/MirasAI",
-  "download_url": "https://github.com/velisnolis/MirasAI/releases/download/v0.10.2/mirasai-wp-0.10.2.zip",
-  "sha256": "d87cb2599b63a3008480d3019700c72382c3d5436e2d92ce55d82e24e3e29ab0",
+  "download_url": "https://github.com/velisnolis/MirasAI/releases/download/v0.10.3/mirasai-wp-0.10.3.zip",
+  "sha256": "6428d837c7679ca5d15c0344a6cf787410243a4ac75914c19b258f623ce17077",
   "sections": {
     "description": "MirasAI host endpoint for WordPress. Exposes an MCP-compatible HTTP surface for controlled AI access.",
     "installation": "Install the release ZIP from GitHub, activate MirasAI, then create a WordPress Application Password from the MirasAI dashboard.",
-    "changelog": "See https://github.com/velisnolis/MirasAI/releases/tag/v0.10.2"
+    "changelog": "See https://github.com/velisnolis/MirasAI/releases/tag/v0.10.3"
   }
 }
