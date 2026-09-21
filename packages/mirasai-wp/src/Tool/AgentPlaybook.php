@@ -26,8 +26,7 @@ class AgentPlaybook
             'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
             'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
             'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
-            'Never infer a write result from a preview. Style previews show the raw Google Fonts @import; the save localizes it. Verify the served file.',
+            'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router. Its preview shows a raw Google Fonts @import; the save localizes it, so never infer a write result from a preview.',
         ]);
     }
 

@@ -72,6 +72,8 @@ $requiredJobs = [
     'files_db_sandbox',
 ];
 $requiredLoops = [
+    'style_preview_import_not_final',
+    'customizer_stale_less_in_open_tab',
     'customizer_save_noop',
     'host_style_update_missing_css',
     'stale_sources_false_negative',
@@ -88,7 +90,7 @@ $playbooks = [
 ];
 
 foreach ($playbooks as $platform => $playbook) {
-    expectPlaybook("{$platform} playbook version is 3", $playbook['version'] ?? null, 3);
+    expectPlaybook("{$platform} playbook version is 4", $playbook['version'] ?? null, 4);
     expectPlaybook(
         "{$platform} playbook names host auth as a dependency",
         is_array($playbook['depends_on']['host_http'] ?? null),
@@ -156,7 +158,7 @@ expectPlaybook('WordPress initialize is exactly four invariants', explode("\n", 
     'MirasAI WordPress host. This HTTP endpoint does not compile YOOtheme LESS.',
     'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
     'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router. Its preview shows a raw Google Fonts @import; the save localizes it, so never infer a write result from a preview.',
 ]);
 
 $wpLoops = array_values(array_map(
@@ -181,7 +183,7 @@ expectPlaybook('Joomla initialize is exactly four invariants', explode("\n", $jo
     'MirasAI Joomla host. This HTTP endpoint does not compile YOOtheme LESS.',
     'Call system/diagnose first and follow playbook. Do not use Customizer, WP-CLI, or SQL for YOOtheme Style writes.',
     'Builder layouts: use template/element-* on this host with if_match, dry_run, then confirm_guarded_write.',
-    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router.',
+    'Style CSS: only compile when your tools/list includes mirasai/style-preview; then use mirasai/style-update on the local router. Its preview shows a raw Google Fonts @import; the save localizes it, so never infer a write result from a preview.',
 ]);
 
 $wp = new WordPressMcpHandler(new WordPressToolRegistry());
