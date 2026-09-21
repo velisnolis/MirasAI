@@ -17,6 +17,6 @@
     <maintainer>Alex Miras</maintainer>
     <maintainerurl>https://miras.pro</maintainerurl>
     <targetplatform name="joomla" version="[56]\.[0-9]+"/>
-    <sha256>3bfa397f19e502e99ba6aa710362bf337c487459070fac182d6b13976341da58</sha256>
+    <sha256>52115239742504f389fec80ec4221c65ecd1d28b934d512a16425ab4ba80dfd0</sha256>
   </update>
 </updates>
