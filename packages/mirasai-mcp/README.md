@@ -161,6 +161,8 @@ compiler. Point mcp2cli at `mirasai-mcp serve` (stdio) for Style compile/write.
 Always pass `site_id`; `default_site_id` may be a different site. mcp2cli
 `--dry-run` is `store_true` — omitting it still sends `dry_run=true`. A real
 write needs JSON with `dry_run: false` and `confirm_guarded_write: true`.
+Put `site_id` inside that JSON too: upstream mcp2cli (up to 3.7.0) drops
+every flag, `--site-id` included, when `--stdin` is given.
 See [agent routes after installing MirasAI](../../docs/agent-routes.md).
 
 The WordPress host additionally exposes guarded `template/style-create`. It

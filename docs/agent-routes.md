@@ -61,6 +61,7 @@ Builder JSON and Style `theme.css` are different systems. Changing an element do
 
 - Same as whichever URL or stdio target you passed.
 - `--dry-run` is `store_true`. Omitting it still sends `dry_run=true` to the tool. A real write needs JSON with `dry_run=false` and `confirm_guarded_write=true` (typically `--stdin`).
+- With `--stdin`, put `site_id` inside the JSON body. Upstream mcp2cli (up to 3.7.0) drops every flag, `--site-id` included, when `--stdin` is given, and the router falls back to `default_site_id` without an error.
 
 **SSH**
 

@@ -123,7 +123,8 @@ class AgentPlaybook
                 'do_not_assume' => 'Having mcp2cli does not mean you have the Style compiler.',
                 'cli_gotchas' => [
                     'The --dry-run flag is store_true. Omitting it still sends dry_run=true to the tool. A real write needs JSON with dry_run=false and confirm_guarded_write=true (typically --stdin).',
-                    'Pass --site-id when the router default is not the target site.',
+                    'Pass --site-id on every call; the router default_site_id may be another site.',
+                    'With --stdin, also put site_id inside the JSON body. Upstream mcp2cli (up to 3.7.0) drops every flag, --site-id included, when --stdin is given, and the router then falls back to default_site_id without saying so.',
                 ],
             ],
             'ssh' => [

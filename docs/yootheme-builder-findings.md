@@ -193,6 +193,12 @@ Trampa de CLI verificada: a mcp2cli, `--dry-run` és `store_true` i l'eina
 assumeix `dry_run=true` quan el camp s'omet. Una escriptura real necessita JSON
 per `--stdin` amb `dry_run=false` i `confirm_guarded_write=true`.
 
+Segona trampa (verificada el 23/09, en lectura): amb `--stdin`, mcp2cli 3.7.0
+ignora tots els flags, `--site-id` inclòs, i el router va al
+`default_site_id`. `template/read --site-id industria-viva-wp --stdin` va
+llegir jordifont i va tornar `post_layout_missing`. Posa `site_id` dins del
+JSON.
+
 Conseqüència per a F-010: la recepta del navegador passa a ser l'últim recurs,
 només quan el router no està disponible. La resta del contingut de F-010 (modes
 de fallada silenciosa, verificació pel segell del CSS) segueix sent vàlida i
