@@ -84,7 +84,7 @@ function readCachedOnePassword(reference, site, env, reader, now) {
       return cached.value;
     }
 
-    const value = reader(reference);
+    const value = reader(reference, { site, env, ttlMs });
     secretCache.set(reference, {
       value,
       expires_at: currentTime + ttlMs,
@@ -92,7 +92,7 @@ function readCachedOnePassword(reference, site, env, reader, now) {
     return value;
   }
 
-  return reader(reference);
+  return reader(reference, { site, env, ttlMs });
 }
 
 function secretTtlMs(site, env) {
@@ -106,7 +106,16 @@ function secretTtlMs(site, env) {
   return seconds * 1000;
 }
 
-function readOnePassword(reference) {
+// MIRASAI_MCP_SECRET_READER points at an executable that prints the secret for
+// the reference in argv[1]. It lets short-lived CLI processes share a persistent
+// cache instead of prompting 1Password on every run; the in-process cache above
+// only helps a long-lived server.
+function readOnePassword(reference, { site, env = process.env, ttlMs } = {}) {
+  const external = env.MIRASAI_MCP_SECRET_READER;
+  if (typeof external === 'string' && external !== '') {
+    return readExternal(external, reference, site, env, ttlMs);
+  }
+
   try {
     return execFileSync('op', ['read', reference], {
       encoding: 'utf8',
@@ -115,5 +124,26 @@ function readOnePassword(reference) {
   } catch (error) {
     const message = error.stderr?.toString?.().trim() || error.message;
     throw new Error(`Could not resolve 1Password reference ${reference}: ${message}`);
+  }
+}
+
+function readExternal(command, reference, site, env, ttlMs) {
+  const childEnv = { ...env, MIRASAI_MCP_SECRET_SITE_ID: site?.site_id ?? '' };
+  if (ttlMs !== undefined) {
+    childEnv.MIRASAI_MCP_SECRET_TTL_SECONDS = String(Math.floor(ttlMs / 1000));
+  }
+
+  try {
+    const value = execFileSync(command, [reference], {
+      encoding: 'utf8',
+      env: childEnv,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    }).trim();
+    if (value === '') {
+      throw new Error('reader returned an empty value');
+    }
+    return value;
+  } catch (error) {
+    throw new Error(`Could not resolve ${reference} via MIRASAI_MCP_SECRET_READER: ${error.message}`);
   }
 }
