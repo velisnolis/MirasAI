@@ -56,6 +56,20 @@ The WordPress admin dashboard includes a compact onboarding surface for:
   current domain and exposes `sandbox/execute-php` only while the domain lock
   matches.
 
+## Post-update checks
+
+Panopticon calls these routes around a manual update. They are plain REST routes, not MCP tools.
+
+```text
+POST /wp-json/mirasai/v1/checks/logs
+POST /wp-json/mirasai/v1/checks/logs/compare   {"cursor": "..."}
+POST /wp-json/mirasai/v1/checks/cache/purge
+```
+
+- **Auth:** any user with `manage_options`. The Panopticon connector's token logs in an administrator on every REST request, so the panel needs no second secret.
+- **Logs:** new entries since a signed cursor in `error_log`, `wp-admin/error_log`, `wp-content/debug.log` and the file `error_log` in php.ini points to, wherever it is. Counts only: never a message or a path. A new fatal is an `issue`; other levels are only counted, because busy sites log them on ordinary requests. `covered: false` means PHP does not write to any of them.
+- **Cache:** empties WP Rocket, IONOS Performance and the object cache. A non-empty `advanced-cache.php` that nothing here can empty is reported as `unsupported`, so the check says its pages may be stale.
+
 ## Current Tools
 
 - `system/info`

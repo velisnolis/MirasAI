@@ -93,6 +93,9 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpHandler.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/RestController.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Admin/DashboardPage.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Updater/GitHubFeedUpdater.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Checks/LogReader.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Checks/CachePurger.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Checks/ChecksController.php';
 
 \Mirasai\WordPress\Admin\DashboardPage::register();
 \Mirasai\WordPress\Updater\GitHubFeedUpdater::register();
@@ -102,4 +105,5 @@ add_action('rest_api_init', static function (): void {
     $handler = new \Mirasai\WordPress\Mcp\McpHandler($registry);
     $controller = new \Mirasai\WordPress\Mcp\RestController($handler);
     $controller->registerRoutes();
+    (new \Mirasai\WordPress\Checks\ChecksController())->registerRoutes();
 });
