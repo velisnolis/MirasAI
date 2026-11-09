@@ -24,6 +24,12 @@ require_once $root . '/packages/mirasai-wp/src/Tool/PublicPageInspector.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/YoothemeLayoutProcessor.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/YoothemeElementNavigator.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/TemplateRenderCheckTool.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ToolInterface.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/AbstractTool.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/PublicPageInspector.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ContentLayoutProcessorInterface.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/YooThemeLayoutProcessor.php';
+require_once $root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/TemplateRenderCheckTool.php';
 
 use Mirasai\WordPress\Tool\TemplateRenderCheckTool as R;
 use Mirasai\WordPress\Tool\YoothemeElementNavigator;
@@ -100,6 +106,19 @@ check($s['elements'] === [] && $s['not_rendered'] === ['root>section[0]'], 'an e
 $long = (object) ['type' => 'layout', 'props' => ['mirasai_path' => 'root'], 'children' => [(object) ['type' => 'text', 'props' => ['mirasai_path' => 'root>text[0]', 'content' => str_repeat('a', 400)]]]];
 $s = R::summarize($long, ['root>text[0]'], []);
 check(mb_strlen($s['elements'][0]['text']) === 301, 'long text cut at 300 characters');
+
+// Joomla mirrors the same marking and summary.
+$JR = \Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateRenderCheckTool::class;
+$jMarked = $layout;
+$jPaths = [];
+$JR::mark($jMarked, 'root', $jPaths);
+check($jMarked === $marked && $jPaths === $paths, 'joomla: same marks and paths as wordpress');
+check($JR::summarize($tree, $paths, ['visible ara', 'Dins la graella', 'equip']) === R::summarize($tree, $paths, ['visible ara', 'Dins la graella', 'equip']), 'joomla: same summary as wordpress');
+check($JR::summarize($repeat, ['root>text[0]'], ['B']) === R::summarize($repeat, ['root>text[0]'], ['B']), 'joomla: same summary for repeated elements');
+check(\Mirasai\Library\Tool\YooThemeLayoutProcessor::TEXT_PROPS === \Mirasai\WordPress\Tool\YoothemeLayoutProcessor::TEXT_PROPS, 'joomla: same text props as wordpress');
+$jt = (new \ReflectionClass($JR))->newInstanceWithoutConstructor();
+check(($jt->toMcpTool()['metadata']['risk_level'] ?? null) === 'read', 'joomla: read-only');
+check(array_keys($jt->getInputSchema()['properties']) === ['key', 'article_id', 'context_id', 'expect', 'offset', 'limit'], 'joomla: key or article_id, no module_id');
 
 echo $fails === 0 ? "OK: $count checks\n" : "$fails of $count checks failed\n";
 exit($fails === 0 ? 0 : 1);

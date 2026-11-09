@@ -14,8 +14,8 @@ namespace Mirasai\Library\Tool;
  */
 class YooThemeLayoutProcessor implements ContentLayoutProcessorInterface
 {
-    /** @var list<string> */
-    private const TEXT_PROPS = [
+    /** @var list<string> Also read by TemplateRenderCheckTool. */
+    public const TEXT_PROPS = [
         'content', 'title', 'meta', 'subtitle', 'text', 'video_title',
         'link_text', 'label', 'description', 'caption', 'alt',
         'button_text', 'heading', 'footer', 'header', 'placeholder',

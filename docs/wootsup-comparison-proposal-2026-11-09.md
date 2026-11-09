@@ -184,7 +184,7 @@ del client.
 | --- | --- |
 | 1.1 `site/public-fetch` | fet i provat als dos hosts: proves locals i webs de proves reals (vegeu «Validació») |
 | 1.2 `site/cache-purge` | fet i provat als dos hosts (vegeu «Validació») |
-| 1.3 `template/render-check` | fet i provat a WordPress; falta Joomla (cal YOOtheme a `provesjoomla`) |
+| 1.3 `template/render-check` | fet i provat als dos hosts (vegeu «Validació») |
 | 1b `template/create` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | pendent |
@@ -349,7 +349,7 @@ El flux d'un agent, als dos webs de proves: `template/list` (per al
 `collection_etag`) → previsualització → creació → `template/element-add` amb
 l'ETag retornat → comprovació.
 
-| | WordPress (`proveswp`) | Joomla (`provesjoomla`, YOOtheme 5.0.18) |
+| | WordPress (`proveswp`) | Joomla (`provesjoomla`, YOOtheme 5.0.18 en aquesta prova) |
 | --- | --- | --- |
 | Tipus | `single-post` | `com_content.article` |
 | Clau generada | `mirasai_…` (`generateStorageKey()` del host) | 8 caràcters (`generateStorageKey()` del host) |
@@ -365,3 +365,35 @@ WordPress, l'emmagatzematge de YOOtheme (`Storage`) la llegeix i el seu
 
 L'eina no activa plantilles ni hi posa condicions (`query`): això canvia el que
 veuen els visitants i queda per a un segon pas, amb previsualització.
+
+### 1.3 `template/render-check`, Joomla, 2026-11-09
+
+`provesjoomla` té ara YOOtheme 5.0.54, instal·lat amb la clau del servidor
+(1Password, «YOOtheme API Key (server.miras.pro)»). El paquet es va comprovar amb
+el SHA-256 del feed, i la clau queda al lloc d'actualitzacions del web, com a la
+resta de Joomla del servidor.
+
+Diferències amb WordPress, comprovades amb un spike (eina temporal, ja retirada):
+
+- **YOOtheme no arrenca a l'aplicació API.** `template_bootstrap.php` només el
+  carrega per al client `site` o per a uns quants components. L'eina el carrega
+  amb el mateix `bootstrap.php` i el mateix conjunt de paquets. Després, la
+  resposta MCP surt igual.
+- **Les fonts d'article llegeixen l'article dels paràmetres del render**
+  (`article`, `template => com_content.article`), no de globals.
+- **Visitant:** `loadIdentity(null)` falla a l'API (`UserFactory not set`); es fa
+  amb `loadIdentity(new User())` i es restaura la identitat després.
+
+Proves:
+
+| Cas | Resultat |
+| --- | --- |
+| Plantilla `com_content.article` amb `context_id=1` | titular fix i titular lligat al títol («Prova SocialMagick: à, è, í i una imatge») als seus paths |
+| La mateixa sense context | només el titular fix, amb la nota |
+| Article 2 amb layout propi | els dos titulars; el desactivat a `not_rendered`; coincideix amb `site/public-fetch` |
+| `context_id` en un article, plantilla inexistent, article sense layout | `context_only_for_templates`, `template_not_found`, `article_layout_missing` |
+
+Material de proves que queda a `provesjoomla`: l'article 2 té un layout de
+YOOtheme al `fulltext`, que abans era buit. Per restaurar-lo:
+``UPDATE jos_content SET `fulltext`='' WHERE id=2`` (nota a
+`~provesjoomla/mirasai-test/article2-restore.txt`).

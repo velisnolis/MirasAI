@@ -30,6 +30,7 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleSourcesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleUpdateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateCreateTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateRenderCheckTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateTranslateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\ThemeExtractToModulesTool;
 
@@ -102,6 +103,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read',
             'template/translate',
             'template/create',
+            'template/render-check',
         ];
     }
 
@@ -132,6 +134,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read'                 => new TemplateReadTool(),
             'template/translate'            => new TemplateTranslateTool(),
             'template/create'               => new TemplateCreateTool(),
+            'template/render-check'         => new TemplateRenderCheckTool(),
             default                         => throw new \InvalidArgumentException("Unknown tool: {$name}"),
         };
     }
