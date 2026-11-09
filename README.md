@@ -325,7 +325,8 @@ Common workflow:
 
 `template/create` adds a new template switched off; fill it with
 `template/element-add`. `template/set-status` switches it on or off and
-`template/move` changes the order YOOtheme checks templates in; both preview
+`template/move` changes the order YOOtheme checks templates in (and
+`template/duplicate` copies one, switched off); both preview
 which template wins for that type (`shadowed_by`, `takes_over_from`).
 `template/audit` with `scope: "site"` audits every layout at once.
 

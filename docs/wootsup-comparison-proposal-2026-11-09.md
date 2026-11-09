@@ -558,3 +558,11 @@ tret els comentaris.
 Provat a `proveswp` (pàgina amb layout propi → `own_layout` i id 5; entrada amb
 la plantilla activada → `template` i la clau exacta; sense plantilla → `null`)
 i a `provesjoomla` (article 2 → `own_layout`).
+
+### Duplicar plantilles
+
+`template/duplicate` (`guarded_write`, `collection_etag`): còpia amb el tipus,
+les condicions, els paràmetres i el layout, desactivada i just darrere de
+l'original; nom per defecte «<original> (copy)». Provat als dos hosts: la
+còpia té els mateixos elements que l'original (11/11 a WordPress, 12/12 a
+Joomla) i el visitant no veu cap canvi.

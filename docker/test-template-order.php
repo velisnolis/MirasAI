@@ -58,6 +58,10 @@ foreach (['wordpress' => \Mirasai\WordPress\Tool\TemplateOrder::class, 'joomla' 
     check(array_keys($O::moved($templates, 'all', 1)) === ['news', 'page', 'all', 'new', 'old'], "$host: moving to its own place changes nothing");
     check(array_keys($O::moved($templates, 'old', 1)) === ['news', 'page', 'old', 'all', 'new'], "$host: moved between two of its type");
 
+    $dup = $O::duplicated($templates, 'news', 'news2', 'Notícies (copy)');
+    check(array_keys($dup) === ['news', 'news2', 'page', 'all', 'new', 'old'], "$host: the copy goes right after the original");
+    check($dup['news2'] === ['name' => 'Notícies (copy)', 'type' => 'single-post', 'query' => ['terms' => ['5']], 'status' => 'disabled'] && $dup['news'] === $templates['news'], "$host: copy keeps type and conditions, is switched off; original unchanged");
+
     $narrow = $O::withStatus(['a' => ['type' => 'x', 'query' => ['lang' => 'ca']], 'b' => ['type' => 'x']], 'a', true);
     $d = $O::describe($narrow, 'a');
     check($d['applies'] === 'to the pages its conditions match' && $d['takes_over_from'] === [['key' => 'b', 'pages' => 'those matching both']], "$host: a template with conditions takes only the matching pages");

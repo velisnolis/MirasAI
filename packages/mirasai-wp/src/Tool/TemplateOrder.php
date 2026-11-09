@@ -49,6 +49,30 @@ final class TemplateOrder
     }
 
     /**
+     * A switched-off copy of one template, with its type, conditions, params and layout, placed right after it.
+     *
+     * @param array<string, mixed> $templates storage order
+     * @return array<string, mixed>
+     */
+    public static function duplicated(array $templates, string $key, string $newKey, string $name): array
+    {
+        $copy = $templates[$key];
+        $copy['name'] = $name;
+        $copy['status'] = 'disabled';
+        $result = [];
+
+        foreach ($templates as $k => $template) {
+            $result[$k] = $template;
+
+            if ((string) $k === $key) {
+                $result[$newKey] = $copy;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Move one template to a position among the templates of its own type (0 = checked first).
      *
      * @param array<string, mixed> $templates storage order

@@ -88,6 +88,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateOrder.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTemplateOrderTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateSetStatusTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateMoveTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateDuplicateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateWidgetTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleSourcesTool.php';

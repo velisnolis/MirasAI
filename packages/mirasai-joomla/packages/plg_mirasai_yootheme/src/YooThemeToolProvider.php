@@ -30,6 +30,7 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleSourcesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleUpdateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateCreateTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateDuplicateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateMoveTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSetStatusTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateAuditTool;
@@ -108,6 +109,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/create',
             'template/set-status',
             'template/move',
+            'template/duplicate',
             'template/render-check',
             'template/audit',
         ];
@@ -142,6 +144,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/create'               => new TemplateCreateTool(),
             'template/set-status'           => new TemplateSetStatusTool(),
             'template/move'                 => new TemplateMoveTool(),
+            'template/duplicate'            => new TemplateDuplicateTool(),
             'template/render-check'         => new TemplateRenderCheckTool(),
             'template/audit'                => new TemplateAuditTool(),
             default                         => throw new \InvalidArgumentException("Unknown tool: {$name}"),
