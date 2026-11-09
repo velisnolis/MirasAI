@@ -121,6 +121,29 @@ foreach ([\Mirasai\WordPress\Tool\TemplateAuditTool::class, \Mirasai\Plugin\Mira
     unlink($tmp . '/images/a b.jpg'); rmdir($tmp . '/images'); rmdir($tmp);
 }
 
+// scope=site: worst layouts first, clean ones only counted, findings capped.
+$site = [
+    ['selector' => ['key' => 'clean'], 'label' => 'Net', 'layout' => $col([['type' => 'headline', 'props' => ['content' => 'Títol']]])],
+    ['selector' => ['post_id' => 7], 'label' => 'Avisos', 'layout' => $col([['type' => 'headline', 'props' => ['content' => 'A', 'title_element' => 'h2']], ['type' => 'headline', 'props' => ['content' => 'B', 'title_element' => 'h4']]])],
+    ['selector' => ['key' => 'bad'], 'label' => 'Errors', 'layout' => $col([
+        ['type' => 'headline', 'props' => ['content' => 'T']],
+        ['type' => 'grid', 'children' => []], ['type' => 'slideshow', 'children' => []],
+        ['type' => 'image', 'props' => ['image' => 'images/missing.jpg']],
+    ])],
+];
+$reports = [];
+foreach ([[\Mirasai\WordPress\Tool\TemplateAuditTool::class, \Mirasai\WordPress\Tool\YoothemeLayoutAuditor::class], [\Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateAuditTool::class, \Mirasai\Plugin\Mirasai\Yootheme\Tool\YoothemeLayoutAuditor::class]] as [$T, $A]) {
+    $r = $T::siteReport(new $A($def, $files), $site, 2);
+    $reports[] = $r;
+    check($r['scope'] === 'site' && $r['layouts_audited'] === 3 && $r['layouts_clean'] === 1, "$T: audited and clean counts");
+    check(array_column($r['layouts'], 'label') === ['Errors', 'Avisos'], "$T: worst layout first, clean one left out");
+    check($r['layouts'][0]['key'] === 'bad' && $r['layouts'][1]['post_id'] === 7, "$T: each row keeps its selector");
+    check(count($r['layouts'][0]['findings']) === 2 && $r['layouts'][0]['more_findings'] === 2 && $r['layouts'][0]['findings'][0]['severity'] === 'error', "$T: findings capped, worst first, rest counted");
+    check($r['totals'] === ['error' => 3, 'warning' => 2, 'notice' => 1], "$T: totals over every layout");
+    check($T::siteReport(new $A($def, $files), [], 5)['layouts'] === [], "$T: no layouts, no rows");
+}
+check($reports[0] === $reports[1], 'site report is the same on both hosts');
+
 $wp = file_get_contents($root . '/packages/mirasai-wp/src/Tool/YoothemeLayoutAuditor.php');
 $joomla = file_get_contents($root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/YoothemeLayoutAuditor.php');
 $strip = static fn (string $s): string => preg_replace(['/^namespace .*$/m', '/^ \* Mirrored in .*$/m'], '', $s);
