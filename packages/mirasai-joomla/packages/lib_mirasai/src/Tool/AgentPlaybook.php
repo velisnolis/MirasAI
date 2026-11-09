@@ -161,6 +161,7 @@ class AgentPlaybook
                 'id' => 'yootheme_builder',
                 'do' => 'Change Builder elements, props, sources, templates, modules.',
                 'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write.',
+                'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add, check it, and leave switching it on to a person in the Builder: that changes what visitors see.',
                 'not_the_same_as' => 'YOOtheme Style / theme.css. Builder JSON does not go through less.js.',
                 'avoid' => ['SQL on #__content fulltext', 'editing layout JSON on disk', 'Customizer'],
             ],

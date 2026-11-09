@@ -54,6 +54,7 @@ class ToolRegistry
         $registry->register(new TemplateElementCloneTool());
         $registry->register(new TemplateElementDeleteTool());
         $registry->register(new TemplateTranslateTool());
+        $registry->register(new TemplateCreateTool());
         $registry->register(new TemplateWidgetTranslateTool());
         $registry->register(new TemplateStyleReadTool());
         $registry->register(new TemplateStyleSourcesTool());

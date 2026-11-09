@@ -185,7 +185,7 @@ del client.
 | 1.1 `site/public-fetch` | fet i provat als dos hosts: proves locals i webs de proves reals (vegeu «Validació») |
 | 1.2 `site/cache-purge` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.3 `template/render-check` | fet i provat a WordPress; falta Joomla (cal YOOtheme a `provesjoomla`) |
-| 1b `template/create` | pendent; cas real |
+| 1b `template/create` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | pendent |
 | Fase 3 | pendent |
@@ -339,3 +339,29 @@ A `proveswp`:
   sense el context `render`.
 - Errors: `context_not_found`, `context_only_for_templates`,
   `template_not_found` i `unknown_argument` per a `widget_id`.
+
+### 1b `template/create`, 2026-11-09
+
+Proves locals: `docker/test-template-create.php` (entrada desada, desactivada,
+tipus vàlids als dos hosts, layout inicial, noms repetits, permisos).
+
+El flux d'un agent, als dos webs de proves: `template/list` (per al
+`collection_etag`) → previsualització → creació → `template/element-add` amb
+l'ETag retornat → comprovació.
+
+| | WordPress (`proveswp`) | Joomla (`provesjoomla`, YOOtheme 5.0.18) |
+| --- | --- | --- |
+| Tipus | `single-post` | `com_content.article` |
+| Clau generada | `mirasai_…` (`generateStorageKey()` del host) | 8 caràcters (`generateStorageKey()` del host) |
+| `if_match` antic després de crear | `stale_etag` | `stale_etag` |
+| `template/element-add` sobre la plantilla nova | `updated` | `updated` |
+| Comprovació | `template/render-check` amb `context_id=1`: el titular lligat al títol dona «Hello world!» | `template/element-list`: la secció i el titular als seus paths |
+| Visitant amb la plantilla desactivada | sense canvis | sense canvis |
+| Control: activada uns segons a mà | la plantilla substitueix el contingut de l'entrada | el visitant de l'article 1 veu el titular de la plantilla |
+
+Després del control, les dues plantilles es van tornar a desactivar. A
+WordPress, l'emmagatzematge de YOOtheme (`Storage`) la llegeix i el seu
+`Builder::load()` carrega el layout.
+
+L'eina no activa plantilles ni hi posa condicions (`query`): això canvia el que
+veuen els visitants i queda per a un segon pas, amb previsualització.
