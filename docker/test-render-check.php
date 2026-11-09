@@ -149,6 +149,12 @@ foreach ([R::class, $JR] as $C) {
     check(array_column($w, 'code') === ['listing_not_reproducible', 'dynamic_not_rendered'] && $w[1]['paths'] === $bound, "$C: listing and dynamic warnings for an archive template");
     check(str_contains($w[1]['fix'], 'site/public-fetch'), "$C: an archive is checked with site/public-fetch");
     check($C::warnings([], false, 'single-post') === [], "$C: a single template that rendered everything has no warning");
+    $bind = ['query' => ['name' => 'posts'], 'props' => ['title' => ['name' => 'title']]];
+    $switchedOff = ['type' => 'layout', 'children' => [
+        ['type' => 'section', 'props' => ['status' => 'disabled'], 'children' => [['type' => 'headline', 'source' => $bind]]],
+        ['type' => 'section', 'children' => [['type' => 'headline', 'props' => ['status' => 'disabled'], 'source' => $bind], ['type' => 'text', 'source' => $bind]]],
+    ]];
+    check($C::boundPaths($switchedOff) === ['root>section[1]>text[1]'], "$C: a disabled element and what is inside a disabled section are not dynamic failures (Codex review, PR #13)");
     check(str_contains($C::warnings(['x'], false, 'single-post')[0]['fix'], 'context_id'), "$C: a single template is told to try another context_id");
 }
 

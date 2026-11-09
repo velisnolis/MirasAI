@@ -204,13 +204,19 @@ class TemplateRenderCheckTool extends AbstractTool
     }
 
     /**
-     * Paths of the stored elements bound to a Dynamic Source, in the same format as mark().
+     * Paths of the stored elements bound to a Dynamic Source, in the same format as mark(). A disabled
+     * element and everything inside it are left out: they do not render because someone switched them
+     * off, not because their source gave nothing.
      *
      * @param array<string, mixed> $node
      * @return list<string>
      */
     public static function boundPaths(array $node, string $path = 'root'): array
     {
+        if (is_array($node['props'] ?? null) && ($node['props']['status'] ?? null) === 'disabled') {
+            return [];
+        }
+
         $paths = $path !== 'root' && is_array($node['source'] ?? null) && $node['source'] !== [] ? [$path] : [];
 
         foreach (is_array($node['children'] ?? null) ? $node['children'] : [] as $index => $child) {
