@@ -417,7 +417,7 @@ trait TemplateElementSourceSupportTrait
 
     /**
      * bindings_only is a flat list, so a binding whose row or section is
-     * disabled has no nesting left to show it. BIT Vic disables the row and
+     * disabled has no nesting left to show it. A client Joomla site disables the row and
      * leaves last edition's source on the gallery inside it: without this the
      * agent maps a placeholder it was never meant to touch.
      *

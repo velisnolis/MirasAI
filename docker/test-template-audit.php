@@ -83,6 +83,18 @@ foreach (['wordpress' => \Mirasai\WordPress\Tool\YoothemeLayoutAuditor::class, '
     check($r['counts'] === ['error' => 2, 'warning' => 2, 'notice' => 2], "$host: counts per severity");
     check(!in_array("empty_container@{$p}fragment[4]", $codes($r), true) && !in_array("empty_container@{$p}slideshow[5]", $codes($r), true), "$host: an empty fragment and a list bound to a source are not flagged");
 
+    // F-043: a list item showing teaser or content without a length limit.
+    $item = static fn (array $props): array => ['type' => 'grid_item', 'source' => ['query' => ['name' => 'posts'], 'props' => $props]];
+    $r = $audit($col([['type' => 'headline', 'props' => ['content' => 'T']], ['type' => 'grid', 'props' => ['title_element' => 'h2'], 'children' => [
+        $item(['content' => ['name' => 'teaser'], 'title' => ['name' => 'title']]),
+        $item(['content' => ['name' => 'teaser', 'filters' => ['limit' => '180']]]),
+        $item(['content' => ['name' => 'excerpt']]),
+        $item(['meta' => ['name' => 'content', 'filters' => ['limit' => '']]]),
+    ]]]));
+    check($codes($r) === ["unbounded_teaser@{$p}grid[1]>grid_item[0]", "unbounded_teaser@{$p}grid[1]>grid_item[3]"], "$host: teaser or content without a limit in a list item, not with a limit or excerpt");
+    $r = $audit($col([['type' => 'headline', 'props' => ['content' => 'T'], 'source' => ['props' => ['content' => ['name' => 'title']]]], ['type' => 'text', 'source' => ['props' => ['content' => ['name' => 'content']]]]]));
+    check($r['findings'] === [], "$host: the full content of a single post is not flagged");
+
     $r = $audit($col([['type' => 'text', 'props' => ['content' => '<p>Sense títols</p>']]]));
     check($r['findings'] === [] && $r['headings'] === [], "$host: a layout without headings is not asked for an h1");
 

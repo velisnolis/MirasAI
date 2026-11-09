@@ -98,8 +98,8 @@ $wpBatch = new class {
     }
 };
 
-// Indústria Viva in section[0]: a list bound by query arguments plus the empty
-// visibility text that was forgotten on 18/08. BIT Vic in section[1]: a
+// The client WordPress case in section[0]: a list bound by query arguments plus the empty
+// visibility text that was forgotten on 18/08. The client Joomla case in section[1]: a
 // disabled row still holding last edition's gallery source as a placeholder.
 $layout = [
     'type' => 'layout',
@@ -194,7 +194,7 @@ $byPath = static function (array $leaves): array {
     return $indexed;
 };
 
-// The Indústria Viva rebind, this time with the visibility leaf in the map.
+// The client WordPress rebind, this time with the visibility leaf in the map.
 $result = $batch->run($joomla, $layout, [
     ['match' => ['path' => $GRID], 'set' => ['query_arguments' => ['terms' => [9]]]],
     ['match' => ['path' => $TEXT], 'set' => ['keep' => true]],

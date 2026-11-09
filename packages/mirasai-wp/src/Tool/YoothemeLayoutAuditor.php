@@ -48,7 +48,7 @@ final class YoothemeLayoutAuditor
         $findings = [];
         $headings = [];
         $disabled = 0;
-        $this->walk($layout, 'root', null, false, $findings, $headings, $disabled);
+        $this->walk($layout, 'root', null, false, false, $findings, $headings, $disabled);
 
         $h1 = array_values(array_filter($headings, static fn (array $h): bool => $h['level'] === 1));
 
@@ -88,7 +88,7 @@ final class YoothemeLayoutAuditor
      * @param list<array<string, mixed>> $findings
      * @param list<array<string, mixed>> $headings
      */
-    private function walk(array $node, string $path, ?string $itemTitleElement, bool $insideDisabled, array &$findings, array &$headings, int &$disabled): void
+    private function walk(array $node, string $path, ?string $itemTitleElement, bool $isListItem, bool $insideDisabled, array &$findings, array &$headings, int &$disabled): void
     {
         $type = is_string($node['type'] ?? null) && $node['type'] !== '' ? $node['type'] : 'unknown';
         $props = is_array($node['props'] ?? null) ? $node['props'] : [];
@@ -101,18 +101,17 @@ final class YoothemeLayoutAuditor
 
         // A disabled element does not render, and neither does anything inside it.
         if (!$insideDisabled && !$isDisabled && $path !== 'root') {
-            $this->checkElement($type, $path, $props, $bound, $itemTitleElement, $node, $findings, $headings);
+            $this->checkElement($type, $path, $props, $bound, $itemTitleElement, $isListItem, $node, $findings, $headings);
         }
 
         $definition = $this->definitionOf($type);
-        $childTitleElement = !empty($definition['container']) && !empty($definition['element'])
-            ? self::titleElement($props, $definition)
-            : null;
+        $isList = !empty($definition['container']) && !empty($definition['element']) && $type !== 'fragment';
+        $childTitleElement = $isList ? self::titleElement($props, $definition) : null;
 
         foreach (is_array($node['children'] ?? null) ? $node['children'] : [] as $index => $child) {
             if (is_array($child)) {
                 $childType = is_string($child['type'] ?? null) && $child['type'] !== '' ? $child['type'] : 'unknown';
-                $this->walk($child, $path . '>' . $childType . '[' . $index . ']', $childTitleElement, $insideDisabled || $isDisabled, $findings, $headings, $disabled);
+                $this->walk($child, $path . '>' . $childType . '[' . $index . ']', $childTitleElement, $isList, $insideDisabled || $isDisabled, $findings, $headings, $disabled);
             }
         }
     }
@@ -124,7 +123,7 @@ final class YoothemeLayoutAuditor
      * @param list<array<string, mixed>> $findings
      * @param list<array<string, mixed>> $headings
      */
-    private function checkElement(string $type, string $path, array $props, array $bound, ?string $itemTitleElement, array $node, array &$findings, array &$headings): void
+    private function checkElement(string $type, string $path, array $props, array $bound, ?string $itemTitleElement, bool $isListItem, array $node, array &$findings, array &$headings): void
     {
         $definition = $this->definitionOf($type);
 
@@ -157,6 +156,18 @@ final class YoothemeLayoutAuditor
 
             if (($this->fileExists)($image) === false) {
                 $findings[] = self::finding('error', 'image_file_missing', $path, $type, 'Image ' . $image . ' does not exist on the server.', 'Upload the file again or point image at an existing one.');
+            }
+        }
+
+        // A list item showing a whole post: teaser is the full post when there is no excerpt or more tag (F-043).
+        if ($isListItem) {
+            foreach ($bound as $prop => $binding) {
+                $field = is_array($binding) && is_string($binding['name'] ?? null) ? $binding['name'] : '';
+                $limit = is_array($binding) ? ($binding['filters']['limit'] ?? null) : null;
+
+                if (in_array($field, ['teaser', 'content'], true) && ($limit === null || $limit === '' || $limit === 0 || $limit === '0')) {
+                    $findings[] = self::finding('notice', 'unbounded_teaser', $path, $type, sprintf('%s shows %s without a length limit: a post without excerpt shows in full in every item.', (string) $prop, $field), 'Add the limit filter to the binding, for example {"name": "' . $field . '", "filters": {"limit": "180"}}.');
+                }
             }
         }
 

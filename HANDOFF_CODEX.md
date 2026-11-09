@@ -8,12 +8,12 @@ Objectiu de la sessió següent: publicar la 0.8.0 i decidir si es desplega.
 - Repo: `/Users/alexmiras/Documents/Claude Code Default/MovaMiraAI`
 - Branca activa: `main`
 - La **0.7.0 està publicada** (tag i GitHub Release del 27-07-2026 amb cinc
-  assets) i verificada en viu a Auto Vigatana i Indústria Viva.
+  assets) i verificada en viu a el client Joomla i el client WordPress.
 - La **0.8.0 està a `main` i etiquetada** (`v0.8.0`, commit `a9a1dad`), amb
   artefactes a `.release/v0.8.0/` i els *feeds* apuntant-hi.
 - **GitHub Release publicada** el 02-08-2026 amb els cinc assets. Descàrregues
   verificades a 200 i els SHA-256 publicats coincideixen amb els dels *feeds*.
-- **Indústria Viva ja executa la 0.8.0**, canària verificada el 02-08-2026.
+- **el client WordPress ja executa la 0.8.0**, canària verificada el 02-08-2026.
 
 ### Què hi ha a la 0.8.0
 
@@ -151,7 +151,7 @@ git diff --check
 npm run release:prepare
 ```
 
-### Auto Vigatana — Joomla
+### el client Joomla — Joomla
 
 Estat comprovat el 27 de juliol de 2026:
 
@@ -179,20 +179,20 @@ Backups conservats:
 
 - JetBackup complet del compte.
 - Arxiu privat pre-canària:
-  `/home/autovigatana/mirasai-backups/deploy-20260726-151308/mirasai-0.6.2-pre-canary.tar.gz`
+  `/home/<compte>/mirasai-backups/deploy-20260726-151308/mirasai-0.6.2-pre-canary.tar.gz`
 - Backup privat fresc pre-0.7.0:
-  `/home/autovigatana/mirasai-backups/deploy-20260727-183900-pre-0.7.0`
+  `/home/<compte>/mirasai-backups/deploy-20260727-183900-pre-0.7.0`
   (fitxers exactes 0.6.3, dump SQL complet, inventaris, checksums i ZIP desplegat).
 
 No es va crear cap backup Akeeba. El paquet 0.7.0 desplegat es conserva amb
 SHA-256 verificat dins el directori privat del rollback.
 
-### Indústria Viva — WordPress
+### el client WordPress — WordPress
 
 Canària 0.7.0 feta el 27 de juliol de 2026, amb línia base capturada abans
 d'instal·lar i comparada després.
 
-- WordPress `7.0.2`, PHP 8.4, tema actiu `yootheme-industria-viva` (child)
+- WordPress `7.0.2`, PHP 8.4, tema actiu `yootheme-<tema fill del client>` (child)
 - MirasAI WP `0.6.2` → `0.7.0`; eines 46 → 47 (+`template/style-create`)
 - ETag idèntic abans i després: `193f35065e75f8e9f0af6e22ecac7168`
 - `theme.1.css` i `theme.1.rtl.css` byte a byte iguals
@@ -209,15 +209,15 @@ d'instal·lar i comparada després.
   d'aquesta sessió, no del plugin)
 
 **El front retorna 503 per disseny**, abans i després: la mu-plugin
-`industriaviva-site-lock` 1.1.0 tapa el frontend i el REST anònims i deixa
+`site-lock` del client 1.1.0 tapa el frontend i el REST anònims i deixa
 passar l'usuari autenticat. No s'ha verificat el render visual de la portada
 per aquest motiu; els assets sí.
 
 Rollback privat:
-`/home/industriaviva/mirasai-backups/deploy-20260727-170309-pre-0.7.0`
+`/home/<compte>/mirasai-backups/deploy-20260727-170309-pre-0.7.0`
 (plugin 0.6.2, `theme_mods_yootheme`, els dos CSS i `SHA256SUMS`).
 
-### Indústria Viva — canària 0.8.0
+### el client WordPress — canària 0.8.0
 
 Feta el 2 d'agost de 2026, amb línia base capturada abans i comparada després.
 
@@ -226,7 +226,7 @@ Feta el 2 d'agost de 2026, amb línia base capturada abans i comparada després.
 - ETag d'estil, ETag del layout de la pàgina 65 i `theme.1.css` **idèntics**
   abans i després; cap escriptura
 - cap `PHP Fatal` posterior a la instal·lació
-- portada 503 per disseny (mu-plugin `industriaviva-site-lock`), igual que abans
+- portada 503 per disseny (mu-plugin `site-lock` del client), igual que abans
 
 El que canvia, sobre el binding real de la portada
 (`root>section[3]>row[0]>column[0]>text[1]`):
@@ -250,7 +250,7 @@ element-move + target_index             unknown_argument     target_index
 ```
 
 Rollback privat:
-`/home/industriaviva/mirasai-backups/deploy-20260802-112209-pre-0.8.0`
+`/home/<compte>/mirasai-backups/deploy-20260802-112209-pre-0.8.0`
 (plugin 0.7.0, `theme_mods_yootheme`, CSS, contingut de la pàgina 65, `SHA256SUMS`).
 
 ## Artefactes 0.8.0
@@ -280,7 +280,7 @@ find . -type f -print0 | sort -z | xargs -0 shasum -a 256 | sed 's|\./mirasai-wp
 find ./mirasai-wp -type f -print0 | sort -z | xargs -0 sha256sum | sed 's|\./mirasai-wp/|/|' | sha256sum
 ```
 
-El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
+El 27-07-2026 les dues empremtes del client WordPress coincidien:
 `cc58c6762fbb4661e2c7c6596cd6ec43575793f9244b934caf6391c62b83e4fe`, 71 fitxers.
 
 ## Decisions i invariants a preservar
@@ -294,7 +294,7 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
 - Preservar `wp_slash()` en escriptures WordPress de JSON serialitzat.
 - `style-create` és WP-only fins que es dissenyi el cicle natiu de Joomla.
 - No activar automàticament un child theme creat.
-- No desplegar a Indústria Viva ni publicar la release sense aprovació
+- No desplegar a el client WordPress ni publicar la release sense aprovació
   explícita.
 - Conservar els backups de producció fins que la versió estigui consolidada.
 
@@ -306,7 +306,7 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
    crida, i el README del router documentava `confirm: true` en comptes de
    `confirm_guarded_write: true`. No es va fer una auditoria exhaustiva línia a
    línia dels dos helpers d'estil (1.200 i 700 línies): es confia en la suite i
-   en la verificació a Auto Vigatana.
+   en la verificació a el client Joomla.
 2. ~~**Working tree gran i sense commit.**~~ Resolt.
 3. ~~**Publicació de la 0.8.0.**~~ Feta: `main`, tag `v0.8.0`, Release amb cinc
    assets i *feeds* verificats.
@@ -316,7 +316,7 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
    seguit, però la propera vegada val la pena retenir el commit dels feeds fins
    que la Release existeixi. Vegeu
    `~/.agent-system/runbooks/agent-shell-tty-and-1password.md`.
-4. **Auto Vigatana pendent.** Segueix a la 0.7.0. Indústria Viva ja porta la
+4. **el client Joomla pendent.** Segueix a la 0.7.0. el client WordPress ja porta la
    0.8.0. Conservar els dos rollbacks fins que la versió estigui publicada.
 5. **Joomla `style-create`.** Només abordar-lo amb un disseny específic del
    lifecycle Joomla; no és un port mecànic.
@@ -330,7 +330,7 @@ El 27-07-2026 les dues empremtes d'Indústria Viva coincidien:
 4. Resoldre troballes de revisió abans de commitejar.
 5. Preparar commits i tornar a executar `npm run release:prepare`.
 6. Demanar aprovació abans de merge/tag/push/release o desplegament a
-   Indústria Viva.
+   el client WordPress.
 
 ## Suggested skills
 

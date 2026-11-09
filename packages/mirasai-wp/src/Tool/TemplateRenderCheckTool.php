@@ -110,7 +110,7 @@ class TemplateRenderCheckTool extends AbstractTool
             return $rendered;
         }
 
-        $summary = self::summarize($rendered['tree'], $stored, $expect);
+        $summary = self::summarize($rendered['tree'], $stored, $expect, self::boundPaths($layout));
         $htmlText = PublicPageInspector::normalizeText(strip_tags($rendered['html']));
 
         foreach ($summary['expect'] as &$match) {
@@ -144,11 +144,50 @@ class TemplateRenderCheckTool extends AbstractTool
             $response['expect'] = $summary['expect'];
         }
 
-        if ($isTemplate && $context === null) {
+        $type = (string) ($target['meta']['type'] ?? '');
+        $listing = $isTemplate && !str_starts_with($type, 'single-');
+        $warnings = self::warnings($summary['dynamic_not_rendered'], $listing, $type);
+
+        if ($warnings !== []) {
+            $response['warnings'] = $warnings;
+        }
+
+        if ($isTemplate && $context === null && !$listing) {
             $response['note'] = 'Rendered without context_id: Dynamic Sources that need a post render empty.';
         }
 
         return $response;
+    }
+
+    /**
+     * What a render-check result cannot show (F-040): bound elements that came out empty, and listing
+     * templates (archive, search, taxonomy) whose request render-check cannot reproduce.
+     *
+     * @param list<string> $dynamicMissing
+     * @return list<array<string, mixed>>
+     */
+    public static function warnings(array $dynamicMissing, bool $listing, string $type): array
+    {
+        $warnings = [];
+
+        if ($listing) {
+            $warnings[] = [
+                'code' => 'listing_not_reproducible',
+                'message' => "A {$type} template renders lists of an archive, search or taxonomy request, which render-check cannot reproduce: its lists come out empty here.",
+                'fix' => 'Check a URL of this type with site/public-fetch; yootheme.layouts there confirms this template rendered it.',
+            ];
+        }
+
+        if ($dynamicMissing !== []) {
+            $warnings[] = [
+                'code' => 'dynamic_not_rendered',
+                'paths' => $dynamicMissing,
+                'message' => 'Elements bound to a Dynamic Source did not render: their source gave nothing in this render, so this result is not what a visitor of a real page gets.',
+                'fix' => $listing ? 'Check a URL of this type with site/public-fetch.' : 'Pass a context_id whose content has these values, or check a real URL with site/public-fetch.',
+            ];
+        }
+
+        return $warnings;
     }
 
     /**
@@ -162,6 +201,32 @@ class TemplateRenderCheckTool extends AbstractTool
         }
 
         return preg_match('/<(img|picture|video|audio|iframe|svg|canvas|object|embed)\b/i', $html) !== 1;
+    }
+
+    /**
+     * Paths of the stored elements bound to a Dynamic Source, in the same format as mark(). A disabled
+     * element and everything inside it are left out: they do not render because someone switched them
+     * off, not because their source gave nothing.
+     *
+     * @param array<string, mixed> $node
+     * @return list<string>
+     */
+    public static function boundPaths(array $node, string $path = 'root'): array
+    {
+        if (is_array($node['props'] ?? null) && ($node['props']['status'] ?? null) === 'disabled') {
+            return [];
+        }
+
+        $paths = $path !== 'root' && is_array($node['source'] ?? null) && $node['source'] !== [] ? [$path] : [];
+
+        foreach (is_array($node['children'] ?? null) ? $node['children'] : [] as $index => $child) {
+            if (is_array($child)) {
+                $type = is_string($child['type'] ?? null) && $child['type'] !== '' ? $child['type'] : 'unknown';
+                $paths = array_merge($paths, self::boundPaths($child, $path . '>' . $type . '[' . $index . ']'));
+            }
+        }
+
+        return $paths;
     }
 
     /**
@@ -197,9 +262,10 @@ class TemplateRenderCheckTool extends AbstractTool
      *
      * @param list<string> $stored
      * @param list<string> $expect
-     * @return array{elements: list<array<string, mixed>>, not_rendered: list<string>, expect: list<array<string, mixed>>}
+     * @param list<string> $bound paths of stored elements bound to a Dynamic Source
+     * @return array{elements: list<array<string, mixed>>, not_rendered: list<string>, expect: list<array<string, mixed>>, dynamic_not_rendered: list<string>}
      */
-    public static function summarize(object $tree, array $stored, array $expect): array
+    public static function summarize(object $tree, array $stored, array $expect, array $bound = []): array
     {
         $elements = [];
         $seen = [];
@@ -237,7 +303,10 @@ class TemplateRenderCheckTool extends AbstractTool
             unset($element['full_text']);
         }
 
-        return ['elements' => $elements, 'not_rendered' => $notRendered, 'expect' => $matches];
+        // A bound element missing from the render: its source had nothing to give here (F-040).
+        $dynamicMissing = array_values(array_intersect($bound, $missing));
+
+        return ['elements' => $elements, 'not_rendered' => $notRendered, 'expect' => $matches, 'dynamic_not_rendered' => $dynamicMissing];
     }
 
     /**

@@ -17,9 +17,9 @@ que cap nota.
 
 ---
 
-## 2026-08-17 · YOOtheme Pro 5.0.40 · WordPress · agencianord.com
+## 2026-08-17 · YOOtheme Pro 5.0.40 · WordPress · un web de client WordPress
 
-Projecte: landing d'Agència Nord, reconstrucció amb elements natius sobre
+Projecte: landing d'un web de client, reconstrucció amb elements natius sobre
 `post_content` de la pàgina 244. Totes les causes verificades llegint
 `wp-content/themes/yootheme/packages/builder/elements/*/templates/`.
 
@@ -124,7 +124,7 @@ worker fixat.
   El site continua servint el CSS antic indefinidament. Trampa silenciosa.
 - Via principal verificada: `system/diagnose` → comprovar que `tools/list` inclou
   `mirasai/style-preview` → `mirasai/style-update` amb `site_id`, dry-run, ETag i
-  confirmació. La prova live d'Indústria Viva va recompilar YOOtheme 5.0.40 i va
+  confirmació. La prova live d'un web de client WordPress va recompilar YOOtheme 5.0.40 i va
   escriure el `theme_mods` del child sense obrir el Customizer.
 - Últim recurs quan el router no està disponible: obrir el Customizer amb
   `&site=<URL>`, esperar l'iframe,
@@ -195,8 +195,8 @@ per `--stdin` amb `dry_run=false` i `confirm_guarded_write=true`.
 
 Segona trampa (verificada el 23/09, en lectura): amb `--stdin`, mcp2cli 3.7.0
 ignora tots els flags, `--site-id` inclòs, i el router va al
-`default_site_id`. `template/read --site-id industria-viva-wp --stdin` va
-llegir jordifont i va tornar `post_layout_missing`. Posa `site_id` dins del
+`default_site_id`. `template/read --site-id <site_id del client> --stdin` va
+llegir un altre web i va tornar `post_layout_missing`. Posa `site_id` dins del
 JSON.
 
 Conseqüència per a F-010: la recepta del navegador passa a ser l'últim recurs,
@@ -210,7 +210,7 @@ de fallada silenciosa, verificació pel segell del CSS) segueix sent vàlida i
 portable brand Less have nowhere version-controllable to live, and would not
 survive a theme update.»
 
-A Agència Nord tot el sistema de disseny viu a `theme_mods_yootheme` del tema
+En aquest web de client tot el sistema de disseny viu a `theme_mods_yootheme` del tema
 pare. `DESIGN.md` secció 13 ja deia de crear un estil derivat abans de tocar
 LESS, i no es va fer. L'eina `template/style-create` crea el child theme.
 
@@ -263,7 +263,7 @@ Aplicada el 2026-08-17. F-001 a F-004 a `core-builder.md`, F-005 a F-009 a
 `html-uikit-and-css.md`, F-010 i F-011 a `mirasai-runtime.md`. F-012 a memòria,
 perquè no és de YOOtheme. El `SKILL.md` recull la convenció del registre.
 
-2026-09-19, F-024 a F-035 (llucsanchez.com):
+2026-09-19, F-024 a F-035 (un altre web.com):
 - A `yootheme-builder-ops`, workflow 1 i «Capçalera, logo i peu»: F-024 a F-028.
 - A `core-builder.md`: F-029.
 - A `html-uikit-and-css.md`: F-029 a F-034.
@@ -322,7 +322,7 @@ com a `#ancora=valor` **mai** produeix desplaçament natiu, encara que existeixi
 element amb l'id `ancora`. Mesurat a la pàgina: després del clic, `window.scrollY`
 = 46 amb `#servicios` situat a 4314 px.
 
-Codi que ho demostra, `wp-content/mu-plugins/agencia-nord-service-deeplink.php`
+Codi que ho demostra, `wp-content/mu-plugins/<client>-service-deeplink.php`
 v1.3.0: el gestor de clic evitava deliberadament `preventDefault()` amb el comentari
 «el salt a #servicios ha de seguir funcionant». La premissa era falsa.
 
@@ -432,7 +432,7 @@ fix urgent de corrupció. Si s'implementa, l'invariant de no-pèrdua-de-nodes
 es queda: un type de tercer que sí que es prunegi seria el vector, no la
 cura.
 
-### Cas clone-rebind 1 · BIT Vic (comunitat.congresbit.cat)
+### Cas clone-rebind 1 · web de client Joomla
 
 **Data:** 2026-08-18 · **CMS:** Joomla 6.1.3 · **YOOtheme:** 5.0.40 ·
 **MirasAI:** 0.8.2 (MCP `article_id`, sense `mode=` al host live)
@@ -443,7 +443,7 @@ l'edició anterior. Les files que encara no tenen material es deixen amb
 Source vell es queda de placeholder; quan hi ha carpeta/CSV/galeria nova,
 només es canvia el source.
 
-**Exemple:** article 28 «BIT Vic 2026», etag vist
+**Exemple:** article 28 «un web de client Joomla 2026», etag vist
 `373c7c973105472c012de5e8383ecee10dacba3581a334914c6a9064f8dcf481`.
 
 | Path | Source / estat |
@@ -453,7 +453,7 @@ només es canvia el source.
 | `root>section[0]>row[5]>…>gallery_item[0]` | DOCman `edicio-2026-vic-pos` |
 | `root>section[0]>row[6]` (`id=visual`) | `status=disabled`; gallery encara `docmansource` `edicio-2024-vic-vt` |
 | `root>section[0]>row[2]>…>button_item[3]` | «Visual Thinking» `status=disabled`, `link=#visual` |
-| `root>section[0]>row[7]>…>gallery_item[0]` | `files` `images/galeries-de-fotos/congres-bit-vic/edicio-2026-vic/*` |
+| `root>section[0]>row[7]>…>gallery_item[0]` | `files` `images/galeries-de-fotos/<carpeta del client>/edicio-2026-vic/*` |
 | `root>section[0]>row[8]` Vídeos | sense list-source YouTube (a 2024/2025 sí `youtubeChannel1C7D1A.videos`) |
 
 **Implicació per `clone-rebind`.** Ha de clonar pàgina (no una sola secció),
@@ -461,14 +461,14 @@ preservar `status=disabled` i no «arreglar» sources de nodes disabled. El
 `leaf_map` útil és carpeta/CSV/pattern per edició (`edicio-YYYY-vic-*`,
 `csv….records`), no un rebind ceg d'un únic `query_path`.
 
-### Cas clone-rebind 2 · Indústria Viva (draft, no la portada)
+### Cas clone-rebind 2 · un web de client WordPress (draft, no la portada)
 
 **Data:** 2026-08-18 · **CMS:** WordPress 7.0.4 · **YOOtheme:** 5.0.40 ·
 **MirasAI:** 0.8.2 WP · Flart `fs_grid` / `fs_table`
 
 **Setup.** Portada `post_id=65` (`inici`, `page_on_front`) duplicada amb
 WP-CLI `--from-post` a draft **548** `mirasai-lab-clone-portada`. Backup:
-`/home/industriaviva/mirasai-backups/20260818-clone-rebind-lab-20260818T182935Z`.
+una carpeta de còpies del compte.
 La 65 no s'ha mutat (267215 bytes). REST anònim 503 (`industria_viva_site_locked`);
 MCP autenticat 200.
 
@@ -495,9 +495,9 @@ L'etag continua sent del layout complet. `bindings_only` no porta `raw_source`.
 
 | Host | Estat |
 |---|---|
-| industriaviva.cat (WP, plugin a disc) | desplegat; smoke `post_id=548` outline + bindings_only (64 bindings) |
+| un web de client WordPress (WP, plugin a disc) | desplegat; smoke d'un esborrany outline + bindings_only (64 bindings) |
 | lab LXC 103 Joomla | desplegat; smoke `key=mirasai-fase0` outline (tree, sense layout) i bindings_only (0, el fixture no té sources) |
-| lets.cat / comunitat.congresbit.cat | **no** desplegat |
+| altres webs de client | **no** desplegat |
 
 Bug de desplegament WP: `bindingsOnlyFromLayout` era `private` al trait usat
 pel pare `TemplateReadTool`; `TemplateElementListTool` (fill) no hi podia
@@ -511,7 +511,7 @@ cridar. Corregit a `protected` als dos CMS.
 
 **Data:** 19/08/2026 · **Versió:** MirasAI 0.8.2 · **CMS:** WordPress i Joomla
 
-**Símptoma.** Clonar una fila que té ID (BIT Vic: `root>section[0]>row[6]`,
+**Símptoma.** Clonar una fila que té ID (un web de client Joomla: `root>section[0]>row[6]`,
 `id=visual`) deixava dos elements amb `id="visual"` a la mateixa pàgina. El
 botó d'àncora `#visual` continuava saltant a l'original: la còpia era
 inabastable per enllaç, i l'usuari ho llegia com «el clone no ha funcionat».
@@ -545,7 +545,7 @@ de la còpia apunta on toca.
 
 **Observació.** Quan al Builder s'apaga un bloc, `props.status=disabled` queda
 a l'element que s'ha apagat — típicament la **fila** o la secció — i no baixa
-als descendents. A BIT Vic, `root>section[0]>row[6]` porta `status=disabled` i
+als descendents. A un web de client Joomla, `root>section[0]>row[6]` porta `status=disabled` i
 el `gallery_item` de dins conserva el `docmansource` `edicio-2024-vic-vt` com a
 placeholder, sense cap marca pròpia.
 
@@ -565,7 +565,7 @@ arbre ha de tornar explícitament el context que la planitud destrueix.
 ### F-021 · Un rebind oblidat no dona cap error: filtra malament i calla
 
 **Data:** 19/08/2026 · **CMS:** WordPress · **YOOtheme:** 5.0.40 · **Site:**
-industriaviva (compte de desenvolupament, draft 548)
+un web de client WordPress (compte de desenvolupament, un esborrany)
 
 **Observació.** El clone del 18/08 va quedar a mitges i hi va **seguir** un dia
 sencer sense que res ho denunciés. A `root>section[8]`:
@@ -643,7 +643,7 @@ de manera que cal forçar també `opacity: 1` i `transform: none` als elements a
 `[uk-scrollspy-class]`. Sense això el risc no és que es vegi lleig, és deixar
 contingut invisible.
 
-## 2026-09-19 · YOOtheme Pro 5.0.43 · WordPress · llucsanchez.com
+## 2026-09-19 · YOOtheme Pro 5.0.43 · WordPress · un altre web.com
 
 Projecte: portada nova (pàgina 9) construïda des d'una maqueta HTML aprovada,
 amb elements natius via MirasAI 0.10.1 (`mcp2cli` contra el router local), Style
@@ -854,7 +854,7 @@ ho fa qui rep el CSS, just abans d'escriure'l al disc:
   StyleController::save()», i hi afegeix la mateixa capçalera
   `/* YOOtheme Pro vX compiled on ... */`.
 
-Mesurat a industriaviva.cat el 21/09/2026 amb YOOtheme 5.0.44: el router va
+Mesurat a un web de client WordPress el 21/09/2026 amb YOOtheme 5.0.44: el router va
 enviar **324.074 bytes** amb l'`@import`, i el fitxer servit va quedar en
 **326.385** amb set `@font-face` i zero `fonts.googleapis`. La diferència són
 les fonts, posades pel camí de desada.
@@ -882,7 +882,7 @@ del CDN. És el mateix problema d'estat en memòria que el Builder conservant un
 layout obert, per una altra porta: els ETags no el veuen perquè no hi ha cap
 escriptura MCP pel mig.
 
-Vist a industriaviva.cat el 21/09/2026: dues desades seguides van produir el
+Vist a un web de client WordPress el 21/09/2026: dues desades seguides van produir el
 mateix valor ranci; la tercera, després de recarregar la pestanya, el bo.
 
 **Regla accionable.** Recarrega la pestanya del Customizer abans de desar si
@@ -895,3 +895,142 @@ navegador.
 **no** canvia perquè `dirty` era fals i `save()` no fa res. Aquí la capçalera
 **sí** que canvia, perquè la compilació passa de debò; el que és vell és
 l'entrada.
+
+## 2026-11-04 · YOOtheme Pro 5.0.53 · Joomla 6.2 · un web de client Joomla
+
+### F-038 · En un vídeo de fons, `image_loading` decideix si surt `preload=none`
+
+**Símptoma.** La mateixa secció amb vídeo de fons surt amb
+`<video … preload=none width=1920 height=1080>` en uns idiomes i sense cap
+d'aquests atributs en un altre.
+
+**Causa verificada.** `packages/builder/elements/section/templates/template-video.php`
+fa `'preload' => ['none {@!image_loading}']` i treu `width` i `height` de
+`image_width` i `image_height`. L'opció de la UI es diu «Load image eagerly», però
+també governa el vídeo. Si la secció té `image`, el vídeo s'anul·la
+(`template.php`, línia 20), i per això no es pot fer servir `image` de pòster
+sense tocar la plantilla.
+
+**Mesura.** Chrome amb 4G emulat (9 Mbps, 60 ms, CPU ×4), sense memòria cau, mateix
+HTML espanyol reescrit amb una substitució de resposta, 4 passades de cada:
+
+| Variant | Inici del vídeo (mitjana) | LCP (mitjana) |
+|---|---|---|
+| `preload=none` | 1,64 s | 1,65 s |
+| Sense `preload=none` | 1,13 s | 1,23 s |
+
+Les dades baixades en els primers 12 s són pràcticament iguals (14–15 MB amb un
+fitxer de 34 MB): al primer viewport, `uk-cover` reprodueix el vídeo igualment.
+La mostra és petita i una de les passades amb `preload=none` va ser tan ràpida com
+les altres, així que la xifra és orientativa; la direcció es va repetir a les
+mesures entre idiomes.
+
+**Regla accionable.** Hero amb vídeo al primer viewport: `image_loading=true`,
+`image_width` i `image_height`. Vídeo per sota del primer viewport: deixa'l sense
+`image_loading`, on `preload=none` sí que pot estalviar dades (deducció, no
+mesurat). El pes real es controla amb la codificació: 34 → 21 MB (CRF 21 → 25,
+VMAF 97 → 94) sense cap canvi d'atributs.
+
+### F-039 · JCH amb `bottom_js` fa saltar la pàgina: UIkit arrenca després de la primera pintura
+
+**Símptoma.** CLS de 0,32–0,36 en escriptori i 0 en mòbil, amb una home amb
+`uk-height-viewport` i una barra superior amb `uk-grid`. No és cap imatge sense
+mides ni cap font.
+
+**Causa verificada.** YOOtheme escriu `uk-grid` i `uk-height-viewport` com a
+atributs. La classe `uk-grid` i el `min-height` els posa UIkit quan arrenca. JCH
+Optimize (9.4.3, `bottom_js=1`) mou `uikit.min.js` al final del `<body>`, i el
+navegador ja ha pintat: barra apilada (63 px en lloc de 46) i secció a 170 px. La
+pàgina de un web de client Joomla exclosa de JCH, amb els mateixos elements, dona 0,001.
+
+**Correcció.** A `excludeJs_peo`, la regla de `uikit.min.js` amb
+`"dontmove":"on"`. CLS mesurat de 0,35 a 0,008 en escriptori.
+
+**Cost i parany.** JCH manté l'ordre: `isGate` a `JsItem.php` fa que els scripts
+anteriors també es quedin al `<head>` i bloquegin la pintura (jQuery, 30 kB amb
+gzip). A la web real, LCP +65 ms en escriptori i +100 a +300 ms en mòbil amb 4G
+emulat. Una simulació que només movia UIkit no ho va ensenyar i deia que el mòbil
+no empitjorava. Reservar l'espai amb CSS només va baixar a 0,12–0,20.
+
+**Regla accionable.** Prova la regla real, no una reescriptura de l'HTML. Compara
+amb la memòria cau escalfada i en A-B-A: just després de `jchoptimize:recache`, el
+mateix estat va sortir fins a 600 ms pitjor.
+
+## 2026-11-09 · YOOtheme Pro 5.0.53 · WordPress 7.1.4 · MirasAI 0.12.0 · un web de client WordPress
+
+### F-040 · `template/render-check` d'una plantilla d'arxiu sense context només pinta el que és estàtic
+
+**Símptoma.** Plantilla nova `archive-post` («Notícies»):
+un títol estàtic i una graella amb l'ítem lligat a `posts.archivePost`, més
+paginació. `template/render-check` sense `context_id` torna `renders_empty=false`
+i un sol element, el títol. La graella no hi surt i no hi ha cap avís.
+
+**Causa.** Fora d'una petició d'arxiu real, la consulta `archivePost` no té
+entrades; la graella es queda sense ítems i el títol estàtic fa que el layout no
+compti com a buit. `context_id` serveix per a les plantilles de fitxa (amb
+una plantilla de fitxa d'un tipus propi i dues fitxes reals el resultat és correcte), però no
+representa una pàgina d'arxiu. Que sigui exactament així dins de l'eina és una
+deducció: no s'ha mirat el codi.
+
+**Comprovació.** Amb la plantilla activada, `site/public-fetch` de la pàgina de notícies
+troba els títols i els extractes de les 7 notícies a `main` i identifica la
+plantilla per la clau.
+
+**Regla accionable.** Per a plantilles d'arxiu, cerca o taxonomia, no donis per
+bo un `render-check` que només ensenya els elements estàtics: verifica-ho amb
+`site/public-fetch` a una URL d'aquell tipus. Proposta per a l'eina: avisar quan
+el layout té fonts d'arxiu o de cerca i no hi ha context que les pugui resoldre,
+en lloc de tornar el resultat com si fos complet.
+
+### F-041 · Dos dry-runs iguals de `template/create` tornen el mateix `preview_token`
+
+**Observació, no error confirmat.** Dos dry-runs de `template/create` amb els
+mateixos arguments i el mateix `collection_etag`, amb uns minuts de diferència,
+van tornar el mateix `preview_token` (`ea5534af…`). La confirmació amb aquell
+token va crear la plantilla sense problemes.
+
+**Lectura probable.** El token sembla derivat dels arguments (un hash), i no
+d'una sessió de previsualització amb caducitat. Si és així, el token prova que
+la confirmació porta els mateixos arguments que el dry-run, però no que el
+dry-run sigui recent: aquesta garantia ve només de l'`if_match`. És una
+deducció pel comportament; no s'ha mirat el codi.
+
+**Per decidir.** Si és el disseny volgut, convé dir-ho a la documentació de
+`preview_token` (0.11.0) perquè ningú hi confiï com a prova de frescor. Si no, el
+token hauria d'incloure alguna cosa que canviï entre previsualitzacions.
+
+### F-042 · Una condició `!!` sobre un camp llista amaga l'element sempre
+
+**Símptoma.** A la plantilla de fitxa d'un tipus de contingut propi, un títol «Fotografies» amb una font
+que només té `_condition` ← `field.galeria`, filtre `condition: "!!"`. El camp és
+una galeria d'ACF, que YOOtheme exposa com a `[Attachment]`. El títol no surt en
+cap fitxa, tampoc en una que té 2 imatges a la galeria: just a sota, la
+galeria (ítem lligat a `<tipus>.single<Tipus>.field.galeria`) sí que pinta les 2
+imatges amb lightbox. Comprovat a l'HTML públic.
+
+**Causa.** No localitzada. El que s'ha vist és que la condició `!!` funciona amb
+camps de text (`field.repte`, `field.client`, `content`…) i no amb aquest camp de
+llista. No s'ha provat cap subcamp (`field.galeria.url`) ni cap altre filtre.
+
+**Regla accionable.** No posis una condició de visibilitat sobre un camp que
+torna una llista. Els elements multi-ítem ja desapareixen quan la llista és buida;
+si cal un títol, posa'l dins del mateix element o prescindeix-ne. A el web del client es
+va treure el títol.
+
+### F-043 · El camp `teaser` d'una entrada sense extracte torna l'entrada sencera
+
+**Símptoma.** Plantilla `archive-post` amb una graella lligada a
+`posts.archivePost`, amb `content` ← `teaser`. Les targetes mostren cada notícia
+completa: entre 71 i 752 paraules.
+
+**Causa.** Les entrades (importades d'un altre web) no tenen extracte ni
+`<!--more-->`, i en aquest cas `teaser` no talla res. `excerpt` també és buit:
+no és l'extracte automàtic de WordPress.
+
+**Correcció verificada.** El filtre de longitud a la font:
+`{"name": "teaser", "filters": {"limit": "180"}}`. Les targetes passen a
+170–180 caràcters, tallades per paraula i amb punts suspensius.
+
+**Regla accionable.** En llistats d'entrades, posa sempre el filtre `limit` al
+`teaser` (o fes servir un extracte real). Sense límit, una entrada sense extracte
+omple la targeta sencera.

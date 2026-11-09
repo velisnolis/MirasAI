@@ -1,9 +1,9 @@
-# MovaMiraAI - TODO operatiu detectat a InARTS UB
+# MovaMiraAI - TODO operatiu detectat en un web de client
 
 Data: 2026-05-08
 
 Aquest fitxer recull dos deutes tecnics detectats durant la migracio Joomla
-d'InARTS al hosting UB.
+d'un web de client Joomla en un subdirectori d'un hosting extern.
 
 ## 1. Compatibilitat MCP: `rereplacer/capabilities`
 
@@ -57,23 +57,23 @@ Estat: cobert a `0.4.8` amb normalitzacio compartida i smoke tests.
 
 ### Problema
 
-InARTS a UB viu a:
+El web viu a:
 
 ```text
-https://www.ub.edu/a-rts
+https://example.org/subsite
 ```
 
-Joomla esta servit sota un subdirectori public (`/a-rts`) i l'API pot entrar
+Joomla esta servit sota un subdirectori public (`/subsite`) i l'API pot entrar
 tant per:
 
 ```text
-/a-rts/api/v1/mirasai/mcp
-/a-rts/api/index.php/v1/mirasai/mcp
+/subsite/api/v1/mirasai/mcp
+/subsite/api/index.php/v1/mirasai/mcp
 ```
 
 Abans del patch de ruta, l'endpoint `/api/v1/mirasai/mcp` podia donar 404 en
 instal.lacions d'aquest tipus. La versio `0.4.7` ja ha incorporat un fallback de
-ruta que va funcionar a InARTS, pero convindria deixar-ho cobert amb proves.
+ruta que va funcionar en aquest web, pero convindria deixar-ho cobert amb proves.
 
 ### Solucio proposada
 
@@ -84,29 +84,29 @@ ruta que va funcionar a InARTS, pero convindria deixar-ho cobert amb proves.
   - api app: `/v1/mirasai/mcp`
 - Afegir tests o smoke checks amb aquests casos:
   - Joomla a domini arrel: `/api/v1/mirasai/mcp`
-  - Joomla a subdirectori: `/a-rts/api/v1/mirasai/mcp`
-  - API app amb index.php: `/a-rts/api/index.php/v1/mirasai/mcp`
+  - Joomla a subdirectori: `/subsite/api/v1/mirasai/mcp`
+  - API app amb index.php: `/subsite/api/index.php/v1/mirasai/mcp`
 - Revisar el dashboard:
   - `com_mirasai/admin/src/View/Dashboard/HtmlView.php` construeix l'endpoint
-    amb `Uri::root()`, que en subdirectori ha d'incloure `/a-rts/`.
+    amb `Uri::root()`, que en subdirectori ha d'incloure `/subsite/`.
   - Afegir una nota o validacio visual si el path public calculat no coincideix
     amb el path real de la request.
 
-Validacio feta a InARTS:
+Validacio feta al web:
 
-- `https://www.ub.edu/a-rts/api/v1/mirasai/mcp` respon `tools/list`.
-- `https://www.ub.edu/a-rts/api/index.php/v1/mirasai/mcp` respon `tools/list`.
+- `https://example.org/subsite/api/v1/mirasai/mcp` respon `tools/list`.
+- `https://example.org/subsite/api/index.php/v1/mirasai/mcp` respon `tools/list`.
 - `system/info` retorna Joomla `5.4.5`, PHP `8.2.29`, MySQL `8.0.45-commercial`.
 
 ## Notes operatives
 
 - No desar tokens Joomla/MirasAI en aquest repo.
-- UB usa NFS: en canvis remots de fitxers PHP, evitar substitucions amb
+- Aquell hosting usa NFS: en canvis remots de fitxers PHP, evitar substitucions amb
   `rename()` sobre fitxers calents si el servidor talla la connexio. Patró que
   ha funcionat: backup amb nom nou, escriptura directa, validacio i comprovacio
   de `.nfs*`.
 
-## 3. Pendents operatius detectats a comunitat.congresbit.cat
+## 3. Pendents operatius detectats a un altre web de client Joomla
 
 Data: 2026-05-25
 
@@ -114,14 +114,14 @@ Estat: obert.
 
 ### Context
 
-- Site: `comunitat.congresbit.cat`
+- Site: `un altre web de client Joomla`
 - Joomla `5.4.5`, PHP `8.4.21`, YOOtheme `5.0.34`
 - MirasAI `0.4.8` instal.lat i validat via endpoint standalone.
 - Backup BBDD previ:
-  `/home/congresbit/mirasai-backups/20260525-140828/db-before-mirasai.sql.gz`
+  una còpia de la base de dades al compte del client
 - Endpoint standalone funcional:
-  `https://comunitat.congresbit.cat/mcp-endpoint.php`
-- Token de prova local al compte: `/home/congresbit/.mirasai-comunitat-token`
+  `l'endpoint MCP de prova del client`
+- Token de prova local al compte del client (fora del repo).
   (no copiar al repo).
 
 ### TODO-015: Component MirasAI no visible al menu Components
@@ -226,7 +226,7 @@ Implementat:
 - `template/element-source-delete`
 - `if_match`, `dry_run`, `confirm_guarded_write` i invalidacio cache post-write.
 - Suport per storage de template, article YOOtheme i `mod_yootheme_builder`.
-- Validat amb escriptura/restauracio a l'article despublicat `Videos` (`id=1`) a `comunitat.congresbit.cat`.
+- Validat amb escriptura/restauracio a l'article despublicat `Videos` (`id=1`) a `un altre web de client Joomla`.
 - Validat al Docker lab CT `103` amb `docker/test-template-etag.sh`.
 
 ### TODO-018: Schema runtime YOOtheme ampliat
@@ -238,4 +238,4 @@ Implementat:
 - `template/element-schema` resol refs `${builder.*}` contra el config runtime instal.lat de YOOtheme.
 - Retorna `props_schema`, `element_schema` i `source_binding_schema`.
 - Manté la definicio PHP de YOOtheme com a font de veritat i marca que `enable/show` no s'avaluen.
-- Validat a `comunitat.congresbit.cat`: `headline` resol `builder.link`, exposa `props_schema.properties.content` i `source_field_count`.
+- Validat a `un altre web de client Joomla`: `headline` resol `builder.link`, exposa `props_schema.properties.content` i `source_field_count`.

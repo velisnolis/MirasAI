@@ -200,8 +200,8 @@ hosts, dins de `npm test`.
 
 Webs reals, amb el paquet de la branca `feat/visitor-checks` (0.10.4 + canvis):
 
-- `proveswp` (proves-wp.miras.pro): WordPress 7.1.4, PHP 8.4, sense YOOtheme.
-- `provesjoomla` (proves-joomla.miras.pro): Joomla 6.2.0, PHP 8.4, sense YOOtheme.
+- el web de proves WordPress (el web de proves WordPress): WordPress 7.1.4, PHP 8.4, sense YOOtheme.
+- el web de proves Joomla (el web de proves Joomla): Joomla 6.2.0, PHP 8.4, sense YOOtheme.
 
 | Cas | WordPress | Joomla |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ Webs reals, amb el paquet de la branca `feat/visitor-checks` (0.10.4 + canvis):
 | Arguments erronis (`expect` com a text, argument desconegut) | — | rebutjats pel validador abans de la crida |
 
 Les redireccions cap a fora es van provar amb tres regles `Redirect 302`
-temporals a l'`.htaccess` de `proveswp`, que després es va restaurar idèntic.
+temporals a l'`.htaccess` de el web de proves WordPress, que després es va restaurar idèntic.
 No s'han provat: un servidor que no es pot cridar a si mateix
 (`loopback_failed`) ni una resposta de més de 2 MB a Joomla.
 
@@ -230,10 +230,10 @@ això permetia triar a quin host es connectava el servidor. Ara:
   `Host` amb un port no estàndard, una IP que no és la del servidor o un nom
   que no sigui DNS net. No es pot comparar amb `SERVER_PORT`:
   Apache amb `UseCanonicalName Off` el copia de `Host` (comprovat a
-  `provesjoomla`);
+  el web de proves Joomla);
 - Joomla fa la petició amb cURL directe, que també talla la resposta a 2 MB.
 
-Provat a `provesjoomla`: portada normal amb la connexió fixada i `Host` amb
+Provat a el web de proves Joomla: portada normal amb la connexió fixada i `Host` amb
 `:8080` rebutjat. A cPanel un nom de host fals ja no arriba a Joomla (421).
 
 Risc que queda a WordPress: `home_url()` surt de la base de dades, excepte si
@@ -242,13 +242,13 @@ fa cap dels webs que conec, però no està cobert.
 
 Notes per tornar a provar en aquests comptes:
 
-- Tots dos tenen l'accés limitat a la IP del servidor (185.254.206.69) amb un
+- Tots dos tenen l'accés limitat a la IP del servidor (la IP del servidor) amb un
   bloc `Require ip` a l'`.htaccess`. Les crides MCP es fan amb curl des del
   servidor mateix; la petició que el web es fa a si mateix també passa el filtre.
-- L'`.htaccess` de `provesjoomla` no té les regles de reescriptura de Joomla:
+- L'`.htaccess` de el web de proves Joomla no té les regles de reescriptura de Joomla:
   el MCP és a `/api/index.php/v1/mirasai/mcp`, no a `/api/v1/mirasai/mcp`.
-- Còpies fetes abans d'instal·lar, al servidor: `~proveswp/mirasai-test/` (el
-  connector 0.10.4 i l'`.htaccess`) i `~provesjoomla/mirasai-test/` (dump de la
+- Còpies fetes abans d'instal·lar, al servidor: `~el web de proves WordPress/mirasai-test/` (el
+  connector 0.10.4 i l'`.htaccess`) i `~el web de proves Joomla/mirasai-test/` (dump de la
   base de dades).
 
 ### 1.2 `site/cache-purge`, 2026-11-09
@@ -256,12 +256,12 @@ Notes per tornar a provar en aquests comptes:
 Proves locals: `docker/test-cache-purge.php`, amb WP Rocket, una memòria cau
 d'objectes i un drop-in desconegut simulats.
 
-WordPress (`proveswp`, sense cap memòria cau): `dry_run` sense res a buidar i
+WordPress (el web de proves WordPress, sense cap memòria cau): `dry_run` sense res a buidar i
 purga amb `state=pass`, `page=none`. El camí de WP Rocket només està provat amb
 funcions simulades; el codi és el mateix `CachePurger` que ja feien servir les
 comprovacions posteriors a l'actualització.
 
-Joomla (`provesjoomla`), el cas complet amb System - Page Cache activat
+Joomla (el web de proves Joomla), el cas complet amb System - Page Cache activat
 temporalment:
 
 | Pas | Resultat |
@@ -276,13 +276,13 @@ temporalment:
 Després es va restaurar l'article (idèntic per `cmp`) i es va tornar a
 desactivar el connector.
 
-La memòria cau de pàgina de JCH Optimize (`jchpagecache`, vist a nordlogway
+La memòria cau de pàgina de JCH Optimize (`jchpagecache`, vist a un web de client Joomla
 amb JCH 9.4.3) té emmagatzematge propi i no escolta cap esdeveniment de neteja
 de Joomla. L'eina la detecta i torna `unsupported`; no s'ha provat de buidar-la.
 
 ### Spike 1.3 `template/render-check`, WordPress, 2026-11-09
 
-A `proveswp`, amb YOOtheme Pro 5.0.53 copiat del tema pare d'`ambiens` (sense el
+A el web de proves WordPress, amb YOOtheme Pro 5.0.53 copiat del tema pare d'`un web de client WordPress` (sense el
 tema fill ni la configuració). Es queda instal·lat per a les proves.
 
 Què s'ha comprovat, amb una pàgina de prova (`prova-render-mirasai`) i
@@ -325,7 +325,7 @@ Proves locals: `docker/test-render-check.php` (marques de path iguals a les de
 `template/element-list`, resum, `expect`, branques que no es mostren, elements
 repetits, render buit).
 
-A `proveswp`:
+A el web de proves WordPress:
 
 - Pàgina `prova-render-mirasai`: el titular, el text i el títol del web
   (font `site`) surten amb el seu path; l'element desactivat surt a
@@ -349,7 +349,7 @@ El flux d'un agent, als dos webs de proves: `template/list` (per al
 `collection_etag`) → previsualització → creació → `template/element-add` amb
 l'ETag retornat → comprovació.
 
-| | WordPress (`proveswp`) | Joomla (`provesjoomla`, YOOtheme 5.0.18 en aquesta prova) |
+| | WordPress (el web de proves WordPress) | Joomla (el web de proves Joomla, YOOtheme 5.0.18 en aquesta prova) |
 | --- | --- | --- |
 | Tipus | `single-post` | `com_content.article` |
 | Clau generada | `mirasai_…` (`generateStorageKey()` del host) | 8 caràcters (`generateStorageKey()` del host) |
@@ -368,8 +368,8 @@ veuen els visitants i queda per a un segon pas, amb previsualització.
 
 ### 1.3 `template/render-check`, Joomla, 2026-11-09
 
-`provesjoomla` té ara YOOtheme 5.0.54, instal·lat amb la clau del servidor
-(1Password, «YOOtheme API Key (server.miras.pro)»). El paquet es va comprovar amb
+el web de proves Joomla té ara YOOtheme 5.0.54, instal·lat amb la clau del servidor
+(1Password, «YOOtheme API Key (el servidor)»). El paquet es va comprovar amb
 el SHA-256 del feed, i la clau queda al lloc d'actualitzacions del web, com a la
 resta de Joomla del servidor.
 
@@ -393,10 +393,10 @@ Proves:
 | Article 2 amb layout propi | els dos titulars; el desactivat a `not_rendered`; coincideix amb `site/public-fetch` |
 | `context_id` en un article, plantilla inexistent, article sense layout | `context_only_for_templates`, `template_not_found`, `article_layout_missing` |
 
-Material de proves que queda a `provesjoomla`: l'article 2 té un layout de
+Material de proves que queda a el web de proves Joomla: l'article 2 té un layout de
 YOOtheme al `fulltext`, que abans era buit. Per restaurar-lo:
 ``UPDATE jos_content SET `fulltext`='' WHERE id=2`` (nota a
-`~provesjoomla/mirasai-test/article2-restore.txt`).
+`~el web de proves Joomla/mirasai-test/article2-restore.txt`).
 
 ### Fase 2 · Registre d'accions, 2026-11-09
 
@@ -427,11 +427,11 @@ aquesta capçalera, el host fa servir el User-Agent.
 
 Proves reals:
 
-- `proveswp`, amb Simple History 5.36 instal·lat per a la prova:
+- el web de proves WordPress, amb Simple History 5.36 instal·lat per a la prova:
   `site/cache-purge` → «MirasAI ran site/cache-purge on - for
   claude-code/2.1.0 via @miras/mirasai-mcp», amb l'usuari de la contrasenya
   d'aplicació i `_initiator_ai_agent` per capçalera.
-- `provesjoomla`: `template/list` i `site/cache-purge` amb `dry_run` no deixen
+- el web de proves Joomla: `template/list` i `site/cache-purge` amb `dry_run` no deixen
   cap fila; `site/cache-purge` i `template/element-update-props` en deixen una
   cadascuna, amb el destí, el client i els ETags. Després de la correcció de
   l'usuari, la fila porta `user_id 658` (`alex-proves`).
@@ -459,24 +459,24 @@ Els nivells per defecte surten de la definició de l'element (`headline` és
 desactivats, i el que tenen a dins, no s'auditen; només es compten.
 
 Proves: `docker/test-template-audit.php` (27 comprovacions, les dues còpies de
-l'auditor idèntiques). A `proveswp`, la pàgina de prova dona
+l'auditor idèntiques). A el web de proves WordPress, la pàgina de prova dona
 `image_file_missing` i `missing_alt` per a una imatge que de debò no existeix
-al servidor, i l'esquema h1 → h2 (dinàmic). A `provesjoomla`, l'article 2 i la
+al servidor, i l'esquema h1 → h2 (dinàmic). A el web de proves Joomla, l'article 2 i la
 plantilla creada surten nets, amb el seu esquema.
 
 **Ajornat: l'avís `unknown_prop_keys` a les escriptures.** Un recompte de només
 lectura sobre layouts reals mostra que la definició de l'element no basta:
 
-- ambiens (WordPress, 12 layouts, 416 nodes): una sola clau desconeguda,
+- un web de client WordPress (WordPress, 12 layouts, 416 nodes): una sola clau desconeguda,
   `column.width_medium` (l'amplada que desa la fila), 96 vegades;
-- nordlogway (Joomla): unes 30 claus distintes, centenars de vegades
+- un web de client Joomla (Joomla): unes 30 claus distintes, centenars de vegades
   (`headline.parallax_y`, `section.padding`, `text.margin`…). Els camps de
   paral·laxi viuen en un panell compartit del personalitzador
   (`builder-parallax`) al qual l'element remet amb un botó, i d'altres són noms
   de versions antigues que YOOtheme ignora.
 
 Els camps del tipus carregat per YOOtheme són els mateixos que els de la
-definició estàtica (comprovat a `proveswp`), així que l'avís demana resoldre
+definició estàtica (comprovat a el web de proves WordPress), així que l'avís demana resoldre
 aquests panells i limitar-se a les claus que escriu la crida. Sense això seria
 soroll.
 
@@ -505,7 +505,7 @@ El playbook diu als agents que l'enviïn. Proves: `docker/test-preview-token.php
 als dos hosts (altres `props` amb el token → `preview_mismatch`; les mateixes →
 `updated`).
 
-**Bindings de diversos ítems: avís nou.** A les plantilles de nordlogway, la
+**Bindings de diversos ítems: avís nou.** A les plantilles de un web de client Joomla, la
 consulta de llista (`articles`) és al `grid_item`, no al `grid`.
 `template/element-source-set` (forma d'un sol path) torna ara
 `warnings: [binding_on_list_container]` quan es lliga una font a un element de
@@ -523,9 +523,9 @@ Correccions de la revisió de Codex a la PR #11 (redireccions amb només query;
 `template/audit` amb `scope: "site"`: totes les plantilles i tots els layouts
 (entrades i widgets a WordPress; articles fora de la paperera a Joomla). Per a
 cada layout amb troballes, els recomptes i com a molt `max_per_layout`
-troballes, de pitjor a millor; els nets només es compten. Provat a `proveswp`
+troballes, de pitjor a millor; els nets només es compten. Provat a el web de proves WordPress
 (3 layouts, 1 net, la imatge que falta i un salt h1 → h3 real a la plantilla de
-prova) i `provesjoomla` (2 layouts nets).
+prova) i el web de proves Joomla (2 layouts nets).
 
 ### Activar i ordenar plantilles
 
@@ -538,10 +538,10 @@ condicions la tapa (`shadowed_by`) i de quines posteriors prendria pàgines.
 `template/list` mostra ara `status`.
 
 Proves: `docker/test-template-order.php` (29 comprovacions, les dues còpies
-idèntiques). En real a `proveswp`: activar la plantilla creada → el visitant de
+idèntiques). En real a el web de proves WordPress: activar la plantilla creada → el visitant de
 l'entrada 1 la veu; activar-ne dues → guanya la primera i la previsualització
 diu que l'altra queda tapada; moure la segona al davant → el visitant passa a
-veure-la; després, ordre original i totes dues desactivades. A `provesjoomla`:
+veure-la; després, ordre original i totes dues desactivades. A el web de proves Joomla:
 activar → el visitant de l'article 1 veu la plantilla; desactivar → torna
 l'article.
 
@@ -555,9 +555,9 @@ l'entrada a partir de la classe del `body` (`postid-N`, `page-id-N`). És `null`
 quan cap layout del Builder pinta la pàgina o quan un minificador d'HTML ha
 tret els comentaris.
 
-Provat a `proveswp` (pàgina amb layout propi → `own_layout` i id 5; entrada amb
+Provat a el web de proves WordPress (pàgina amb layout propi → `own_layout` i id 5; entrada amb
 la plantilla activada → `template` i la clau exacta; sense plantilla → `null`)
-i a `provesjoomla` (article 2 → `own_layout`).
+i a el web de proves Joomla (article 2 → `own_layout`).
 
 ### Duplicar plantilles
 
@@ -591,8 +591,37 @@ amb el seu lloc als dos hosts, la mateixa secció vàlida passa, i a Joomla un
   del hash, i una reordenació no canviava el `collection_etag`; `set-status` i
   `move` haurien acceptat un `if_match` d'abans d'una reordenació. Ara cada
   plantilla s'ordena per dins però la col·lecció conserva l'ordre. Provat a
-  `provesjoomla`: després d'un `template/move`, l'ETag d'abans → `stale_etag`.
+  el web de proves Joomla: després d'un `template/move`, l'ETag d'abans → `stale_etag`.
 - P2: a WordPress, l'auditoria de tot el web feia servir `listLayouts()`, que
   té límits (200 i 500). Ara enumera tots els id (metadades i comentari al
   contingut) i pagina amb `offset`/`limit`, amb `layouts_total`, `next_offset` i
   `layouts_unreadable`; Joomla fa el mateix.
+
+## Prova de la 0.12.0 a un web de client WordPress
+
+Quatre observacions a `docs/yootheme-builder-findings.md` (F-040 a F-043).
+
+- **F-040, `render-check` d'una plantilla d'arxiu.** Confirmat al codi:
+  `context_id` només reprodueix una fitxa, i una consulta d'arxiu, cerca o
+  taxonomia no té entrades fora d'una petició real. Ara `render-check` torna
+  `warnings`: `listing_not_reproducible` per a les plantilles que no són de
+  fitxa (WordPress: tipus que no comencen per `single-`; Joomla: diferent de
+  `com_content.article`) i `dynamic_not_rendered` amb els paths dels elements
+  lligats a una font que no s'han pintat. Provat a el web de proves WordPress amb una plantilla
+  `archive-post` com la d'un web de client WordPress: un sol element (el títol) i els dos avisos,
+  amb el path de l'ítem de la graella.
+- **F-041, `preview_token` repetit.** És el disseny: és el hash de l'eina i
+  dels arguments, no una sessió. Totes les escriptures protegides demanen
+  `if_match`, que és el que prova que la previsualització és vigent. Documentat
+  al playbook i a `PreviewToken`.
+- **F-042, condició `!!` sobre un camp llista.** Reproduït a el web de proves WordPress sense
+  ACF: amb l'entrada 1, la condició sobre `title` es compleix i les condicions
+  sobre `categories` i `categories.name` no. Causa dins de YOOtheme no
+  localitzada. Ara `template/element-source-preview` torna
+  `binding_through_list_field` quan una propietat o una condició passa per un
+  camp llista (`SourceListPaths`, amb el tipus de resultat i el mapa de tipus de
+  `template/source-types`). Provat: `categories` a WordPress i `tags` a Joomla
+  avisen; `title` no.
+- **F-043, `teaser` sense límit.** `template/audit` dona `unbounded_teaser`
+  (notice) quan un ítem d'una llista lliga `teaser` o `content` sense el filtre
+  `limit`. Provat a la plantilla d'arxiu de prova.

@@ -129,5 +129,34 @@ foreach ([R::class, $JR] as $C) {
     check($C::rendersNothing('<div class="imgx"></div>'), "$C: a class name that starts with img is not an image");
 }
 
+// F-040: bound elements that did not render, and listing templates.
+$archive = ['type' => 'layout', 'children' => [['type' => 'section', 'children' => [['type' => 'row', 'children' => [['type' => 'column', 'children' => [
+    ['type' => 'headline', 'props' => ['content' => 'Actualitat']],
+    ['type' => 'grid', 'children' => [['type' => 'grid_item', 'source' => ['query' => ['name' => 'posts', 'field' => ['name' => 'archivePost']], 'props' => ['title' => ['name' => 'title']]]]]],
+]]]]]]]];
+foreach ([R::class, $JR] as $C) {
+    $bound = $C::boundPaths($archive);
+    check($bound === ['root>section[0]>row[0]>column[0]>grid[1]>grid_item[0]'], "$C: bound paths found");
+    $marked = $archive;
+    $stored = [];
+    $C::mark($marked, 'root', $stored);
+    $tree = json_decode((string) json_encode($marked));
+    $tree->children[0]->children[0]->children[0]->children[1]->children = [];
+    $toArrays($tree);
+    $s = $C::summarize($tree, $stored, [], $bound);
+    check($s['dynamic_not_rendered'] === $bound && count($s['elements']) === 1, "$C: the empty grid item is reported, the static title still renders");
+    $w = $C::warnings($s['dynamic_not_rendered'], true, 'archive-post');
+    check(array_column($w, 'code') === ['listing_not_reproducible', 'dynamic_not_rendered'] && $w[1]['paths'] === $bound, "$C: listing and dynamic warnings for an archive template");
+    check(str_contains($w[1]['fix'], 'site/public-fetch'), "$C: an archive is checked with site/public-fetch");
+    check($C::warnings([], false, 'single-post') === [], "$C: a single template that rendered everything has no warning");
+    $bind = ['query' => ['name' => 'posts'], 'props' => ['title' => ['name' => 'title']]];
+    $switchedOff = ['type' => 'layout', 'children' => [
+        ['type' => 'section', 'props' => ['status' => 'disabled'], 'children' => [['type' => 'headline', 'source' => $bind]]],
+        ['type' => 'section', 'children' => [['type' => 'headline', 'props' => ['status' => 'disabled'], 'source' => $bind], ['type' => 'text', 'source' => $bind]]],
+    ]];
+    check($C::boundPaths($switchedOff) === ['root>section[1]>text[1]'], "$C: a disabled element and what is inside a disabled section are not dynamic failures (Codex review, PR #13)");
+    check(str_contains($C::warnings(['x'], false, 'single-post')[0]['fix'], 'context_id'), "$C: a single template is told to try another context_id");
+}
+
 echo $fails === 0 ? "OK: $count checks\n" : "$fails of $count checks failed\n";
 exit($fails === 0 ? 0 : 1);

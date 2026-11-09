@@ -73,7 +73,7 @@ Hosts can still be used directly over HTTP MCP. The router is the preferred oper
 | Auth | Joomla API token, Super User gated | WordPress Application Password + `manage_options`; MirasAI token fallback | 1Password/env/dev secret refs |
 | Dashboard | Full admin dashboard, onboarding, status, elevation | Compact onboarding/status dashboard | CLI registry |
 | Automatic updates | XML feed serves published `0.9.0` until this tag exists | JSON feed serves published `0.9.0` until this tag exists | No feed; install the release tarball |
-| Last live canary | Joomla 5 + YOOtheme Pro 5.0.40 lab (`0.9.0`) | WordPress 7.0.4 + PHP 8.4 + YOOtheme Pro 5.0.40 (`0.9.0`) | Guarded Style compile/write and provenance readback exercised against Indústria Viva on 2026-08-17 |
+| Last live canary | Joomla 5 + YOOtheme Pro 5.0.40 lab (`0.9.0`) | WordPress 7.0.4 + PHP 8.4 + YOOtheme Pro 5.0.40 (`0.9.0`) | Guarded Style compile/write and provenance readback exercised against a client WordPress site on 2026-08-17 |
 | CMS content | Articles, categories, multilingual workflows | Posts/pages, terms, WPML/Polylang workflows | Routes host tools |
 | YOOtheme | Templates, articles, Builder modules | Templates, pages/posts, Builder widgets | Routes host tools |
 | YOOtheme Styles | Read, sources, guarded update | Read, sources, guarded create/update | Pinned-worker preview, update, and verification |

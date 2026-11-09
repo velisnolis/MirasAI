@@ -34,6 +34,7 @@ require_once $pluginSrc . '/Tool/TemplateElementSourceSupportTrait.php';
 require_once $pluginSrc . '/Tool/TemplateElementListTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementReadTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementSourceReadTool.php';
+require_once $pluginSrc . '/Tool/SourceListPaths.php';
 require_once $pluginSrc . '/Tool/TemplateElementSourcePreviewTool.php';
 require_once $pluginSrc . '/Tool/AbstractTemplateElementWriteTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementSourceSetTool.php';

@@ -274,10 +274,10 @@ check('etag changes when the config changes', $etagBefore !== $after['etag']);
 // child theme detection
 $GLOBALS['test_stylesheet'] = 'yootheme-child';
 mkdir($childDir . '/less', 0777, true);
-file_put_contents($childDir . '/less/theme.industria-viva.less', "/*\n\nName: Indústria Viva\n\n*/\n");
+file_put_contents($childDir . '/less/theme.client-style.less', "/*\n\nName: Client Style\n\n*/\n");
 $withChild = (new TemplateStyleReadTool())->handle([]);
 $ids = array_column($withChild['available'] ?? [], 'source', 'id');
-check('a child theme style joins the library', ($ids['industria-viva'] ?? '') === 'child');
+check('a child theme style joins the library', ($ids['client-style'] ?? '') === 'child');
 check('child theme is reported as present', ($withChild['child_theme']['present'] ?? false) === true);
 check('no missing-child-theme warning once one exists', !array_filter($withChild['warnings'] ?? [], static fn($w) => str_contains($w, 'No child theme')));
 $GLOBALS['test_stylesheet'] = 'yootheme';
@@ -404,8 +404,8 @@ check('style-update reports updates within the active family', ($dryRun['style_a
 $createTarget = $root . '/wp-content/themes/yootheme-brand';
 $createArguments = [
     'if_match' => $currentRead['etag'],
-    'style_id' => 'industria-viva',
-    'name' => 'Indústria Viva',
+    'style_id' => 'client-style',
+    'name' => 'Client Style',
     'background' => 'White',
     'color' => 'Pink',
     'variations' => [
@@ -421,11 +421,11 @@ check('style-create dry-run does not create the child theme', !is_dir($createTar
 check('style-create explicitly leaves activation for a separate operation', ($createPreview['child_theme']['will_activate'] ?? true) === false);
 
 $created = (new TemplateStyleCreateTool())->handle($createArguments + ['confirm_guarded_write' => true]);
-$createdStylePath = $createTarget . '/less/theme.industria-viva.less';
+$createdStylePath = $createTarget . '/less/theme.client-style.less';
 $createdStyle = is_file($createdStylePath) ? (string) file_get_contents($createdStylePath) : '';
 check('style-create writes the versionable child-theme Style source', ($created['action'] ?? null) === 'created' && is_file($createdStylePath));
 check('style-create scaffolds a declared YOOtheme child theme', str_contains((string) file_get_contents($createTarget . '/style.css'), 'Template: yootheme'));
-check('style-create writes structured Style metadata', str_contains($createdStyle, "Name: Indústria Viva") && str_contains($createdStyle, "Style: white-pink"));
+check('style-create writes structured Style metadata', str_contains($createdStyle, "Name: Client Style") && str_contains($createdStyle, "Style: white-pink"));
 check('style-create preserves the supplied Less body', str_contains($createdStyle, '@global-primary-background: #e85039;'));
 check('style-create creates a private snapshot before writing', ($created['snapshot_created'] ?? false) === true);
 check('style-create does not make an inactive child Style runtime-visible', ($created['runtime_visible'] ?? true) === false);
@@ -501,11 +501,11 @@ check('style-update rejects a lost-update race at the database gate', ($conflict
 check('a rejected compare-and-swap leaves the current config untouched', $helper->loadConfig() === $commitCandidate);
 
 $previousStylesheet = $GLOBALS['test_stylesheet'];
-$GLOBALS['test_stylesheet'] = 'yootheme-industria-viva';
+$GLOBALS['test_stylesheet'] = 'yootheme-client-style';
 $childRead = (new TemplateStyleReadTool())->handle([]);
-check('style-read storage option follows the child stylesheet', ($childRead['storage']['option'] ?? '') === 'theme_mods_yootheme-industria-viva');
+check('style-read storage option follows the child stylesheet', ($childRead['storage']['option'] ?? '') === 'theme_mods_yootheme-client-style');
 $childHelper = new YoothemeStyleHelper();
-check('styleModsOptionName uses child theme mods', $childHelper->styleModsOptionName() === 'theme_mods_yootheme-industria-viva');
+check('styleModsOptionName uses child theme mods', $childHelper->styleModsOptionName() === 'theme_mods_yootheme-client-style');
 $childConfig = $childHelper->loadConfig();
 $childEtag = $childHelper->etag($childConfig, $childHelper->compiledState());
 $childCandidate = $childHelper->patchConfig($childConfig, 'flow', 'white-pink', ['@global-background' => '#fff'], [], null, false);
@@ -524,11 +524,11 @@ $childSnapshotManifest = is_file($childSnapshotDir . '/manifest.json')
     : null;
 check(
     'child style-update snapshot names the exact theme_mods option',
-    is_file($childSnapshotDir . '/theme_mods_yootheme-industria-viva.serialized')
+    is_file($childSnapshotDir . '/theme_mods_yootheme-client-style.serialized')
 );
 check(
     'child style-update manifest records the exact theme_mods option',
-    ($childSnapshotManifest['theme_mods_option'] ?? null) === 'theme_mods_yootheme-industria-viva'
+    ($childSnapshotManifest['theme_mods_option'] ?? null) === 'theme_mods_yootheme-client-style'
 );
 
 $provenanceRead = (new TemplateStyleReadTool())->handle([]);
@@ -615,7 +615,7 @@ check(
 );
 check(
     'style-read identifies the uninitialized child option and parent fallback separately',
-    ($uninitializedRead['storage']['active_option'] ?? null) === 'theme_mods_yootheme-industria-viva'
+    ($uninitializedRead['storage']['active_option'] ?? null) === 'theme_mods_yootheme-client-style'
         && ($uninitializedRead['storage']['source_option'] ?? null) === 'theme_mods_yootheme'
 );
 $uninitializedUpdate = (new TemplateStyleUpdateTool())->handle([
