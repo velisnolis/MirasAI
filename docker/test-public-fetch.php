@@ -200,6 +200,18 @@ foreach ([
     check(($r['code'] ?? '') === 'too_many_expect', "$host: expect checked before fetching");
 }
 
+// Joomla: where the site is when live_site is empty and the Host header decides Uri::root().
+$J = \Mirasai\Library\Tool\SitePublicFetchTool::class;
+check($J::siteTarget('https://example.cat', 'https://evil.example/', '10.0.0.5') === ['site_url' => 'https://example.cat/', 'pin' => null], 'joomla: live_site wins and is not pinned');
+check($J::siteTarget('', 'https://example.cat/', '185.254.206.69') === ['site_url' => 'https://example.cat/', 'pin' => '185.254.206.69'], 'joomla: request host is pinned to the receiving address');
+check($J::siteTarget('', 'https://example.cat:443/', '185.254.206.69')['pin'] === '185.254.206.69', 'joomla: explicit default port accepted');
+check(($J::siteTarget('', 'https://example.cat:8080/', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: port from the Host header refused');
+check(($J::siteTarget('', 'http://example.cat:443/', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: https port on http refused');
+check($J::siteTarget('http://example.cat:8080', 'http://example.cat:8080/', '10.0.0.5') === ['site_url' => 'http://example.cat:8080/', 'pin' => null], 'joomla: a non-default port works through live_site');
+check(($J::siteTarget('', 'https://example.cat/', null)['code'] ?? '') === 'site_url_untrusted', 'joomla: no server address refused');
+check(($J::siteTarget('', 'https://example.cat/', 'not-an-ip')['code'] ?? '') === 'site_url_untrusted', 'joomla: malformed server address refused');
+check(($J::siteTarget('', '/', '10.0.0.5')['code'] ?? '') === 'site_url_unknown', 'joomla: root without host refused');
+
 // The two hosts carry the same inspector.
 $wp = file_get_contents($root . '/packages/mirasai-wp/src/Tool/PublicPageInspector.php');
 $joomla = file_get_contents($root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/PublicPageInspector.php');

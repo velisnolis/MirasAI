@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Tool;
 
-use Joomla\CMS\Http\HttpFactory;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Uri\Uri;
 use Mirasai\Library\Mirasai;
 
@@ -12,6 +12,9 @@ class SitePublicFetchTool extends AbstractTool
 {
     /** @var (callable(string): array<string, mixed>)|null */
     private $fetcher;
+
+    /** Address every request connects to, whatever the URL host resolves to. */
+    private ?string $pinnedAddress = null;
 
     /**
      * No database: the parent constructor is skipped on purpose.
@@ -70,7 +73,23 @@ class SitePublicFetchTool extends AbstractTool
             return $expect;
         }
 
-        $siteUrl = $this->siteUrl ?? Uri::root();
+        if ($this->siteUrl !== null) {
+            $siteUrl = $this->siteUrl;
+        } else {
+            $target = self::siteTarget(
+                (string) Factory::getApplication()->get('live_site', ''),
+                Uri::root(),
+                isset($_SERVER['SERVER_ADDR']) ? (string) $_SERVER['SERVER_ADDR'] : null,
+            );
+
+            if (isset($target['error'])) {
+                return $target;
+            }
+
+            $siteUrl = $target['site_url'];
+            $this->pinnedAddress = $target['pin'];
+        }
+
         $url = (string) ($arguments['url'] ?? '');
         $cacheBust = ($arguments['cache_bust'] ?? false) === true;
 
@@ -98,35 +117,109 @@ class SitePublicFetchTool extends AbstractTool
     }
 
     /**
-     * Joomla's client has no response size limit; PublicPageInspector truncates the body it parses.
+     * Where the site is and which address to connect to.
+     *
+     * Without live_site, Uri::root() comes from the request's Host header. On a
+     * server where this site is the default virtual host, any Host reaches
+     * Joomla, so the host alone must not decide where the server connects.
+     * The connection is pinned to the address that received this request. A
+     * port in the Host header is refused: Apache with UseCanonicalName Off
+     * copies it into SERVER_PORT too, so there is nothing to check it against.
+     *
+     * @return array{site_url: string, pin: ?string}|array{error: string, code: string}
+     */
+    public static function siteTarget(string $liveSite, string $requestRoot, ?string $serverAddr): array
+    {
+        if (trim($liveSite) !== '') {
+            return ['site_url' => rtrim(trim($liveSite), '/') . '/', 'pin' => null];
+        }
+
+        $parts = parse_url($requestRoot);
+
+        if (!is_array($parts) || !isset($parts['host'])) {
+            return ['error' => 'The site URL could not be determined.', 'code' => 'site_url_unknown'];
+        }
+
+        $defaultPort = strtolower((string) ($parts['scheme'] ?? '')) === 'http' ? 80 : 443;
+
+        if (isset($parts['port']) && (int) $parts['port'] !== $defaultPort) {
+            return [
+                'error' => 'The site answers on a non-default port that only the Host header names. Set live_site in Global Configuration to fetch from this site.',
+                'code' => 'site_url_untrusted',
+            ];
+        }
+
+        if ($serverAddr === null || filter_var($serverAddr, FILTER_VALIDATE_IP) === false) {
+            return [
+                'error' => 'The server address is unknown, so the site host cannot be trusted. Set live_site in Global Configuration.',
+                'code' => 'site_url_untrusted',
+            ];
+        }
+
+        return ['site_url' => $requestRoot, 'pin' => $serverAddr];
+    }
+
+    /**
+     * Plain cURL rather than Joomla's client: it can pin the address and stop at the size limit.
      *
      * @return array<string, mixed>
      */
     public function request(string $url): array
     {
-        try {
-            $http = HttpFactory::getHttp([
-                'follow_location' => false,
-                'userAgent' => 'MirasAI-public-fetch/' . Mirasai::VERSION,
-            ]);
-            $response = $http->get($url, ['Accept' => 'text/html,application/xhtml+xml'], 15);
-        } catch (\Throwable $exception) {
+        if (!function_exists('curl_init')) {
+            return ['error' => 'The PHP curl extension is not available.', 'code' => 'curl_unavailable'];
+        }
+
+        $parts = parse_url($url);
+        $scheme = strtolower((string) ($parts['scheme'] ?? 'https'));
+        $port = (int) ($parts['port'] ?? ($scheme === 'http' ? 80 : 443));
+        $headers = [];
+        $body = '';
+        $limit = PublicPageInspector::MAX_BODY_BYTES + 1;
+
+        $handle = curl_init($url);
+        $options = [
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERAGENT => 'MirasAI-public-fetch/' . Mirasai::VERSION,
+            CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml'],
+            CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
+                if (str_contains($line, ':')) {
+                    [$name, $value] = explode(':', $line, 2);
+                    $headers[strtolower(trim($name))] = trim($value);
+                } elseif (preg_match('#^HTTP/#', $line) === 1) {
+                    $headers = [];
+                }
+
+                return strlen($line);
+            },
+            CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, $limit): int {
+                $body .= $chunk;
+
+                // Returning a short count aborts the transfer once enough is in.
+                return strlen($body) >= $limit ? 0 : strlen($chunk);
+            },
+        ];
+
+        if ($this->pinnedAddress !== null) {
+            $address = str_contains($this->pinnedAddress, ':') ? '[' . $this->pinnedAddress . ']' : $this->pinnedAddress;
+            $options[CURLOPT_RESOLVE] = [($parts['host'] ?? '') . ':' . $port . ':' . $address];
+        }
+
+        curl_setopt_array($handle, $options);
+        $ok = curl_exec($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($handle);
+
+        if ($ok === false && !(strlen($body) >= $limit && $status > 0)) {
             return [
-                'error' => 'The site could not be reached from its own server: ' . $exception->getMessage(),
+                'error' => 'The site could not be reached from its own server: ' . $error,
                 'code' => 'loopback_failed',
             ];
         }
 
-        $headers = [];
-
-        foreach ($response->getHeaders() as $name => $values) {
-            $headers[strtolower((string) $name)] = is_array($values) ? implode(', ', $values) : (string) $values;
-        }
-
-        return [
-            'status' => $response->getStatusCode(),
-            'headers' => $headers,
-            'body' => (string) $response->getBody(),
-        ];
+        return ['status' => $status, 'headers' => $headers, 'body' => $body];
     }
 }

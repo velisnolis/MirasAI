@@ -195,6 +195,25 @@ temporals a l'`.htaccess` de `proveswp`, que després es va restaurar idèntic.
 No s'han provat: un servidor que no es pot cridar a si mateix
 (`loopback_failed`) ni una resposta de més de 2 MB a Joomla.
 
+Revisió de seguretat posterior (mateix dia). A Joomla sense `live_site`,
+`Uri::root()` surt de la capçalera `Host`; on el web és el vhost per defecte,
+això permetia triar a quin host es connectava el servidor. Ara:
+
+- amb `live_site`, mana `live_site`;
+- sense `live_site`, la connexió es fixa amb `CURLOPT_RESOLVE` a `SERVER_ADDR`
+  (l'adreça que ha rebut la petició) i un port no estàndard a `Host` es
+  rebutja amb `site_url_untrusted`. No es pot comparar amb `SERVER_PORT`:
+  Apache amb `UseCanonicalName Off` el copia de `Host` (comprovat a
+  `provesjoomla`);
+- Joomla fa la petició amb cURL directe, que també talla la resposta a 2 MB.
+
+Provat a `provesjoomla`: portada normal amb la connexió fixada i `Host` amb
+`:8080` rebutjat. A cPanel un nom de host fals ja no arriba a Joomla (421).
+
+Risc que queda a WordPress: `home_url()` surt de la base de dades, excepte si
+el `wp-config.php` defineix `WP_HOME` a partir de `$_SERVER['HTTP_HOST']`. No ho
+fa cap dels webs que conec, però no està cobert.
+
 Notes per tornar a provar en aquests comptes:
 
 - Tots dos tenen l'accés limitat a la IP del servidor (185.254.206.69) amb un
