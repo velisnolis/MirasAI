@@ -69,12 +69,25 @@ class TemplateAuditTool extends AbstractTool
             return null;
         }
 
-        $path = ltrim((string) preg_replace('/[?#].*$/', '', $image), '/');
+        // Decode first, then judge: a check before decoding lets %2e%2e through.
+        $path = ltrim(rawurldecode((string) preg_replace('/[?#].*$/', '', $image)), '/');
 
-        if ($path === '' || str_contains($path, '..')) {
+        if ($path === '' || preg_match('#(^|/)\.\.(/|$)|[\x00\\\\]#', $path) === 1) {
             return null;
         }
 
-        return is_file($root . '/' . rawurldecode($path));
+        $base = realpath($root);
+        $file = realpath($root . '/' . $path);
+
+        if ($file === false) {
+            return false;
+        }
+
+        // A file that resolves outside the site root (a symlinked uploads folder) is not judged.
+        if ($base === false || !str_starts_with($file, $base . '/')) {
+            return null;
+        }
+
+        return is_file($file);
     }
 }

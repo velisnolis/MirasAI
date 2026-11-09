@@ -113,6 +113,11 @@ foreach ([\Mirasai\WordPress\Tool\TemplateAuditTool::class, \Mirasai\Plugin\Mira
     check($T::localFileExists($tmp, 'images/none.jpg') === false, "$T: missing file");
     check($T::localFileExists($tmp, 'https://x/y.jpg') === null && $T::localFileExists($tmp, '//x/y.jpg') === null && $T::localFileExists($tmp, 'data:image/png;base64,x') === null, "$T: URLs not judged");
     check($T::localFileExists($tmp, '../../etc/passwd') === null, "$T: no path traversal");
+    check($T::localFileExists($tmp, '%2e%2e/%2e%2e/etc/passwd') === null && $T::localFileExists($tmp, 'images/%2E%2E/%2E%2E/etc/hosts') === null, "$T: encoded traversal refused");
+    check($T::localFileExists($tmp, "images/a b.jpg%00.png") === null && $T::localFileExists($tmp, 'images\\..\\x') === null, "$T: NUL and backslash refused");
+    symlink('/etc', $tmp . '/images/out');
+    check($T::localFileExists($tmp, 'images/out/hosts') === null, "$T: a file behind a symlink out of the root is not judged");
+    unlink($tmp . '/images/out');
     unlink($tmp . '/images/a b.jpg'); rmdir($tmp . '/images'); rmdir($tmp);
 }
 
