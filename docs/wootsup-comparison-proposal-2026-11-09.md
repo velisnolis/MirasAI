@@ -584,3 +584,15 @@ Proves: `docker/test-element-tree-validation.php` (12 comprovacions, els dos
 hosts) i en real: un `title_element: h7` dins d'una secció nova es rebutja
 amb el seu lloc als dos hosts, la mateixa secció vàlida passa, i a Joomla un
 `update-props` amb `h7` es rebutja.
+
+### Revisió de Codex a la PR #12
+
+- P1: a Joomla, `buildTemplatesEtag()` ordenava les plantilles per clau abans
+  del hash, i una reordenació no canviava el `collection_etag`; `set-status` i
+  `move` haurien acceptat un `if_match` d'abans d'una reordenació. Ara cada
+  plantilla s'ordena per dins però la col·lecció conserva l'ordre. Provat a
+  `provesjoomla`: després d'un `template/move`, l'ETag d'abans → `stale_etag`.
+- P2: a WordPress, l'auditoria de tot el web feia servir `listLayouts()`, que
+  té límits (200 i 500). Ara enumera tots els id (metadades i comentari al
+  contingut) i pagina amb `offset`/`limit`, amb `layouts_total`, `next_offset` i
+  `layouts_unreadable`; Joomla fa el mateix.

@@ -13,6 +13,7 @@ $root = dirname(__DIR__);
 
 require_once $root . '/packages/mirasai-wp/src/Tool/TemplateOrder.php';
 require_once $root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/TemplateOrder.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/YooThemeHelper.php';
 
 $fails = 0;
 $count = 0;
@@ -66,6 +67,15 @@ foreach (['wordpress' => \Mirasai\WordPress\Tool\TemplateOrder::class, 'joomla' 
     $d = $O::describe($narrow, 'a');
     check($d['applies'] === 'to the pages its conditions match' && $d['takes_over_from'] === [['key' => 'b', 'pages' => 'those matching both']], "$host: a template with conditions takes only the matching pages");
 }
+
+// Joomla's collection etag must change with the order (Codex review, PR #12): the order decides which template applies.
+$helper = (new \ReflectionClass(\Mirasai\Library\Tool\YooThemeHelper::class))->newInstanceWithoutConstructor();
+$a = ['k1' => ['name' => 'A', 'type' => 'x', 'query' => []], 'k2' => ['type' => 'x', 'name' => 'B']];
+$b = ['k2' => ['type' => 'x', 'name' => 'B'], 'k1' => ['name' => 'A', 'type' => 'x', 'query' => []]];
+$c = ['k1' => ['type' => 'x', 'query' => [], 'name' => 'A'], 'k2' => ['name' => 'B', 'type' => 'x']];
+check($helper->buildTemplatesEtag($a) !== $helper->buildTemplatesEtag($b), 'joomla: reordering templates changes the collection etag');
+check($helper->buildTemplatesEtag($a) === $helper->buildTemplatesEtag($c), 'joomla: field order inside a template does not');
+check($helper->buildTemplatesEtag($a) !== $helper->buildTemplatesEtag(\Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateOrder::withStatus($a, 'k2', false)), 'joomla: switching a template off changes it');
 
 $strip = static fn (string $s): string => preg_replace(['/^namespace .*$/m', '/^ \* Mirrored in .*$/m'], '', $s);
 check($strip(file_get_contents($root . '/packages/mirasai-wp/src/Tool/TemplateOrder.php')) === $strip(file_get_contents($root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/TemplateOrder.php')), 'order copies are identical apart from namespace and mirror note');

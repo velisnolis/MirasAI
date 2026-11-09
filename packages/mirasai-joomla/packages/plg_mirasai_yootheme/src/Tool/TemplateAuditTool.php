@@ -13,8 +13,13 @@ use Mirasai\Library\Tool\YooThemeHelper;
 class TemplateAuditTool extends AbstractTool
 {
     public const SITE_MAX_PER_LAYOUT = 5;
+    public const SITE_DEFAULT_LIMIT = 100;
+    public const SITE_MAX_LIMIT = 500;
 
     private YooThemeHelper $yooHelper;
+
+    /** @var array<string, mixed>|null templates read once per call */
+    private ?array $templates = null;
 
     public function __construct()
     {
@@ -34,6 +39,7 @@ class TemplateAuditTool extends AbstractTool
             . 'and skipped heading levels (warning); images without alternative text and headings over 70 characters (notice). '
             . 'Also returns the heading outline. scope=site audits every template and article layout instead and returns, '
             . 'per layout with findings, its counts and at most max_per_layout findings, worst first; clean layouts are only counted. '
+            . 'It pages through every layout with offset/limit; next_offset is null once all are covered. '
             . 'It reads the saved layout: values from Dynamic Sources are not judged, '
             . 'use template/render-check for what renders. Meta titles and descriptions are not checked. Read-only.';
     }
@@ -49,6 +55,13 @@ class TemplateAuditTool extends AbstractTool
                     'type' => 'string',
                     'enum' => ['layout', 'site'],
                     'description' => 'layout (default) audits the one target given; site audits every layout and takes no target.',
+                ],
+                'offset' => ['type' => 'integer', 'minimum' => 0, 'description' => 'scope=site only: skip this many layouts. Defaults to 0.'],
+                'limit' => [
+                    'type' => 'integer',
+                    'minimum' => 1,
+                    'maximum' => self::SITE_MAX_LIMIT,
+                    'description' => 'scope=site only: layouts audited per call. Defaults to ' . self::SITE_DEFAULT_LIMIT . '; next_offset continues.',
                 ],
                 'max_per_layout' => [
                     'type' => 'integer',
@@ -67,7 +80,7 @@ class TemplateAuditTool extends AbstractTool
                 return ['error' => 'scope=site audits every layout; drop key and article_id.', 'code' => 'site_scope_takes_no_target'];
             }
 
-            return self::siteReport($this->auditor(), $this->siteLayouts(), (int) ($arguments['max_per_layout'] ?? self::SITE_MAX_PER_LAYOUT));
+            return self::sitePage($this->auditor(), $this->siteSelectors(), $arguments, fn (array $selector): ?array => $this->resolveLayout($selector));
         }
 
         $key = trim((string) ($arguments['key'] ?? ''));
@@ -121,20 +134,18 @@ class TemplateAuditTool extends AbstractTool
     }
 
     /**
-     * Every template, then every article not in the trash whose fulltext holds a YOOtheme layout.
+     * Every template, then every article not in the trash whose fulltext holds a YOOtheme layout. Ids only.
      *
-     * @return list<array{selector: array<string, mixed>, label: string, layout: array<string, mixed>}>
+     * @return list<array<string, mixed>>
      */
-    private function siteLayouts(): array
+    private function siteSelectors(): array
     {
-        $layouts = [];
+        $selectors = [];
 
-        foreach ($this->yooHelper->loadTemplates() as $key => $template) {
-            $layout = is_array($template) ? $this->yooHelper->getTemplateLayout($template) : null;
+        $this->templates = $this->yooHelper->loadTemplates();
 
-            if ($layout !== null) {
-                $layouts[] = ['selector' => ['key' => (string) $key], 'label' => $this->yooHelper->getTemplateName($template), 'layout' => $layout];
-            }
+        foreach (array_keys($this->templates) as $key) {
+            $selectors[] = ['key' => (string) $key];
         }
 
         $query = $this->db->getQuery(true)
@@ -145,15 +156,73 @@ class TemplateAuditTool extends AbstractTool
             ->order($this->db->quoteName('id'));
 
         foreach ($this->db->setQuery($query)->loadColumn() ?: [] as $id) {
-            $article = $this->yooHelper->loadArticle((int) $id);
-            $layout = $article !== null ? $this->yooHelper->getArticleLayout($article) : null;
-
-            if ($layout !== null) {
-                $layouts[] = ['selector' => ['article_id' => (int) $id], 'label' => (string) ($article['title'] ?? ''), 'layout' => $layout];
-            }
+            $selectors[] = ['article_id' => (int) $id];
         }
 
-        return $layouts;
+        return $selectors;
+    }
+
+    /**
+     * @param array<string, mixed> $selector
+     * @return array{label: string, layout: array<string, mixed>}|null
+     */
+    private function resolveLayout(array $selector): ?array
+    {
+        if (isset($selector['key'])) {
+            $this->templates ??= $this->yooHelper->loadTemplates();
+            $template = $this->templates[$selector['key']] ?? null;
+            $layout = is_array($template) ? $this->yooHelper->getTemplateLayout($template) : null;
+
+            return $layout === null ? null : ['label' => $this->yooHelper->getTemplateName($template), 'layout' => $layout];
+        }
+
+        $article = $this->yooHelper->loadArticle((int) $selector['article_id']);
+        $layout = $article !== null ? $this->yooHelper->getArticleLayout($article) : null;
+
+        return $layout === null ? null : ['label' => (string) ($article['title'] ?? ''), 'layout' => $layout];
+    }
+
+    /**
+     * One page of the site audit: the selectors list every layout, only this page is loaded and audited.
+     *
+     * @param list<array<string, mixed>> $selectors every layout on the site, in a stable order
+     * @param array<string, mixed> $arguments
+     * @param callable(array<string, mixed>): ?array{label: string, layout: array<string, mixed>} $resolve
+     * @return array<string, mixed>
+     */
+    public static function sitePage(YoothemeLayoutAuditor $auditor, array $selectors, array $arguments, callable $resolve): array
+    {
+        $total = count($selectors);
+        $offset = max(0, (int) ($arguments['offset'] ?? 0));
+        $limit = max(1, min(self::SITE_MAX_LIMIT, (int) ($arguments['limit'] ?? self::SITE_DEFAULT_LIMIT)));
+        $layouts = [];
+        $unreadable = 0;
+
+        foreach (array_slice($selectors, $offset, $limit) as $selector) {
+            $resolved = $resolve($selector);
+
+            if ($resolved === null) {
+                $unreadable++;
+                continue;
+            }
+
+            $layouts[] = ['selector' => $selector] + $resolved;
+        }
+
+        $report = self::siteReport($auditor, $layouts, (int) ($arguments['max_per_layout'] ?? self::SITE_MAX_PER_LAYOUT));
+        $next = $offset + $limit < $total ? $offset + $limit : null;
+
+        return [
+            'scope' => 'site',
+            'layouts_total' => $total,
+            'offset' => $offset,
+            'next_offset' => $next,
+            'layouts_unreadable' => $unreadable,
+        ] + $report + [
+            'note' => $next === null
+                ? 'Every layout on the site is in this or an earlier page. Audit one layout (scope=layout) for every finding and its heading outline.'
+                : "Totals cover this page only. Call again with offset={$next} for the next layouts.",
+        ];
     }
 
     /**
@@ -192,12 +261,10 @@ class TemplateAuditTool extends AbstractTool
         usort($rows, static fn (array $a, array $b): int => [$b['counts']['error'], $b['counts']['warning'], $b['counts']['notice']] <=> [$a['counts']['error'], $a['counts']['warning'], $a['counts']['notice']]);
 
         return [
-            'scope' => 'site',
             'layouts_audited' => count($layouts),
             'layouts_clean' => $clean,
             'totals' => $totals,
             'layouts' => $rows,
-            'note' => 'Audit one layout (scope=layout with its key, post_id or widget_id) for every finding and its heading outline.',
         ];
     }
 

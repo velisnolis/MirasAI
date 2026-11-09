@@ -510,11 +510,19 @@ class YooThemeHelper
     /**
      * Build a stable ETag for the full YOOtheme templates collection.
      *
+     * Each template is key-sorted so the hash does not depend on how its own fields are stored, but the
+     * templates keep their order: YOOtheme applies the first enabled one that fits a page, so a reorder
+     * is a change and must break an if_match taken before it.
+     *
      * @param array<string, array<string, mixed>> $templates
      */
     public function buildTemplatesEtag(array $templates): string
     {
-        $copy = $this->sortRecursive($templates);
+        $copy = [];
+
+        foreach ($templates as $key => $template) {
+            $copy[] = [(string) $key, is_array($template) ? $this->sortRecursive($template) : $template];
+        }
 
         return hash(
             'sha256',
