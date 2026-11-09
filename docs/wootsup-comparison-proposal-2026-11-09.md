@@ -566,3 +566,21 @@ les condicions, els paràmetres i el layout, desactivada i just darrere de
 l'original; nom per defecte «<original> (copy)». Provat als dos hosts: la
 còpia té els mateixos elements que l'original (11/11 a WordPress, 12/12 a
 Joomla) i el visitant no veu cap canvi.
+
+### Afegir molts elements d'un cop: ja hi era; validació de tot l'arbre
+
+`template/element-add` ja accepta un element amb tots els seus fills (una
+secció amb files, columnes i elements) i ho escriu tot o res amb un sol
+`if_match`; és el que WootsUp anuncia a la 3.1. No cal `elements[]`.
+
+El forat era la validació: la comprovació de valors `select`/`radio` només
+mirava l'element de dalt. Ara `rejectInvalidTree()` mira cada node de l'arbre
+afegit i diu on és el valor dolent (`at: element>row[0]>column[0]>headline[0]`).
+A més, a **Joomla** aquesta validació existia però cap eina la cridava:
+`element-add` i `element-update-props` hi desaven valors invàlids sense avís.
+Ara les dues validen, com a WordPress.
+
+Proves: `docker/test-element-tree-validation.php` (12 comprovacions, els dos
+hosts) i en real: un `title_element: h7` dins d'una secció nova es rebutja
+amb el seu lloc als dos hosts, la mateixa secció vàlida passa, i a Joomla un
+`update-props` amb `h7` es rebutja.

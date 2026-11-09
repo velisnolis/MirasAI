@@ -40,6 +40,39 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
         return YoothemePropsValidator::validate($elementType, $definition['fields'], $props);
     }
 
+
+    /**
+     * rejectInvalidProps() on every node of an element tree, so a section added with its rows,
+     * columns and elements is checked as a whole. at is the node's place inside the added element.
+     *
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    protected function rejectInvalidTree(array $element, string $at = 'element'): ?array
+    {
+        $rejection = $this->rejectInvalidProps(
+            (string) ($element['type'] ?? ''),
+            is_array($element['props'] ?? null) ? $element['props'] : []
+        );
+
+        if ($rejection !== null) {
+            return $rejection + ['at' => $at];
+        }
+
+        foreach (is_array($element['children'] ?? null) ? $element['children'] : [] as $index => $child) {
+            if (is_array($child)) {
+                $type = is_string($child['type'] ?? null) && $child['type'] !== '' ? $child['type'] : 'unknown';
+                $rejection = $this->rejectInvalidTree($child, $at . '>' . $type . '[' . $index . ']');
+
+                if ($rejection !== null) {
+                    return $rejection;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
      * @return array<string, mixed>

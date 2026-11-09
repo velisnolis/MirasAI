@@ -59,10 +59,7 @@ class TemplateElementAddTool extends AbstractTemplateElementWriteTool
                 return ['error' => 'element must be an object.', 'code' => 'invalid_element'];
             }
 
-            $rejection = $this->rejectInvalidProps(
-                (string) ($element['type'] ?? ''),
-                is_array($element['props'] ?? null) ? $element['props'] : []
-            );
+            $rejection = $this->rejectInvalidTree($element);
 
             if ($rejection !== null) {
                 return $rejection;

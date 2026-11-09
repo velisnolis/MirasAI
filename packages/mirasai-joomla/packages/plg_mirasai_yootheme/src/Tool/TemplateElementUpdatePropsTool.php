@@ -74,6 +74,16 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
         return $this->mutateTemplateElement(
             $arguments,
             function (array $layout) use ($path, $props, $merge, $includeElement): array {
+                $target = (new YooThemeElementNavigator())->findElement($layout, $path);
+
+                if ($target !== null) {
+                    $rejection = $this->rejectInvalidProps((string) ($target['element']['type'] ?? ''), $props);
+
+                    if ($rejection !== null) {
+                        return $rejection;
+                    }
+                }
+
                 $updated = (new YooThemeElementNavigator())->updateElementProps($layout, $path, $props, $merge);
 
                 if ($updated === null) {
