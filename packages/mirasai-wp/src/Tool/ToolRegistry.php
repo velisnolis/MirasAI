@@ -38,6 +38,7 @@ class ToolRegistry
         $registry->register(new TemplateListTool());
         $registry->register(new TemplateReadTool());
         $registry->register(new TemplateSummaryTool());
+        $registry->register(new TemplateRenderCheckTool());
         $registry->register(new TemplateElementListTool());
         $registry->register(new TemplateElementReadTool());
         $registry->register(new TemplateElementTypesTool());

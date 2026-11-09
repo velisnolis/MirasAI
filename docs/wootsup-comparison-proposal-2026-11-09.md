@@ -103,6 +103,29 @@ Afegir el pas «verificar» al playbook (`system/diagnose`) i a
 `docs/agent-routes.md`: escriure → `site/cache-purge` si cal →
 `site/public-fetch` amb els textos esperats.
 
+### Fase 1b · Crear plantilles de YOOtheme (cas real, 2026-11-09)
+
+En un projecte, l'agent va haver de crear una plantilla de YOOtheme per
+WP-CLI, amb còpia prèvia de la configuració del tema, perquè MirasAI no en pot
+crear. Després la va omplir amb MirasAI. Les eines `template/element-*` només
+editen plantilles que ja existeixen.
+
+Proposta: `template/create` (`guarded_write`, tots dos hosts):
+
+- crea la plantilla **desactivada**, amb nom, tipus (`single-post`, etc.) i,
+  opcionalment, un layout inicial; així cap pàgina canvia fins que algú
+  l'activa;
+- `dry_run`, `confirm_guarded_write` i `if_match` contra l'ETag de la col·lecció
+  de plantilles (l'opció `yootheme` a WordPress, el `custom_data` de l'extensió
+  a Joomla), que les escriptures ja retornen com a `collection_etag`;
+- torna la `key` nova i el seu ETag, a punt per a `template/element-add`;
+- `template/render-check` amb `context_id` serveix per comprovar-la abans
+  d'activar-la.
+
+Activar, desactivar i reordenar plantilles (l'ordre decideix quina s'aplica)
+és un segon pas: canvia el que veuen els visitants i demana una
+previsualització de quines pàgines canvien de plantilla.
+
 ### Fase 2 · Registre d'accions
 
 Cada escriptura feta per MCP queda al registre del CMS: el registre d'accions
@@ -138,8 +161,7 @@ del client.
 
 - `elements[]` a `template/element-add`, tot o res sota un sol `if_match`.
 - De URL a layout (`post_id`, plantilla o widget).
-- Gestió de plantilles del tema: crear desactivada, duplicar, reordenar,
-  activar, amb previsualització de quines pàgines canvien de plantilla.
+- Duplicar plantilles (crear-les és a la fase 1b).
 
 ### Ja cobert
 
@@ -162,7 +184,8 @@ del client.
 | --- | --- |
 | 1.1 `site/public-fetch` | fet i provat als dos hosts: proves locals i webs de proves reals (vegeu «Validació») |
 | 1.2 `site/cache-purge` | fet i provat als dos hosts (vegeu «Validació») |
-| 1.3 `template/render-check` | pendent de spike |
+| 1.3 `template/render-check` | fet i provat a WordPress; falta Joomla (cal YOOtheme a `provesjoomla`) |
+| 1b `template/create` | pendent; cas real |
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | pendent |
 | Fase 3 | pendent |
@@ -256,3 +279,63 @@ desactivar el connector.
 La memòria cau de pàgina de JCH Optimize (`jchpagecache`, vist a nordlogway
 amb JCH 9.4.3) té emmagatzematge propi i no escolta cap esdeveniment de neteja
 de Joomla. L'eina la detecta i torna `unsupported`; no s'ha provat de buidar-la.
+
+### Spike 1.3 `template/render-check`, WordPress, 2026-11-09
+
+A `proveswp`, amb YOOtheme Pro 5.0.53 copiat del tema pare d'`ambiens` (sense el
+tema fill ni la configuració). Es queda instal·lat per a les proves.
+
+Què s'ha comprovat, amb una pàgina de prova (`prova-render-mirasai`) i
+`wp eval-file`:
+
+- `YOOtheme\app(Builder::class)->render($json, ['prefix' => 'page', 'post' => $post])`
+  dona el mateix text que veu el visitant (comparat amb `site/public-fetch`).
+- Funciona igual dins d'una petició REST (mu-plugin temporal, ja esborrat):
+  `REST_REQUEST=true`, `is_admin()=false`, 11 ms per a una pàgina petita.
+- `Builder::load($json, ['context' => 'render', ...])` torna l'arbre ja
+  transformat: sense els elements desactivats i amb les fonts dinàmiques
+  resoltes a `props`. Una marca posada a `props` de cada node abans de carregar
+  sobreviu, de manera que es pot dir el path de cada element que es mostra i quins
+  paths han desaparegut.
+- Un element desactivat porta `props.status = "disabled"` (ho mira
+  `DisabledTransform`), no `status` al node.
+- **El resultat depèn de l'usuari.** La font `site.is_guest` dona 0 com a
+  administrador i 1 com a visitant. Per veure el que veu el visitant cal
+  renderitzar amb `wp_set_current_user(0)` i restaurar-lo després.
+- **Plantilles amb context:** amb `$wp_query`, `$wp_the_query` i `$post`
+  apuntant a una entrada real i `prefix => 'template'`, un titular lligat a
+  `{"name":"posts","field":{"name":"singlePost"}}` → `title` dona «Hello
+  world!». Amb una entrada inexistent surt buit, sense error: l'eina ha de
+  comprovar abans que el context existeix.
+
+Disseny que en surt:
+
+- `template/render-check` (lectura) amb el destí habitual (`key`, `post_id`)
+  i, per a plantilles, una entrada o article de context.
+- Renderitza com a visitant. Torna els elements amb text visible i el seu path
+  (format `root>section[0]>…`), els paths desats que no es mostren
+  (desactivats, condicions o font buida) i si el resultat queda buit.
+- Accepta `expect[]` com `site/public-fetch` i diu en quins paths surt cada text.
+- No llegeix l'estat de publicació: una pàgina en esborrany també es
+  renderitza, i això es diu a la resposta.
+
+### 1.3 `template/render-check`, WordPress, 2026-11-09
+
+Proves locals: `docker/test-render-check.php` (marques de path iguals a les de
+`template/element-list`, resum, `expect`, branques que no es mostren, elements
+repetits, render buit).
+
+A `proveswp`:
+
+- Pàgina `prova-render-mirasai`: el titular, el text i el títol del web
+  (font `site`) surten amb el seu path; l'element desactivat surt a
+  `not_rendered`; `site.is_guest` val 1 encara que la crida la fa un
+  administrador.
+- Plantilla `mirasaitest` (`single-post`, desactivada) amb `context_id=1`:
+  «Hello world!» i el text de l'entrada als seus paths.
+- La mateixa plantilla sense `context_id`: `renders_empty=true` i una nota. Les
+  transformacions de YOOtheme eliminen tot el layout quan la font no es resol, i
+  `load()` torna `null`; l'eina ho distingeix d'un layout trencat carregant-lo
+  sense el context `render`.
+- Errors: `context_not_found`, `context_only_for_templates`,
+  `template_not_found` i `unknown_argument` per a `widget_id`.
