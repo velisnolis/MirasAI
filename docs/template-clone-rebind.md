@@ -2,7 +2,7 @@
 
 Estat: **ajornat**. No implementat. No existeix al `tools/list`.
 Data: 2026-08-18. Revisat el 2026-08-19.
-Casos reals: BIT Vic (Joomla) i Indústria Viva draft 548 (WP).
+Casos reals: el client Joomla (Joomla) i el client WordPress (un esborrany) (WP).
 
 Nom de producte: **clone-rebind**. Mai «dynamize».
 
@@ -34,12 +34,12 @@ i un dry-run que llista **totes** les fulles amb binding de l'abast amb el seu
 estat (`rebound` / `kept` / `untouched`), de manera que la completesa es
 verifica a la resposta i no a la memòria de l'agent.
 
-- BIT Vic: l'humà duplica l'article (natiu) → batch-rebind in-place. Un write.
-- Indústria Viva: `template/element-clone` (ja existeix) → batch-rebind sobre
+- el client Joomla: l'humà duplica l'article (natiu) → batch-rebind in-place. Un write.
+- el client WordPress: `template/element-clone` (ja existeix) → batch-rebind sobre
   la còpia. Dos writes; si el segon falla queda una secció duplicada amb
   bindings vells: visible i recuperable, no corrupció.
 - Cobreix a més el cas que aquest document no contemplava: rebindejar una
-  pàgina existent **sense** clonar, que és el flux recurrent de BIT Vic quan
+  pàgina existent **sense** clonar, que és el flux recurrent del client Joomla quan
   arriba carpeta o CSV nou.
 
 ### Estat: implementat el 19/08
@@ -76,7 +76,7 @@ història del disseny descartat.
 
 Avui el camí és `template/element-clone` + N `template/element-source-set`.
 Al cas IV van caldre dos writes per la llista i encara va faltar la fulla
-`_condition`. Al cas BIT Vic el clone ni tan sols és Builder: es duplica
+`_condition`. Al cas del client Joomla el clone ni tan sols és Builder: es duplica
 l'article i es deixen files `status=disabled` amb el source de l'any passat
 com a placeholder.
 
@@ -99,7 +99,7 @@ finestra `stale_etag` no ha mossegat mai; la fulla oblidada, sí.
 
 ## Els dos casos
 
-### Cas A — Indústria Viva (clonar una secció i rebindejar-la)
+### Cas A — client WordPress (clonar una secció i rebindejar-la)
 
 `template/element-clone` deixa la còpia com a germà següent (o a
 `before_path` / `after_path`). El rebind s'aplica **només** sobre la còpia.
@@ -140,7 +140,7 @@ Per al canvi de terms, `set.query_arguments` és un **replace** de
 `element-source-set`), no un merge profund ceg. Field mappings (`title`,
 `iv_ambitString`, …) es queden si `set` no porta `field_mappings`.
 
-### Cas B — BIT Vic (rebind in-place del destí ja duplicat)
+### Cas B — client Joomla (rebind in-place del destí ja duplicat)
 
 L'humà duplica l'article; el layout hi arriba dins de `fulltext`. Aquí no hi
 ha cap còpia a fer: només `rewrites` / `disable` / `leaf_map` sobre el destí,
@@ -208,7 +208,7 @@ Regles:
 
 ## `rewrites`
 
-Opcional, pensat per BIT Vic (carpeta/CSV/pattern). S'aplica **després** del
+Opcional, pensat per al client Joomla (carpeta/CSV/pattern). S'aplica **després** del
 clone i **abans** del `leaf_map` (el mapa pot corregir un rewrite).
 
 - `in`: quins camps string-ish (`query_path`, valors de `query_arguments`).
@@ -216,7 +216,7 @@ clone i **abans** del `leaf_map` (el mapa pot corregir un rewrite).
   `dangerous_exec` de facto i no entra en aquest tool.
 - Informe de dry-run: cada substitució (`path`, camp, before, after).
 - Zero matches d'un rewrite → `rewrite_noop` (warning al preview, no error).
-  Un rewrite que no toca res no ha de fer fallar BIT Vic si encara no hi ha
+  Un rewrite que no toca res no ha de fer fallar el cas del client Joomla si encara no hi ha
   galeria nova.
 
 ## Invariants del write
@@ -284,7 +284,7 @@ El confirm reutilitza aquesta forma amb `action: updated` i `etag` nou.
 
 ## Com s'inspecciona abans (read-modes)
 
-Ja desplegat a industriaviva (WP) i al lab Joomla 2026-08-18.
+Ja desplegat al web del client WordPress i al lab Joomla 2026-08-18.
 
 1. `template/read mode=outline` per situar `section[n]` / files.
 2. `template/element-list mode=bindings_only` per construir el `leaf_map`.
@@ -297,7 +297,7 @@ Ja desplegat a industriaviva (WP) i al lab Joomla 2026-08-18.
 `has_binding`), i `bindings_only` porta `status` i **`disabled_by`**. Aquest
 últim no era al pla: com que `bindings_only` és una llista plana, un binding
 dins d'una fila disabled no es distingia de cap manera, i és exactament la
-forma de BIT Vic (la fila apagada, el `gallery_item` de dins amb el source de
+forma del client Joomla (la fila apagada, el `gallery_item` de dins amb el source de
 l'edició passada). `disabled_by` dona el path de l'avantpassat (o d'ell mateix)
 que està apagat. Tots els flags s'ometen quan l'element renderitza i no té
 binding.
@@ -314,7 +314,7 @@ Ordre, no abans:
 4. Joomla lab (`mirasai-fase0` o article de prova), rebind in-place.
 5. Skill `yootheme-builder-ops` workflow 3: cridar la forma batch; recollir
    casos nous al findings.
-6. BIT Vic producció només amb article destí duplicat per l'humà i dry-run
+6. Producció del client Joomla només amb article destí duplicat per l'humà i dry-run
    revisat.
 
 Playbook: una línia a `best` de `yootheme_builder` quan el tool existeixi.

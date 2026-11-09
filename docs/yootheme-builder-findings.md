@@ -195,7 +195,7 @@ per `--stdin` amb `dry_run=false` i `confirm_guarded_write=true`.
 
 Segona trampa (verificada el 23/09, en lectura): amb `--stdin`, mcp2cli 3.7.0
 ignora tots els flags, `--site-id` inclòs, i el router va al
-`default_site_id`. `template/read --site-id industria-viva-wp --stdin` va
+`default_site_id`. `template/read --site-id <site_id del client> --stdin` va
 llegir un altre web i va tornar `post_layout_missing`. Posa `site_id` dins del
 JSON.
 
@@ -322,7 +322,7 @@ com a `#ancora=valor` **mai** produeix desplaçament natiu, encara que existeixi
 element amb l'id `ancora`. Mesurat a la pàgina: després del clic, `window.scrollY`
 = 46 amb `#servicios` situat a 4314 px.
 
-Codi que ho demostra, `wp-content/mu-plugins/agencia-nord-service-deeplink.php`
+Codi que ho demostra, `wp-content/mu-plugins/<client>-service-deeplink.php`
 v1.3.0: el gestor de clic evitava deliberadament `preventDefault()` amb el comentari
 «el salt a #servicios ha de seguir funcionant». La premissa era falsa.
 
@@ -453,7 +453,7 @@ només es canvia el source.
 | `root>section[0]>row[5]>…>gallery_item[0]` | DOCman `edicio-2026-vic-pos` |
 | `root>section[0]>row[6]` (`id=visual`) | `status=disabled`; gallery encara `docmansource` `edicio-2024-vic-vt` |
 | `root>section[0]>row[2]>…>button_item[3]` | «Visual Thinking» `status=disabled`, `link=#visual` |
-| `root>section[0]>row[7]>…>gallery_item[0]` | `files` `images/galeries-de-fotos/congres-bit-vic/edicio-2026-vic/*` |
+| `root>section[0]>row[7]>…>gallery_item[0]` | `files` `images/galeries-de-fotos/<carpeta del client>/edicio-2026-vic/*` |
 | `root>section[0]>row[8]` Vídeos | sense list-source YouTube (a 2024/2025 sí `youtubeChannel1C7D1A.videos`) |
 
 **Implicació per `clone-rebind`.** Ha de clonar pàgina (no una sola secció),

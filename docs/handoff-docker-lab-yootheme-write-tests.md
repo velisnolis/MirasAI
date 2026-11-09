@@ -11,18 +11,18 @@ This checkout has local MirasAI changes inspired by `wootsup/yt-builder-mcp`:
 - `template/translate` accepts optional `if_match` and returns `stale_etag` when the source template changed.
 - `system/diagnose` returns compact readiness diagnostics for core tools, addon registration, YOOtheme counts, provider warnings, and elevation state.
 
-Read-only production validation was done on `autovigatana`:
+Read-only production validation was done on a client Joomla site:
 
 - Joomla 5.4.5, YOOtheme 5.0.34, MirasAI 0.4.8.
 - `template/summary` registered successfully in `tools/list`.
 - `content/read` on article `1` (`Inici`) returned `yootheme_layout_summary`.
 - `template/list` returned `count=0` because that site stores YOOtheme layouts in articles, not in YOOtheme templates.
-- No content write was performed on `autovigatana`.
+- No content write was performed on a client Joomla site.
 
 Server-side backup made before installing the modified package:
 
 ```text
-/home/autovigatana/application_backups/mirasai-pre-summary-20260525-094156
+/home/<account>/application_backups/mirasai-pre-summary-20260525-094156
 ```
 
 ## Goal for Next Session

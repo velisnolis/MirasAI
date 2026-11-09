@@ -112,7 +112,7 @@ namespace {
         file_put_contents($root . '/configuration.php', '<?php public $password = "secret";');
         file_put_contents($root . '/configuration.php.bak', '<?php public $password = "secret";');
         file_put_contents($root . '/configuration.old.php', '<?php public $password = "secret";');
-        file_put_contents($root . '/configuration.origin-before-ub-2026-05-04.php', '<?php public $password = "secret";');
+        file_put_contents($root . '/configuration.origin-before-migration-2026-05-04.php', '<?php public $password = "secret";');
         file_put_contents($root . '/db-backup.sql', 'CREATE TABLE secrets;');
         file_put_contents($root . '/db-backup.sql.gz', 'compressed dump');
         file_put_contents($root . '/.env.local', 'DB_PASSWORD=secret');
@@ -136,7 +136,7 @@ namespace {
         $blockedConfigurationOld = $tool->handle(['path' => 'configuration.old.php']);
         expectFileRead('configuration.old.php is blocked', str_starts_with($blockedConfigurationOld['error'] ?? '', 'Read access denied'), true);
 
-        $blockedConfigurationMigration = $tool->handle(['path' => 'configuration.origin-before-ub-2026-05-04.php']);
+        $blockedConfigurationMigration = $tool->handle(['path' => 'configuration.origin-before-migration-2026-05-04.php']);
         expectFileRead('migration configuration copy is blocked', str_starts_with($blockedConfigurationMigration['error'] ?? '', 'Read access denied'), true);
 
         $blockedSql = $tool->handle(['path' => 'db-backup.sql']);

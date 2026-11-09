@@ -73,7 +73,7 @@ $layout = [
     ]],
 ];
 
-// BIT Vic's shape: the row is disabled and last edition's source stays on the
+// A client Joomla site's shape: the row is disabled and last edition's source stays on the
 // gallery inside it as a placeholder.
 $layout['children'][] = [
     'type' => 'section',

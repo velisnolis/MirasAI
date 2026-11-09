@@ -10,7 +10,7 @@
  * carrying all 47 types. That is how "there is no tool for this" became true
  * about a tool that answered the question.
  *
- * The schema below mirrors the shape of live introspection on Indústria Viva.
+ * The schema below mirrors the shape of live introspection on a client WordPress site.
  *
  * Run from the repo root:
  *   php docker/test-yootheme-source-paths.php

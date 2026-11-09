@@ -24,7 +24,7 @@
 - **Added:** 2026-03-21 via /plan-eng-review
 
 ### ~~TODO-004: Suport multiidioma per templates YOOtheme~~ ✅ DONE
-- **Completat:** 2026-03-22. Implementat als tools MCP i validat a Boira.
+- **Completat:** 2026-03-22. Implementat als tools MCP i validat en un web de client.
 - **Findings:** `template/list`, `template/read` i `template/translate` ja permeten auditar, llegir i duplicar/traduir templates per idioma.
 - **Extra:** `content/audit-multilingual` detecta templates amb text fix compartit, variants per idioma faltants i casos dinàmics purs amb `lang=all`.
 - **Context:** Els templates es llegeixen de `#__extensions.custom_data.templates`; el filtre d'idioma viu a `query.lang` i el layout a `layout`.

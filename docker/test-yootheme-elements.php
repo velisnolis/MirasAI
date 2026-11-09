@@ -162,7 +162,7 @@ expectElement('text binding count', $typesByName['text']['has_source_binding_cou
 expectElement('section sample path', $typesByName['section']['sample_paths'][0], 'root>section[0]');
 
 // Cloning must not duplicate props.id: YOOtheme renders it as the HTML id and
-// an in-page #anchor would resolve to the source, never to the copy (BIT Vic).
+// an in-page #anchor would resolve to the source, never to the copy (seen on a client Joomla site).
 $anchorLayout = [
     'type' => 'layout',
     'children' => [[

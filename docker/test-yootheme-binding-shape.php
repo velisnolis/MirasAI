@@ -5,7 +5,7 @@
  * The Builder stores a query as one dotted name with its arguments attached to
  * the query itself. MirasAI used to store the name and the field in separate
  * keys with the arguments nested under `query.field`. Two consequences, both
- * verified against the Indústria Viva front page on 2 August 2026:
+ * verified against a client WordPress front page on 2 August 2026:
  *
  *  - reading a Builder-made binding reported `query_arguments: []` even though
  *    the query carried five, and those are the arguments that are hardest to

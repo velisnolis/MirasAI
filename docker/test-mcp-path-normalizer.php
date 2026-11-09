@@ -37,8 +37,8 @@ function expectPath(string $label, string $path, string $base, string $expected)
 echo "\n=== MCP path normalization ===\n";
 
 expectPath('site app at domain root', '/api/v1/mirasai/mcp', '', '/api/v1/mirasai/mcp');
-expectPath('site app under Joomla subdirectory', '/a-rts/api/v1/mirasai/mcp', '/a-rts', '/api/v1/mirasai/mcp');
-expectPath('API app under Joomla subdirectory with index.php', '/a-rts/api/index.php/v1/mirasai/mcp', '/a-rts/api', '/v1/mirasai/mcp');
+expectPath('site app under Joomla subdirectory', '/subsite/api/v1/mirasai/mcp', '/subsite', '/api/v1/mirasai/mcp');
+expectPath('API app under Joomla subdirectory with index.php', '/subsite/api/index.php/v1/mirasai/mcp', '/subsite/api', '/v1/mirasai/mcp');
 expectPath('API app at domain root with index.php', '/api/index.php/v1/mirasai/mcp', '/api', '/v1/mirasai/mcp');
 expectPath('base slash does not strip the whole path', '/api/v1/mirasai/mcp', '/', '/api/v1/mirasai/mcp');
 
