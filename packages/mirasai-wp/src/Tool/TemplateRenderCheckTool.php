@@ -132,7 +132,7 @@ class TemplateRenderCheckTool extends AbstractTool
             'context' => $context instanceof \WP_Post
                 ? ['id' => $context->ID, 'type' => $context->post_type, 'title' => get_the_title($context), 'status' => $context->post_status]
                 : null,
-            'renders_empty' => $htmlText === '',
+            'renders_empty' => self::rendersNothing($rendered['html']),
             'html_bytes' => strlen($rendered['html']),
             'element_count' => $total,
             'elements' => array_slice($summary['elements'], $offset, $limit),
@@ -149,6 +149,19 @@ class TemplateRenderCheckTool extends AbstractTool
         }
 
         return $response;
+    }
+
+    /**
+     * Nothing a visitor would see: no text and no media. A layout with only an image, a video or a map
+     * is not empty, although it has no text.
+     */
+    public static function rendersNothing(string $html): bool
+    {
+        if (PublicPageInspector::normalizeText(strip_tags($html)) !== '') {
+            return false;
+        }
+
+        return preg_match('/<(img|picture|video|audio|iframe|svg|canvas|object|embed)\b/i', $html) !== 1;
     }
 
     /**

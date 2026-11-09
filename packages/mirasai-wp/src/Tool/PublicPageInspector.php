@@ -493,6 +493,17 @@ final class PublicPageInspector
     {
         $parts = parse_url($base);
         $path = is_array($parts) ? (string) ($parts['path'] ?? '/') : '/';
+        $path = $path !== '' ? $path : '/';
+
+        // RFC 3986 §5.2.2: a reference that is only a query or a fragment keeps the whole current path.
+        if (str_starts_with($relative, '?')) {
+            return self::origin($base) . $path . $relative;
+        }
+
+        if (str_starts_with($relative, '#')) {
+            return self::origin($base) . $path . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        }
+
         $directory = substr($path, 0, (int) strrpos($path, '/') + 1);
 
         return self::origin($base) . ($directory !== '' ? $directory : '/') . $relative;
