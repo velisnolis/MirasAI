@@ -19,6 +19,7 @@ require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolInterface.php
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AbstractTool.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/AgentPlaybook.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolRegistry.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpActionRecord.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpHandler.php';
 
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mirasai.php';
@@ -27,6 +28,8 @@ require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/s
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/AgentPlaybook.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ToolRegistry.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Sandbox/EnvironmentGuard.php';
+require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpActionRecord.php';
+require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpActionLog.php';
 require_once dirname(__DIR__) . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpHandler.php';
 
 use Mirasai\Library\Mcp\McpHandler as JoomlaMcpHandler;

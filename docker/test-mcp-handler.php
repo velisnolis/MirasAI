@@ -14,6 +14,8 @@ require_once $libSrc . '/Tool/ToolInterface.php';
 require_once $libSrc . '/Tool/AbstractTool.php';
 require_once $libSrc . '/Tool/ToolArgumentValidator.php';
 require_once $libSrc . '/Tool/ToolRegistry.php';
+require_once $libSrc . '/Mcp/McpActionRecord.php';
+require_once $libSrc . '/Mcp/McpActionLog.php';
 require_once $libSrc . '/Mcp/McpHandler.php';
 
 use Mirasai\Library\Mcp\McpHandler;

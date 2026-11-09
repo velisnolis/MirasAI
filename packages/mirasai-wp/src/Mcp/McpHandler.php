@@ -146,8 +146,15 @@ class McpHandler
             ], true);
         }
 
+        $headers = self::requestHeaders();
+
+        if ($permissions['risk_level'] !== AbstractTool::RISK_READ) {
+            self::attributeToClient($headers);
+        }
+
         try {
             $result = $tool->handle($arguments);
+            self::recordWrite($toolName, $permissions['risk_level'], $arguments, $result, $headers);
 
             return $this->wrapToolResult($result, isset($result['error']));
         } catch (\Throwable $e) {
@@ -155,6 +162,67 @@ class McpHandler
                 'error' => $e->getMessage(),
                 'type' => get_class($e),
             ], true);
+        }
+    }
+
+    /** @return array<string, string> */
+    private static function requestHeaders(): array
+    {
+        return [
+            'x-mcp-client' => isset($_SERVER['HTTP_X_MCP_CLIENT']) ? (string) $_SERVER['HTTP_X_MCP_CLIENT'] : '',
+            'user-agent' => isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '',
+        ];
+    }
+
+    /**
+     * Simple History marks an event as AI-initiated when it recognises the client. Every MCP write is
+     * one, so name the client for anything it logs during this request, MirasAI's own entry included.
+     *
+     * @param array<string, string> $headers
+     */
+    private static function attributeToClient(array $headers): void
+    {
+        if (!function_exists('add_filter')) {
+            return;
+        }
+
+        $client = McpActionRecord::client($headers);
+
+        add_filter('simple_history/ai_initiator_origin', static function ($origin) use ($client) {
+            return $origin ?? ['agent_name' => $client, 'detected_via' => 'header', 'application' => 'MirasAI'];
+        });
+    }
+
+    /**
+     * One Simple History entry per MCP write, when Simple History is active. Logging never fails the write.
+     *
+     * @param array<string, mixed> $arguments
+     * @param array<string, mixed> $result
+     * @param array<string, string> $headers
+     */
+    private static function recordWrite(string $tool, string $riskLevel, array $arguments, array $result, array $headers): void
+    {
+        if (!function_exists('has_action') || !has_action('simple_history_log')) {
+            return;
+        }
+
+        $record = McpActionRecord::build($tool, $riskLevel, $arguments, $result, $headers);
+
+        if ($record === null) {
+            return;
+        }
+
+        try {
+            do_action('simple_history_log', 'MirasAI ran {mirasai_tool} on {mirasai_target} for {mirasai_client}', [
+                'mirasai_tool' => $record['tool'],
+                'mirasai_risk_level' => $record['risk_level'],
+                'mirasai_target' => $record['target'],
+                'mirasai_client' => $record['client'],
+                'mirasai_old_etag' => $record['old_etag'],
+                'mirasai_new_etag' => $record['new_etag'],
+            ], 'info');
+        } catch (\Throwable) {
+            // The write already happened; a logging failure must not turn it into an error.
         }
     }
 

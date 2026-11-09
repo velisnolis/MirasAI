@@ -94,6 +94,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfPostFieldsReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfCptListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfTaxonomyListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolRegistry.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpActionRecord.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpHandler.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/RestController.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Admin/DashboardPage.php';

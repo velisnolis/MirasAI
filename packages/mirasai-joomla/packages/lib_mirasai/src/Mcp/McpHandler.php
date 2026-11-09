@@ -235,6 +235,7 @@ class McpHandler
             try {
                 $result = $tool->handle($arguments);
                 $elevation->finalizeAuditEntry($auditId, isset($result['error']) ? 'error' : 'success');
+                self::recordWrite((string) $toolName, $permissions['risk_level'], $arguments, $result);
 
                 return $this->wrapResultWithElevation($result, $grant);
             } catch (\Throwable $e) {
@@ -245,6 +246,7 @@ class McpHandler
 
         try {
             $result = $tool->handle($arguments);
+            self::recordWrite((string) $toolName, $permissions['risk_level'], $arguments, $result);
 
             // Check if the tool returned an error
             if (isset($result['error'])) {
@@ -257,6 +259,21 @@ class McpHandler
                 'error' => $e->getMessage(),
                 'type' => get_class($e),
             ], true);
+        }
+    }
+
+    /**
+     * One User Actions Log row per MCP write; reads, dry runs, previews and errors are not logged.
+     *
+     * @param array<string, mixed> $arguments
+     * @param array<string, mixed> $result
+     */
+    private static function recordWrite(string $toolName, string $riskLevel, array $arguments, array $result): void
+    {
+        $record = McpActionRecord::build($toolName, $riskLevel, $arguments, $result, McpActionLog::requestHeaders());
+
+        if ($record !== null) {
+            McpActionLog::write($record);
         }
     }
 

@@ -187,7 +187,7 @@ del client.
 | 1.3 `template/render-check` | fet i provat als dos hosts (vegeu «Validació») |
 | 1b `template/create` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
-| Fase 2 | pendent |
+| Fase 2 | feta i provada als dos hosts (vegeu «Validació») |
 | Fase 3 | pendent |
 | Fase 4 | pendent |
 
@@ -397,3 +397,44 @@ Material de proves que queda a `provesjoomla`: l'article 2 té un layout de
 YOOtheme al `fulltext`, que abans era buit. Per restaurar-lo:
 ``UPDATE jos_content SET `fulltext`='' WHERE id=2`` (nota a
 `~provesjoomla/mirasai-test/article2-restore.txt`).
+
+### Fase 2 · Registre d'accions, 2026-11-09
+
+Què es registra: cada crida MCP d'una eina que no és de lectura i que ha
+escrit (ni dry-run, ni previsualització, ni error). Una entrada porta l'eina,
+el nivell de risc, el destí (`key`, `post_id`, `article_id`, `path`… mai el
+contingut dels arguments), el client i els 12 primers caràcters dels ETags
+d'abans i de després. La decisió és a `McpActionRecord`, igual als dos hosts i
+provada a `docker/test-action-log.php`.
+
+El client: el router desa el `clientInfo` de l'`initialize` i l'envia al host
+com a `X-MCP-Client` (`claude-code/2.1.0 via @miras/mirasai-mcp`); sense
+aquesta capçalera, el host fa servir el User-Agent.
+
+- **WordPress:** una entrada de Simple History, si està actiu
+  (`do_action('simple_history_log', …)`). Simple History 5.36 ja reconeix
+  `X-MCP-Client` i marca l'entrada com a feta per una IA
+  (`_initiator_ai_agent`). A més, MirasAI posa el filtre
+  `simple_history/ai_initiator_origin` abans d'executar l'eina, perquè el que
+  Simple History registri pel seu compte en aquella petició també quedi
+  atribuït al client.
+- **Joomla:** una fila a `#__action_logs` (Usuaris → Registre d'accions) amb
+  `COM_MIRASAI_ACTIONLOG_MCP_WRITE`, inserida com ho fa `addLog()` però sense
+  arrencar `com_actionlogs` dins de l'API ni enviar correus. Els connectors
+  passen al registre el Super User del token (`McpActionLog::setUser`) en
+  lloc de carregar-lo com a identitat de l'aplicació, que canviaria com
+  s'executen totes les eines.
+
+Proves reals:
+
+- `proveswp`, amb Simple History 5.36 instal·lat per a la prova:
+  `site/cache-purge` → «MirasAI ran site/cache-purge on - for
+  claude-code/2.1.0 via @miras/mirasai-mcp», amb l'usuari de la contrasenya
+  d'aplicació i `_initiator_ai_agent` per capçalera.
+- `provesjoomla`: `template/list` i `site/cache-purge` amb `dry_run` no deixen
+  cap fila; `site/cache-purge` i `template/element-update-props` en deixen una
+  cadascuna, amb el destí, el client i els ETags. Després de la correcció de
+  l'usuari, la fila porta `user_id 658` (`alex-proves`).
+- El missatge de Joomla s'ha comprovat llegint el fitxer d'idioma i fent la
+  substitució de `getHumanReadableLogMessage()`; no s'ha vist a la pantalla de
+  l'administració (el web de proves només és accessible des del servidor).
