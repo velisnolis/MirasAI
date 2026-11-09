@@ -25,7 +25,7 @@ function check(bool $ok, string $name): void
     }
 }
 
-// The shape template/source-types returns with kind=object and include_fields=true (seen on proveswp).
+// The shape template/source-types returns with kind=object and include_fields=true (seen on a test site).
 $sourceTypes = ['types' => [
     ['name' => 'Post', 'fields' => [['name' => 'title', 'type' => 'String'], ['name' => 'categories', 'type' => '[Category]'], ['name' => 'featuredImage', 'type' => 'Attachment'], ['name' => 'field', 'type' => 'ProjecteFields!']]],
     ['name' => 'Category', 'fields' => [['name' => 'name', 'type' => 'String'], ['name' => 'children', 'type' => '[Category]']]],

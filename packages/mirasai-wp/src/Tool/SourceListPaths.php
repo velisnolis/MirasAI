@@ -9,7 +9,7 @@ namespace Mirasai\WordPress\Tool;
  *
  * YOOtheme does not resolve a prop or a display condition through a list field on an element that is not
  * repeated over that list: the value stays empty and a «!!» condition hides the element on every page.
- * Seen with an ACF gallery on ambiens and reproduced with posts.singlePost categories and categories.name
+ * Seen with an ACF gallery on a client site and reproduced with posts.singlePost categories and categories.name
  * (docs/yootheme-builder-findings.md F-042). The cause inside YOOtheme is not located.
  *
  * Mirrored in plg_mirasai_yootheme. Both copies must stay free of WordPress and Joomla calls so
