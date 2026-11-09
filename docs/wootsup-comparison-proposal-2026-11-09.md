@@ -200,9 +200,12 @@ Revisió de seguretat posterior (mateix dia). A Joomla sense `live_site`,
 això permetia triar a quin host es connectava el servidor. Ara:
 
 - amb `live_site`, mana `live_site`;
-- sense `live_site`, la connexió es fixa amb `CURLOPT_RESOLVE` a `SERVER_ADDR`
-  (l'adreça que ha rebut la petició) i un port no estàndard a `Host` es
-  rebutja amb `site_url_untrusted`. No es pot comparar amb `SERVER_PORT`:
+- sense `live_site`, totes les connexions van a `SERVER_ADDR` (l'adreça que ha
+  rebut la petició) amb `CURLOPT_CONNECT_TO` i l'origen buit, de manera que ni
+  una IP a la URL ni una lectura diferent del host entre `parse_url` i cURL
+  poden triar la destinació. A més, es rebutja amb `site_url_untrusted` un
+  `Host` amb un port no estàndard, una IP que no és la del servidor o un nom
+  que no sigui DNS net. No es pot comparar amb `SERVER_PORT`:
   Apache amb `UseCanonicalName Off` el copia de `Host` (comprovat a
   `provesjoomla`);
 - Joomla fa la petició amb cURL directe, que també talla la resposta a 2 MB.

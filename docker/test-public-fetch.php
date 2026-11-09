@@ -211,6 +211,12 @@ check($J::siteTarget('http://example.cat:8080', 'http://example.cat:8080/', '10.
 check(($J::siteTarget('', 'https://example.cat/', null)['code'] ?? '') === 'site_url_untrusted', 'joomla: no server address refused');
 check(($J::siteTarget('', 'https://example.cat/', 'not-an-ip')['code'] ?? '') === 'site_url_untrusted', 'joomla: malformed server address refused');
 check(($J::siteTarget('', '/', '10.0.0.5')['code'] ?? '') === 'site_url_unknown', 'joomla: root without host refused');
+check(($J::siteTarget('', 'http://10.0.0.7/', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: IP literal Host that is not this server refused');
+check(($J::siteTarget('', 'http://[::1]/', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: IPv6 literal Host refused');
+check($J::siteTarget('', 'http://10.0.2.135/', '10.0.2.135') === ['site_url' => 'http://10.0.2.135/', 'pin' => '10.0.2.135'], 'joomla: IP site reached on its own address');
+check(($J::siteTarget('', 'https://example.cat./', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: trailing-dot host refused');
+check(($J::siteTarget('', 'https://exa_mple.cat/', '185.254.206.69')['code'] ?? '') === 'site_url_untrusted', 'joomla: host outside DNS characters refused');
+check($J::siteTarget('', 'https://xn--crislide-z0a.cat/', '185.254.206.69')['pin'] === '185.254.206.69', 'joomla: punycode host accepted');
 
 // The two hosts carry the same inspector.
 $wp = file_get_contents($root . '/packages/mirasai-wp/src/Tool/PublicPageInspector.php');

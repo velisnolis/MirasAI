@@ -156,6 +156,15 @@ class SitePublicFetchTool extends AbstractTool
             ];
         }
 
+        $host = trim((string) $parts['host'], '[]');
+
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false ? $host !== $serverAddr : preg_match('/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i', $host) !== 1) {
+            return [
+                'error' => 'The Host header is not a plain host name of this server. Set live_site in Global Configuration to fetch from this site.',
+                'code' => 'site_url_untrusted',
+            ];
+        }
+
         return ['site_url' => $requestRoot, 'pin' => $serverAddr];
     }
 
@@ -204,8 +213,10 @@ class SitePublicFetchTool extends AbstractTool
         ];
 
         if ($this->pinnedAddress !== null) {
+            // Empty source host and port: every connection goes to the pinned
+            // address, whatever host cURL reads from the URL (an IP literal too).
             $address = str_contains($this->pinnedAddress, ':') ? '[' . $this->pinnedAddress . ']' : $this->pinnedAddress;
-            $options[CURLOPT_RESOLVE] = [($parts['host'] ?? '') . ':' . $port . ':' . $address];
+            $options[CURLOPT_CONNECT_TO] = ['::' . $address . ':' . $port];
         }
 
         curl_setopt_array($handle, $options);
