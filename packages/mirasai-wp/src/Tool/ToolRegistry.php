@@ -21,6 +21,7 @@ class ToolRegistry
         $registry->register(new ContentCheckLinksTool());
         $registry->register(new ContentAuditMultilingualTool());
         $registry->register(new SitePublicFetchTool());
+        $registry->register(new SiteCachePurgeTool());
         $registry->register(new TaxonomyTermListTool());
         $registry->register(new TaxonomyTermTranslateTool());
         $registry->register(new DbSchemaTool());

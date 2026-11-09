@@ -205,8 +205,8 @@ class AgentPlaybook
             ],
             [
                 'id' => 'purge_page_cache',
-                'do' => 'After Style CSS write, drop HTML caches that still embed the old ?ver= mtime.',
-                'best' => 'SSH wp eval that calls rocket_clean_domain() when WP Rocket is present. This host does not purge page caches yet.',
+                'do' => 'After a Style CSS write, or when site/public-fetch shows an old copy, drop HTML caches.',
+                'best' => 'site/cache-purge: empties WP Rocket, IONOS Performance and the persistent object cache. state=unknown means a page cache drop-in it cannot empty; then purge from that plugin. A CDN in front is not purged. Then site/public-fetch to confirm.',
                 'avoid' => ['assuming object-cache delete is enough', 'wp rocket CLI purge — it is not exposed'],
             ],
             [

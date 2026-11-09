@@ -11,45 +11,33 @@ namespace Mirasai\WordPress\Checks;
  */
 final class CachePurger
 {
+    /**
+     * What purge() would empty, without emptying anything.
+     *
+     * @return array<string, mixed>
+     */
+    public static function detect(): array
+    {
+        $found = array_keys(array_filter(self::known(), static fn (array $cache): bool => $cache['available']()));
+
+        return [
+            'version' => 1,
+            'page_caches' => $found,
+            'unsupported_drop_in' => $found === [] && self::hasDropIn(),
+            'object_cache' => (bool) wp_using_ext_object_cache(),
+        ];
+    }
+
     /** @return array<string, mixed> */
     public static function purge(): array
     {
         $purged = [];
         $errors = 0;
 
-        $known = [
-            'wp_rocket' => static function (): bool {
-                if (!function_exists('rocket_clean_domain')) {
-                    return false;
-                }
-
-                // Same three steps as WP Rocket's own «Clear cache» button.
-                rocket_clean_domain();
-
-                if (function_exists('rocket_clean_minify')) {
-                    rocket_clean_minify();
-                }
-
-                if (function_exists('rocket_clean_cache_busting')) {
-                    rocket_clean_cache_busting();
-                }
-
-                return true;
-            },
-            'ionos_performance' => static function (): bool {
-                if (!is_callable(['\\Ionos\\Performance\\Caching\\Caching', 'flush_total_cache'])) {
-                    return false;
-                }
-
-                \Ionos\Performance\Caching\Caching::flush_total_cache();
-
-                return true;
-            },
-        ];
-
-        foreach ($known as $name => $purge) {
+        foreach (self::known() as $name => $cache) {
             try {
-                if ($purge()) {
+                if ($cache['available']()) {
+                    $cache['purge']();
                     $purged[] = $name;
                 }
             } catch (\Throwable) {
@@ -70,6 +58,34 @@ final class CachePurger
             'page' => $page,
             'purged' => $purged,
             'object' => $object,
+        ];
+    }
+
+    /** @return array<string, array{available: callable(): bool, purge: callable(): void}> */
+    private static function known(): array
+    {
+        return [
+            'wp_rocket' => [
+                'available' => static fn (): bool => function_exists('rocket_clean_domain'),
+                'purge' => static function (): void {
+                    // Same three steps as WP Rocket's own «Clear cache» button.
+                    rocket_clean_domain();
+
+                    if (function_exists('rocket_clean_minify')) {
+                        rocket_clean_minify();
+                    }
+
+                    if (function_exists('rocket_clean_cache_busting')) {
+                        rocket_clean_cache_busting();
+                    }
+                },
+            ],
+            'ionos_performance' => [
+                'available' => static fn (): bool => is_callable(['\\Ionos\\Performance\\Caching\\Caching', 'flush_total_cache']),
+                'purge' => static function (): void {
+                    \Ionos\Performance\Caching\Caching::flush_total_cache();
+                },
+            ],
         ];
     }
 

@@ -200,8 +200,8 @@ class AgentPlaybook
             ],
             [
                 'id' => 'purge_page_cache',
-                'do' => 'After Style CSS write, drop HTML caches that still embed the old CSS query string.',
-                'best' => 'SSH or Joomla cache clean for the groups this host already clears on style-update (com_templates, yootheme, page). Page-cache extensions still need their own purge.',
+                'do' => 'After a Style CSS write, or when site/public-fetch shows an old copy, drop HTML caches.',
+                'best' => 'site/cache-purge: empties every Joomla cache group, core page cache included. Page caches of other extensions (JCH Optimize) are listed under unsupported and need their own purge. A CDN in front is not purged. Then site/public-fetch to confirm.',
                 'avoid' => ['assuming a params write refreshed the frontend CSS'],
             ],
             [

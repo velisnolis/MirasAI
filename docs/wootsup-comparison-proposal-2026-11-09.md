@@ -161,9 +161,9 @@ del client.
 | Pas | Estat |
 | --- | --- |
 | 1.1 `site/public-fetch` | fet i provat als dos hosts: proves locals i webs de proves reals (vegeu «Validació») |
-| 1.2 `site/cache-purge` | pendent |
+| 1.2 `site/cache-purge` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.3 `template/render-check` | pendent de spike |
-| 1.4 Playbook i rutes | fet per a 1.1: job `verify_visitor_view` i fila a `agent-routes.md` |
+| 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | pendent |
 | Fase 3 | pendent |
 | Fase 4 | pendent |
@@ -227,3 +227,32 @@ Notes per tornar a provar en aquests comptes:
 - Còpies fetes abans d'instal·lar, al servidor: `~proveswp/mirasai-test/` (el
   connector 0.10.4 i l'`.htaccess`) i `~provesjoomla/mirasai-test/` (dump de la
   base de dades).
+
+### 1.2 `site/cache-purge`, 2026-11-09
+
+Proves locals: `docker/test-cache-purge.php`, amb WP Rocket, una memòria cau
+d'objectes i un drop-in desconegut simulats.
+
+WordPress (`proveswp`, sense cap memòria cau): `dry_run` sense res a buidar i
+purga amb `state=pass`, `page=none`. El camí de WP Rocket només està provat amb
+funcions simulades; el codi és el mateix `CachePurger` que ja feien servir les
+comprovacions posteriors a l'actualització.
+
+Joomla (`provesjoomla`), el cas complet amb System - Page Cache activat
+temporalment:
+
+| Pas | Resultat |
+| --- | --- |
+| Primera visita a l'article 1 | text trobat; `dry_run` mostra el grup `page` |
+| Canvi a l'article directament a la base de dades | — |
+| `site/public-fetch` | la marca nova **no** hi és: còpia de la memòria cau |
+| `site/public-fetch` amb `cache_bust=true` | la marca hi és |
+| `site/cache-purge` | `state=pass`, `page=purged`, 6 grups |
+| `site/public-fetch` | la marca hi és |
+
+Després es va restaurar l'article (idèntic per `cmp`) i es va tornar a
+desactivar el connector.
+
+La memòria cau de pàgina de JCH Optimize (`jchpagecache`, vist a nordlogway
+amb JCH 9.4.3) té emmagatzematge propi i no escolta cap esdeveniment de neteja
+de Joomla. L'eina la detecta i torna `unsupported`; no s'ha provat de buidar-la.
