@@ -188,7 +188,7 @@ del client.
 | 1b `template/create` | fet i provat als dos hosts (vegeu «Validació») |
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | feta i provada als dos hosts (vegeu «Validació») |
-| Fase 3 | pendent |
+| Fase 3 | `template/audit` fet i provat als dos hosts; l'avís `unknown_prop_keys` queda ajornat amb dades (vegeu «Validació») |
 | Fase 4 | pendent |
 
 ## Validació
@@ -438,3 +438,44 @@ Proves reals:
 - El missatge de Joomla s'ha comprovat llegint el fitxer d'idioma i fent la
   substitució de `getHumanReadableLogMessage()`; no s'ha vist a la pantalla de
   l'administració (el web de proves només és accessible des del servidor).
+
+### Fase 3 · Auditoria, 2026-11-09
+
+`template/audit` (lectura, tots dos hosts; `key`/`post_id`/`widget_id` a
+WordPress, `key`/`article_id` a Joomla). Llegeix el layout desat i no jutja
+els valors que surten de fonts dinàmiques; per a això hi ha
+`template/render-check`.
+
+| Gravetat | Codi | Què vol dir |
+| --- | --- | --- |
+| error | `image_file_missing` | la imatge apunta a un fitxer local que no hi és |
+| error | `empty_container` | una llista (grid, slideshow, switcher…) sense ítems ni font: no surt res |
+| warning | `no_h1`, `multiple_h1`, `heading_level_skip` | esquema de títols (`headline` i títols d'elements amb `title_element`; els ítems d'una llista fan servir el nivell del pare) |
+| notice | `missing_alt` | imatge estàtica sense `image_alt` (una decorativa pot anar buida) |
+| notice | `long_heading` | títol de més de 70 caràcters |
+
+Els nivells per defecte surten de la definició de l'element (`headline` és
+`h1`; `grid`, `panel`, sliders, `h3`), llegits a YOOtheme 5.0.53. Els elements
+desactivats, i el que tenen a dins, no s'auditen; només es compten.
+
+Proves: `docker/test-template-audit.php` (27 comprovacions, les dues còpies de
+l'auditor idèntiques). A `proveswp`, la pàgina de prova dona
+`image_file_missing` i `missing_alt` per a una imatge que de debò no existeix
+al servidor, i l'esquema h1 → h2 (dinàmic). A `provesjoomla`, l'article 2 i la
+plantilla creada surten nets, amb el seu esquema.
+
+**Ajornat: l'avís `unknown_prop_keys` a les escriptures.** Un recompte de només
+lectura sobre layouts reals mostra que la definició de l'element no basta:
+
+- ambiens (WordPress, 12 layouts, 416 nodes): una sola clau desconeguda,
+  `column.width_medium` (l'amplada que desa la fila), 96 vegades;
+- nordlogway (Joomla): unes 30 claus distintes, centenars de vegades
+  (`headline.parallax_y`, `section.padding`, `text.margin`…). Els camps de
+  paral·laxi viuen en un panell compartit del personalitzador
+  (`builder-parallax`) al qual l'element remet amb un botó, i d'altres són noms
+  de versions antigues que YOOtheme ignora.
+
+Els camps del tipus carregat per YOOtheme són els mateixos que els de la
+definició estàtica (comprovat a `proveswp`), així que l'avís demana resoldre
+aquests panells i limitar-se a les claus que escriu la crida. Sense això seria
+soroll.

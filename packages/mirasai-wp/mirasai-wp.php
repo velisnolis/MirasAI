@@ -65,6 +65,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourceSupportTrai
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateSummaryTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateRenderCheckTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeLayoutAuditor.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateAuditTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementTypesTool.php';
