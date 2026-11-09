@@ -38,7 +38,9 @@ class SitePublicFetchTool extends AbstractTool
             . 'header, nav, main, footer or other. Use it after a write to confirm what visitors get: a saved change can still be '
             . 'invisible because the article is not published or a page cache serves an old copy (cache_bust=true asks past most page caches). '
             . 'It reads the served HTML only: text hidden with CSS still counts, and content added by JavaScript is not seen. '
-            . 'YOOtheme prints the header twice (desktop and mobile), so header and nav texts usually count twice. Read-only.';
+            . 'YOOtheme prints the header twice (desktop and mobile), so header and nav texts usually count twice. '
+            . 'yootheme.layouts names the layouts that rendered the page: kind=template with the key to pass to template/* tools, '
+            . 'or own_layout for the page\'s own layout; null when no Builder layout rendered the page, or an HTML minifier stripped the markers. Read-only.';
     }
 
     public function getInputSchema(): array

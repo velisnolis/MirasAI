@@ -186,6 +186,14 @@ foreach ([
     $a = $I::analyze(str_repeat('a', $I::MAX_BODY_BYTES + 10), [], []);
     check($a['body_truncated'] === true, "$host: oversize body truncated");
 
+    // Which YOOtheme layouts rendered the page.
+    $yoo = $I::yoothemeLayouts('<body class="post-template-default single postid-12 wp-theme-yootheme"><!-- Builder #template-abc_12 --><div></div><!-- Builder #footer --><!--Builder #template-abc_12--></body>');
+    check($yoo === ['layouts' => [['prefix' => 'template-abc_12', 'kind' => 'template', 'key' => 'abc_12'], ['prefix' => 'footer', 'kind' => 'area']], 'wordpress_post_id' => 12], "$host: template key, area and post id read, duplicates once");
+    check($I::yoothemeLayouts('<body class="page-template page page-id-5"><!-- Builder #page --></body>') === ['layouts' => [['prefix' => 'page', 'kind' => 'own_layout']], 'wordpress_post_id' => 5], "$host: own layout and page id");
+    check($I::yoothemeLayouts('<body class="x"><div>minified</div></body>') === null, "$host: no marker is null, not an empty list");
+    check($I::yoothemeLayouts('<body class="site com_content view-article"><!-- Builder #page --></body>')['wordpress_post_id'] === null, "$host: no WordPress post id on Joomla");
+    check(array_key_exists('yootheme', $I::analyze('<p>x</p>', [], [])), "$host: analyze always carries the yootheme key");
+
     // The tool.
     $seen = [];
     $T = $classes['tool'];

@@ -544,3 +544,17 @@ diu que l'altra queda tapada; moure la segona al davant → el visitant passa a
 veure-la; després, ordre original i totes dues desactivades. A `provesjoomla`:
 activar → el visitant de l'article 1 veu la plantilla; desactivar → torna
 l'article.
+
+### De la URL al layout
+
+No ha calgut cap eina nova: YOOtheme escriu `<!-- Builder #prefix -->` a l'HTML
+de cada layout que pinta (`template-<clau>` per a una plantilla, `page` per al
+layout propi, `header`/`footer` per a les àrees). `site/public-fetch` ara ho
+torna a `yootheme.layouts`, amb la clau de la plantilla, i a WordPress l'id de
+l'entrada a partir de la classe del `body` (`postid-N`, `page-id-N`). És `null`
+quan cap layout del Builder pinta la pàgina o quan un minificador d'HTML ha
+tret els comentaris.
+
+Provat a `proveswp` (pàgina amb layout propi → `own_layout` i id 5; entrada amb
+la plantilla activada → `template` i la clau exacta; sense plantilla → `null`)
+i a `provesjoomla` (article 2 → `own_layout`).
