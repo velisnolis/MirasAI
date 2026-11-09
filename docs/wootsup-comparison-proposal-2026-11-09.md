@@ -512,3 +512,35 @@ consulta de llista (`articles`) és al `grid_item`, no al `grid`.
 llista (contenidor amb ítems, que no sigui un `fragment`), amb el path del
 primer ítem. No rebutja res: un objecte únic lligat al contenidor és vàlid.
 Provat als dos hosts: avís al `grid`, cap avís al `grid_item`.
+
+## Després de la 0.11.0
+
+Correccions de la revisió de Codex a la PR #11 (redireccions amb només query;
+`renders_empty` amb només imatges o vídeo), pendents de publicar.
+
+### Auditoria de tot el web
+
+`template/audit` amb `scope: "site"`: totes les plantilles i tots els layouts
+(entrades i widgets a WordPress; articles fora de la paperera a Joomla). Per a
+cada layout amb troballes, els recomptes i com a molt `max_per_layout`
+troballes, de pitjor a millor; els nets només es compten. Provat a `proveswp`
+(3 layouts, 1 net, la imatge que falta i un salt h1 → h3 real a la plantilla de
+prova) i `provesjoomla` (2 layouts nets).
+
+### Activar i ordenar plantilles
+
+`template/set-status` i `template/move` (`guarded_write`, `collection_etag`).
+YOOtheme aplica la primera plantilla activada, en l'ordre desat, que té el tipus
+de la pàgina i unes condicions que hi encaixen (`TemplateHelper::match()`); una
+plantilla sense condicions les encaixa totes. La previsualització diu, abans i
+després, l'ordre de les plantilles d'aquell tipus, si una anterior sense
+condicions la tapa (`shadowed_by`) i de quines posteriors prendria pàgines.
+`template/list` mostra ara `status`.
+
+Proves: `docker/test-template-order.php` (29 comprovacions, les dues còpies
+idèntiques). En real a `proveswp`: activar la plantilla creada → el visitant de
+l'entrada 1 la veu; activar-ne dues → guanya la primera i la previsualització
+diu que l'altra queda tapada; moure la segona al davant → el visitant passa a
+veure-la; després, ordre original i totes dues desactivades. A `provesjoomla`:
+activar → el visitant de l'article 1 veu la plantilla; desactivar → torna
+l'article.

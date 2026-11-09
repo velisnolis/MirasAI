@@ -161,7 +161,7 @@ class AgentPlaybook
                 'id' => 'yootheme_builder',
                 'do' => 'Change Builder elements, props, sources, templates, modules.',
                 'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch).',
-                'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add, check it, and leave switching it on to a person in the Builder: that changes what visitors see.',
+                'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add and check it with template/render-check and a context_id. Switching it on changes what visitors see: template/set-status (and template/move for the order) with a dry run first; shadowed_by in the preview means an earlier template hides it. Then site/public-fetch on a page of that type.',
                 'not_the_same_as' => 'YOOtheme Style / theme.css. Builder JSON does not go through less.js.',
                 'avoid' => ['SQL on #__content fulltext', 'editing layout JSON on disk', 'Customizer'],
             ],

@@ -92,6 +92,8 @@ POST /wp-json/mirasai/v1/checks/cache/purge
 - `template/render-check`
 - `template/audit`
 - `template/create`
+- `template/set-status`
+- `template/move`
 - `template/element-list`
 - `template/element-read`
 - `template/element-types`

@@ -107,6 +107,7 @@ class YoothemeWpHelper
                     'key' => (string) $key,
                     'name' => $this->templateName($template, (string) $key),
                     'type' => is_string($template['type'] ?? null) ? (string) $template['type'] : 'template',
+                    'status' => TemplateOrder::isEnabled($template) ? 'enabled' : 'disabled',
                     'language' => $this->templateLanguage($template),
                     'etag' => $this->etag($template),
                     'has_layout' => $layout !== null,

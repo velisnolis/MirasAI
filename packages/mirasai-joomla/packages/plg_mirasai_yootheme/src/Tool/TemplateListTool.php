@@ -16,6 +16,7 @@ class TemplateListTool extends AbstractTool
         'type',
         'language',
         'etag',
+        'status',
         'dynamic_only',
         'has_static_text',
         'translatable_node_count',
@@ -62,7 +63,7 @@ class TemplateListTool extends AbstractTool
                 ],
                 'fields' => [
                     'type' => 'array',
-                    'description' => 'Optional projection to reduce response size. Allowed values: key, name, type, language, etag, dynamic_only, has_static_text, translatable_node_count, assignment_fingerprint.',
+                    'description' => 'Optional projection to reduce response size. Allowed values: key, name, type, status, language, etag, dynamic_only, has_static_text, translatable_node_count, assignment_fingerprint.',
                     'items' => [
                         'type' => 'string',
                         'enum' => self::FIELD_KEYS,
@@ -115,6 +116,7 @@ class TemplateListTool extends AbstractTool
                 'key' => (string) $key,
                 'name' => $this->yooHelper->getTemplateName($template),
                 'type' => $type,
+                'status' => TemplateOrder::isEnabled($template) ? 'enabled' : 'disabled',
                 'language' => $language,
                 'etag' => $this->yooHelper->buildTemplateEtag($template),
                 'dynamic_only' => !$hasStaticText,

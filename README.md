@@ -324,7 +324,10 @@ Common workflow:
    outline problems and images without alternative text
 
 `template/create` adds a new template switched off; fill it with
-`template/element-add` and leave switching it on to a person in the Builder.
+`template/element-add`. `template/set-status` switches it on or off and
+`template/move` changes the order YOOtheme checks templates in; both preview
+which template wins for that type (`shadowed_by`, `takes_over_from`).
+`template/audit` with `scope: "site"` audits every layout at once.
 
 `template/read` and `template/element-list` accept `mode`. `full` (default) is
 the current payload. `outline` returns a nested tree of `type`, `path`,
