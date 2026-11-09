@@ -186,6 +186,13 @@ class McpHandler
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
+        // Not a tool argument: the handler checks it below.
+
+        $previewToken = $arguments[PreviewToken::ARGUMENT] ?? null;
+
+        unset($arguments[PreviewToken::ARGUMENT]);
+
+
         $rejection = ToolArgumentValidator::validate((string) $toolName, $tool->getInputSchema(), $arguments);
 
         if ($rejection !== null) {
@@ -211,6 +218,18 @@ class McpHandler
                 'risk_level' => $permissions['risk_level'],
                 'workflow_hint' => AbstractTool::workflowHintForRiskLevel($permissions['risk_level']),
                 'action_required' => 'Run a dry_run or preview first, then retry the exact write with confirm_guarded_write=true and a fresh if_match when the tool supports ETags.',
+            ], true);
+        }
+
+        $isGuarded = $permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE;
+
+        if ($isGuarded && ($arguments['dry_run'] ?? null) !== true && is_string($previewToken)
+            && !hash_equals(PreviewToken::for((string) $toolName, $arguments), $previewToken)
+        ) {
+            return $this->wrapToolResult([
+                'error' => 'These arguments are not the ones the dry run previewed. Run the dry run again with the arguments you mean to write.',
+                'code' => 'preview_mismatch',
+                'tool' => $toolName,
             ], true);
         }
 
@@ -247,6 +266,10 @@ class McpHandler
         try {
             $result = $tool->handle($arguments);
             self::recordWrite((string) $toolName, $permissions['risk_level'], $arguments, $result);
+
+            if ($isGuarded && ($arguments['dry_run'] ?? null) === true && !isset($result['error'])) {
+                $result[PreviewToken::ARGUMENT] = PreviewToken::for((string) $toolName, $arguments);
+            }
 
             // Check if the tool returned an error
             if (isset($result['error'])) {

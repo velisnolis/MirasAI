@@ -15,6 +15,7 @@ require_once $libSrc . '/Tool/AbstractTool.php';
 require_once $libSrc . '/Tool/ToolArgumentValidator.php';
 require_once $libSrc . '/Tool/ToolRegistry.php';
 require_once $libSrc . '/Mcp/McpActionRecord.php';
+require_once $libSrc . '/Mcp/PreviewToken.php';
 require_once $libSrc . '/Mcp/McpActionLog.php';
 require_once $libSrc . '/Mcp/McpHandler.php';
 

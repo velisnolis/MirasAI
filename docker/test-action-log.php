@@ -13,7 +13,9 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 
 require_once $root . '/packages/mirasai-wp/src/Mcp/McpActionRecord.php';
+require_once $root . '/packages/mirasai-wp/src/Mcp/PreviewToken.php';
 require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/McpActionRecord.php';
+require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Mcp/PreviewToken.php';
 
 $fails = 0;
 $count = 0;

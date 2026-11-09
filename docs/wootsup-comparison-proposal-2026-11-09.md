@@ -189,7 +189,7 @@ del client.
 | 1.4 Playbook i rutes | fet per a 1.1 i 1.2: job `verify_visitor_view`, `purge_page_cache` apunta a `site/cache-purge`, files a `agent-routes.md` |
 | Fase 2 | feta i provada als dos hosts (vegeu «Validació») |
 | Fase 3 | `template/audit` fet i provat als dos hosts; l'avís `unknown_prop_keys` queda ajornat amb dades (vegeu «Validació») |
-| Fase 4 | pendent |
+| Fase 4 | feta i provada als dos hosts (vegeu «Validació») |
 
 ## Validació
 
@@ -479,3 +479,36 @@ Els camps del tipus carregat per YOOtheme són els mateixos que els de la
 definició estàtica (comprovat a `proveswp`), així que l'avís demana resoldre
 aquests panells i limitar-se a les claus que escriu la crida. Sense això seria
 soroll.
+
+### Fase 4 · Comprovacions, 2026-11-09
+
+**Sublayouts i fragments: ja funcionava.** A YOOtheme 5.0.53 només `fragment`
+té sublayout, i el desa a `children` (la seva plantilla fa
+`$builder->render($children)`). El navegador de MirasAI recorre `children`
+sense mirar el tipus. Prova real als dos hosts: un fragment amb fila, columna i
+titular; `template/element-list` dona el path de dins
+(`…>fragment[2]>row[0]>column[0]>headline[0]`),
+`template/element-update-props` el modifica i `template/render-check` troba el
+text nou en aquest path. `template/audit` no compta un fragment buit com a
+llista buida.
+
+**Confirmació lligada als arguments: no ho estava; ara sí, de manera opcional.**
+Una confirmació podia portar arguments diferents dels de la previsualització
+amb el mateix `if_match`. Ara el `McpHandler` de cada host afegeix un
+`preview_token` (SHA-256 de l'eina i dels arguments, sense `dry_run` ni
+`confirm_guarded_write`, amb les claus ordenades) a la resposta de cada dry-run
+d'una eina `guarded_write`. Si la confirmació torna aquest token i els
+arguments no coincideixen, es rebutja amb `preview_mismatch` abans d'executar
+l'eina. Sense token, tot funciona com abans: els clients actuals no es trenquen.
+El playbook diu als agents que l'enviïn. Proves: `docker/test-preview-token.php`
+(19 comprovacions, els dos handlers) i, en real, `template/element-update-props`
+als dos hosts (altres `props` amb el token → `preview_mismatch`; les mateixes →
+`updated`).
+
+**Bindings de diversos ítems: avís nou.** A les plantilles de nordlogway, la
+consulta de llista (`articles`) és al `grid_item`, no al `grid`.
+`template/element-source-set` (forma d'un sol path) torna ara
+`warnings: [binding_on_list_container]` quan es lliga una font a un element de
+llista (contenidor amb ítems, que no sigui un `fragment`), amb el path del
+primer ítem. No rebutja res: un objecte únic lligat al contenidor és vàlid.
+Provat als dos hosts: avís al `grid`, cap avís al `grid_item`.

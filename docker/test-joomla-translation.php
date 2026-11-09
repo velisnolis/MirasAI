@@ -163,6 +163,7 @@ verify(isset($batch->handle($batchArgs + ['fix_links'=>true])['error']), 'batch 
 
 foreach (['ToolArgumentValidator', 'ToolRegistry'] as $name) { require_once $src . $name . '.php'; }
 require_once dirname($src) . '/Mcp/McpActionRecord.php';
+require_once dirname($src) . '/Mcp/PreviewToken.php';
 require_once dirname($src) . '/Mcp/McpActionLog.php';
 require_once dirname($src) . '/Mcp/McpHandler.php';
 $registry = new Mirasai\Library\Tool\ToolRegistry();

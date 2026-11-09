@@ -65,6 +65,7 @@ require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolArgumentValid
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/RuntimeSettings.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Tool/ToolRegistry.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpActionRecord.php';
+require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/PreviewToken.php';
 require_once dirname(__DIR__) . '/packages/mirasai-wp/src/Mcp/McpHandler.php';
 
 use Mirasai\WordPress\Mcp\McpHandler;
