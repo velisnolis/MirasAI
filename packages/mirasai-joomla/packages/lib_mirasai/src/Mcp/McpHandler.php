@@ -186,6 +186,13 @@ class McpHandler
             return $this->errorResponse(-32602, "Unknown tool: {$toolName}");
         }
 
+        // Not a tool argument: the handler checks it below.
+
+        $previewToken = $arguments[PreviewToken::ARGUMENT] ?? null;
+
+        unset($arguments[PreviewToken::ARGUMENT]);
+
+
         $rejection = ToolArgumentValidator::validate((string) $toolName, $tool->getInputSchema(), $arguments);
 
         if ($rejection !== null) {
@@ -214,6 +221,18 @@ class McpHandler
             ], true);
         }
 
+        $isGuarded = $permissions['risk_level'] === AbstractTool::RISK_GUARDED_WRITE;
+
+        if ($isGuarded && ($arguments['dry_run'] ?? null) !== true && is_string($previewToken)
+            && !hash_equals(PreviewToken::for((string) $toolName, $arguments), $previewToken)
+        ) {
+            return $this->wrapToolResult([
+                'error' => 'These arguments are not the ones the dry run previewed. Run the dry run again with the arguments you mean to write.',
+                'code' => 'preview_mismatch',
+                'tool' => $toolName,
+            ], true);
+        }
+
         if ($requiresElevation && EnvironmentGuard::isProduction()) {
             $elevation = new ElevationService();
 
@@ -235,6 +254,7 @@ class McpHandler
             try {
                 $result = $tool->handle($arguments);
                 $elevation->finalizeAuditEntry($auditId, isset($result['error']) ? 'error' : 'success');
+                self::recordWrite((string) $toolName, $permissions['risk_level'], $arguments, $result);
 
                 return $this->wrapResultWithElevation($result, $grant);
             } catch (\Throwable $e) {
@@ -245,6 +265,11 @@ class McpHandler
 
         try {
             $result = $tool->handle($arguments);
+            self::recordWrite((string) $toolName, $permissions['risk_level'], $arguments, $result);
+
+            if ($isGuarded && ($arguments['dry_run'] ?? null) === true && !isset($result['error'])) {
+                $result[PreviewToken::ARGUMENT] = PreviewToken::for((string) $toolName, $arguments);
+            }
 
             // Check if the tool returned an error
             if (isset($result['error'])) {
@@ -257,6 +282,21 @@ class McpHandler
                 'error' => $e->getMessage(),
                 'type' => get_class($e),
             ], true);
+        }
+    }
+
+    /**
+     * One User Actions Log row per MCP write; reads, dry runs, previews and errors are not logged.
+     *
+     * @param array<string, mixed> $arguments
+     * @param array<string, mixed> $result
+     */
+    private static function recordWrite(string $toolName, string $riskLevel, array $arguments, array $result): void
+    {
+        $record = McpActionRecord::build($toolName, $riskLevel, $arguments, $result, McpActionLog::requestHeaders());
+
+        if ($record !== null) {
+            McpActionLog::write($record);
         }
     }
 

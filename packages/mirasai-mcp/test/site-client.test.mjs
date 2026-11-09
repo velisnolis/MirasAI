@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import test from 'node:test';
-import { MirasaiHostClient, authHeadersForSite } from '../src/site-client.mjs';
+import { MirasaiHostClient, authHeadersForSite, setUpstreamClient, upstreamClientHeader } from '../src/site-client.mjs';
 
 const PREFLIGHT_STAGE_NAMES = ['dns_tls', 'http', 'auth', 'initialize', 'tools/list', 'diagnose'];
 
@@ -629,4 +629,32 @@ test('site preflight classifies an initialize JSON-RPC error without advancing l
   assert.equal(preflightStage(result, 'initialize').status, 'failed');
   assert.equal(preflightStage(result, 'initialize').classification, 'json_rpc_error');
   assert.equal(preflightStage(result, 'tools/list').status, 'skipped');
+});
+
+test('the upstream AI client is forwarded to hosts as X-MCP-Client', async () => {
+  setUpstreamClient(null);
+  assert.deepEqual(upstreamClientHeader(), {});
+
+  setUpstreamClient({ name: 'claude-code', version: '2.1.0' });
+  assert.deepEqual(upstreamClientHeader(), { 'X-MCP-Client': 'claude-code/2.1.0 via @miras/mirasai-mcp' });
+
+  setUpstreamClient({ name: 'evil\r\nX-Injected: 1', version: '1' });
+  assert.deepEqual(upstreamClientHeader(), { 'X-MCP-Client': 'evilX-Injected: 1/1 via @miras/mirasai-mcp' });
+
+  setUpstreamClient({ name: 'codex' });
+  const seen = [];
+  const client = new MirasaiHostClient(
+    { site_id: 'x', url: 'https://example.cat/mcp', platform: 'wordpress' },
+    {
+      tokenResolver: () => ({ type: 'basic', value: 'u:p' }),
+      fetchImpl: async (_url, init) => {
+        seen.push(init.headers);
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), { headers: { 'content-type': 'application/json' } });
+      },
+    },
+  );
+  await client.call('tools/list');
+  assert.equal(seen[0]['X-MCP-Client'], 'codex via @miras/mirasai-mcp');
+
+  setUpstreamClient(null);
 });

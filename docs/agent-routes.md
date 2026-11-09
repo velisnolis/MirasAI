@@ -38,7 +38,10 @@ Capabilities are not “MirasAI is installed ⇒ everything works”. They depen
 | YOOtheme **Style** read | `template/style-read` | same | same | optional: first line of `theme.<id>.css` | same as host |
 | YOOtheme **Style** write / recompile | **STOP** | **STOP** | `mirasai/style-update` | do not write config | **Cannot compile.** Stop. |
 | Prove CSS changed | CSS `compiled on` header via `file/read` | same | `mirasai/style-verify` then the header | `head -n1` of the CSS file | same as host |
-| Purge HTML cache after CSS write | not implemented on the host | same | same | WP Rocket: `rocket_clean_domain()` via `wp eval` | not from this environment |
+| Purge HTML cache after a write | `site/cache-purge` (WP Rocket, IONOS, object cache; every Joomla cache group). Other page caches come back as `unsupported` | same | same, proxied | WP Rocket: `rocket_clean_domain()` via `wp eval` | same as host, if authenticated |
+| See what a visitor gets after a write | `site/public-fetch` with `expect` | same | same, proxied | `curl` from the server | same as host, if authenticated |
+
+`site/public-fetch` only fetches URLs on the site's own host. A text missing with `cache_bust=false` but present with `cache_bust=true` means a page cache is serving an old copy. Missing both ways means the write did not reach that URL or the page is not public.
 
 Builder JSON and Style `theme.css` are different systems. Changing an element does not compile LESS. Changing `@less` / `custom_less` does not update the Builder.
 
@@ -103,6 +106,6 @@ Only when `mirasai/style-preview` is not in `tools/list`:
 3. Change a real control and undo it.
 4. `await window.yootheme.store.useConfigStore().save()`.
 5. Check `/* YOOtheme Pro v… compiled on … */` on the CSS file.
-6. Purge page cache (WP Rocket: `rocket_clean_domain()`).
+6. Purge page cache: `site/cache-purge`, or WP Rocket's `rocket_clean_domain()` over SSH.
 
 Prefer installing `@miras/mirasai-mcp` with a pinned `style_worker_sha256` over this recipe.

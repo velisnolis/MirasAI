@@ -101,9 +101,48 @@ class TemplateElementSourceSetTool extends AbstractTemplateElementWriteTool
                     $response['element'] = $element;
                 }
 
+                $warning = $this->listContainerWarning($current['element'], $path);
+
+                if ($warning !== null) {
+                    $response['warnings'] = [$warning];
+                }
+
                 return $response;
             },
         );
+    }
+
+    /**
+     * YOOtheme repeats the item of a list element (grid_item), not the list (grid): a query with several
+     * results bound on the list shows nothing extra. Seen on real templates: the articles query sits on
+     * grid_item. A single object bound on the list (the current article) is fine, hence a warning.
+     *
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function listContainerWarning(array $element, string $path): ?array
+    {
+        $type = is_string($element['type'] ?? null) ? $element['type'] : '';
+
+        if ($type === '' || $type === 'fragment') {
+            return null;
+        }
+
+        $definition = (new YoothemeWpHelper())->loadElementDefinition($type);
+
+        if (isset($definition['error']) || empty($definition['container']) || empty($definition['element'])) {
+            return null;
+        }
+
+        $children = is_array($element['children'] ?? null) ? $element['children'] : [];
+        $first = is_array($children[0] ?? null) ? $children[0] : null;
+        $itemType = is_string($first['type'] ?? null) ? $first['type'] : '';
+
+        return [
+            'code' => 'binding_on_list_container',
+            'message' => "A query with several results bound on this {$type} does not repeat anything: YOOtheme repeats its items. Bind it on the item instead. A single object, such as the current article, is fine here.",
+            'item_path' => $itemType !== '' ? $path . '>' . $itemType . '[0]' : null,
+        ];
     }
 
     /**

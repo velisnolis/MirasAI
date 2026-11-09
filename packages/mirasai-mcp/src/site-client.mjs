@@ -4,6 +4,21 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const PREFLIGHT_STAGE_NAMES = ['dns_tls', 'http', 'auth', 'initialize', 'tools/list', 'diagnose'];
 const BODY_SNIPPET_LIMIT = 300;
 
+// The AI client that talks to this router over stdio, from its initialize
+// request. Hosts log it with each write (Simple History reads X-MCP-Client).
+let upstreamClient = null;
+
+export function setUpstreamClient(clientInfo) {
+  const clean = (value) => (typeof value === 'string' ? value.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 80) : '');
+  const name = clean(clientInfo?.name);
+  const version = clean(clientInfo?.version);
+  upstreamClient = name === '' ? null : `${name}${version !== '' ? `/${version}` : ''} via @miras/mirasai-mcp`;
+}
+
+export function upstreamClientHeader() {
+  return upstreamClient === null ? {} : { 'X-MCP-Client': upstreamClient };
+}
+
 class HostRequestError extends Error {
   constructor(message, preflight) {
     super(message);
@@ -58,6 +73,7 @@ export class MirasaiHostClient {
           ...(this.protocol === 'mcp' ? { Accept: 'application/json, text/event-stream' } : {}),
           ...(this.sessionId !== null ? { 'Mcp-Session-Id': this.sessionId } : {}),
           ...(this.protocolVersion !== null ? { 'MCP-Protocol-Version': this.protocolVersion } : {}),
+          ...upstreamClientHeader(),
           ...authHeadersForSite(this.site, auth),
         },
         body: JSON.stringify({

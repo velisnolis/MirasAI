@@ -45,5 +45,9 @@ require_once $pluginSrc . '/Tool/TemplateElementCloneTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementDeleteTool.php';
 require_once $pluginSrc . '/Tool/TemplateReadTool.php';
 require_once $pluginSrc . '/Tool/TemplateTranslateTool.php';
+require_once $pluginSrc . '/Tool/TemplateCreateTool.php';
+require_once $pluginSrc . '/Tool/TemplateRenderCheckTool.php';
+require_once $pluginSrc . '/Tool/YoothemeLayoutAuditor.php';
+require_once $pluginSrc . '/Tool/TemplateAuditTool.php';
 
 return new \Mirasai\Plugin\Mirasai\Yootheme\YooThemeToolProvider();

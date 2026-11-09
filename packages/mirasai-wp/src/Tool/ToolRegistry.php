@@ -20,6 +20,8 @@ class ToolRegistry
         $registry->register(new ContentTranslateBatchTool());
         $registry->register(new ContentCheckLinksTool());
         $registry->register(new ContentAuditMultilingualTool());
+        $registry->register(new SitePublicFetchTool());
+        $registry->register(new SiteCachePurgeTool());
         $registry->register(new TaxonomyTermListTool());
         $registry->register(new TaxonomyTermTranslateTool());
         $registry->register(new DbSchemaTool());
@@ -36,6 +38,8 @@ class ToolRegistry
         $registry->register(new TemplateListTool());
         $registry->register(new TemplateReadTool());
         $registry->register(new TemplateSummaryTool());
+        $registry->register(new TemplateRenderCheckTool());
+        $registry->register(new TemplateAuditTool());
         $registry->register(new TemplateElementListTool());
         $registry->register(new TemplateElementReadTool());
         $registry->register(new TemplateElementTypesTool());
@@ -51,6 +55,7 @@ class ToolRegistry
         $registry->register(new TemplateElementCloneTool());
         $registry->register(new TemplateElementDeleteTool());
         $registry->register(new TemplateTranslateTool());
+        $registry->register(new TemplateCreateTool());
         $registry->register(new TemplateWidgetTranslateTool());
         $registry->register(new TemplateStyleReadTool());
         $registry->register(new TemplateStyleSourcesTool());

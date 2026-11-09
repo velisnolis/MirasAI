@@ -9,6 +9,7 @@ use Joomla\CMS\Session\Session;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
+use Mirasai\Library\Mcp\McpActionLog;
 use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Mcp\McpPathNormalizer;
 use Mirasai\Library\Sandbox\SandboxLoader;
@@ -67,6 +68,8 @@ final class MirasaiSystem extends CMSPlugin implements SubscriberInterface
 
             return;
         }
+
+        McpActionLog::setUser($user);
 
         $method = $app->getInput()->getMethod();
 

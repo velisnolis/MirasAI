@@ -163,9 +163,17 @@ class AgentPlaybook
             [
                 'id' => 'yootheme_builder',
                 'do' => 'Change Builder elements, props, sources, templates, widgets.',
-                'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write.',
+                'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch).',
+                'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add, check it, and leave switching it on to a person in the Builder: that changes what visitors see.',
                 'not_the_same_as' => 'YOOtheme Style / theme.css. Builder JSON does not go through less.js.',
                 'avoid' => ['WP-CLI on post meta', 'editing layout JSON on disk', 'Customizer'],
+            ],
+            [
+                'id' => 'verify_visitor_view',
+                'do' => 'After a Builder or content write, confirm what an anonymous visitor gets.',
+                'best' => 'site/public-fetch with the page URL and expect=[the texts you changed]. Missing with cache_bust=false but found with cache_bust=true: a page cache serves an old copy, see purge_page_cache. Missing both ways: the write did not reach this URL, or the post is not public (look at status and redirects).',
+                'caveat' => 'It reads the served HTML only: text hidden with CSS still counts and content added by JavaScript is not seen. A draft answers 404 to visitors; that is expected.',
+                'avoid' => ['treating a new etag as proof that visitors see the change'],
             ],
             [
                 'id' => 'yootheme_style_read',
@@ -198,8 +206,8 @@ class AgentPlaybook
             ],
             [
                 'id' => 'purge_page_cache',
-                'do' => 'After Style CSS write, drop HTML caches that still embed the old ?ver= mtime.',
-                'best' => 'SSH wp eval that calls rocket_clean_domain() when WP Rocket is present. This host does not purge page caches yet.',
+                'do' => 'After a Style CSS write, or when site/public-fetch shows an old copy, drop HTML caches.',
+                'best' => 'site/cache-purge: empties WP Rocket, IONOS Performance and the persistent object cache. state=unknown means a page cache drop-in it cannot empty; then purge from that plugin. A CDN in front is not purged. Then site/public-fetch to confirm.',
                 'avoid' => ['assuming object-cache delete is enough', 'wp rocket CLI purge — it is not exposed'],
             ],
             [

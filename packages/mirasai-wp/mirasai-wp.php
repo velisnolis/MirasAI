@@ -4,7 +4,7 @@
  * Plugin Name: MirasAI
  * Plugin URI: https://miras.pro
  * Description: MirasAI host endpoint for WordPress. Exposes a small MCP-compatible HTTP surface for the local MirasAI router.
- * Version: 0.10.4
+ * Version: 0.11.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: Miras
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MIRASAI_WP_VERSION', '0.10.4');
+define('MIRASAI_WP_VERSION', '0.11.0');
 define('MIRASAI_WP_CONTRACT_VERSION', '1');
 define('MIRASAI_WP_PLUGIN_FILE', __FILE__);
 define('MIRASAI_WP_PLUGIN_DIR', __DIR__);
@@ -44,6 +44,9 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentTranslateBatchTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentCheckLinksTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentAuditMultilingualTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/PublicPageInspector.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SitePublicFetchTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SiteCachePurgeTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TaxonomyTermListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TaxonomyTermTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/DbSchemaTool.php';
@@ -61,6 +64,9 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourceSupportTrait.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateSummaryTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateRenderCheckTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/YoothemeLayoutAuditor.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateAuditTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementTypesTool.php';
@@ -77,6 +83,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementMoveTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementCloneTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementDeleteTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateTranslateTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateCreateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateWidgetTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleSourcesTool.php';
@@ -89,6 +96,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfPostFieldsReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfCptListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AcfTaxonomyListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ToolRegistry.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpActionRecord.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/PreviewToken.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/McpHandler.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Mcp/RestController.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Admin/DashboardPage.php';

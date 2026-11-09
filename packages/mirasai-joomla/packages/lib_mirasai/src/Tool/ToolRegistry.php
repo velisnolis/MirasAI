@@ -25,6 +25,8 @@ class ToolRegistry
         'content/audit-multilingual' => ['description' => 'Scans the entire Joomla site and returns a structured diagnostic of multilingual completeness. Reports gaps in articles, menus, modules, categories, metadata, language switcher, and theme areas. Each gap includes the MCP tool call needed to fix it.', 'risk_level' => AbstractTool::RISK_READ],
         'category/translate' => ['description' => 'Creates a translated version of a Joomla category. YOU must provide translated_title (and optionally translated_description).', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
         'site/setup-language-switcher' => ['description' => 'Checks if a language switcher exists and, if not, creates and publishes a mod_languages module in the appropriate position. Detects YOOtheme theme positions automatically.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
+        'site/public-fetch' => ['description' => 'Fetches one URL of this site as an anonymous visitor and reports status, redirects, title, cache headers and whether expected texts appear, and where.', 'risk_level' => AbstractTool::RISK_READ],
+        'site/cache-purge' => ['description' => 'Empties every Joomla cache group, like Clear Cache → Delete All, and lists page caches of other extensions it cannot empty.', 'risk_level' => AbstractTool::RISK_SAFE_WRITE],
         'sandbox/status' => ['description' => 'Returns the current state of the MirasAI sandbox: whether it is active, its state (ok/loading/crashed/safe_mode), loaded files, crashed files, and environment detection.', 'risk_level' => AbstractTool::RISK_READ],
         'file/read' => ['description' => 'Reads non-sensitive file content anywhere under the Joomla root directory. Blocks common secret-bearing files such as Joomla configuration, .env files, private keys, and certificate bundles.', 'risk_level' => AbstractTool::RISK_READ],
         'file/write' => ['description' => 'Write content to a file in the sandbox directory (media/mirasai/sandbox/). PHP files are syntax-validated before writing. Supports overwrite and append modes, and UTF-8 or base64 encoding.', 'risk_level' => AbstractTool::RISK_DANGEROUS_EXEC],
@@ -128,6 +130,8 @@ class ToolRegistry
         $registry->registerLazy('content/audit-multilingual',  ContentAuditMultilingualTool::class, 'core', self::CORE_TOOL_METADATA['content/audit-multilingual']);
         $registry->registerLazy('category/translate',          CategoryTranslateTool::class, 'core', self::CORE_TOOL_METADATA['category/translate']);
         $registry->registerLazy('site/setup-language-switcher', SiteSetupLanguageSwitcherTool::class, 'core', self::CORE_TOOL_METADATA['site/setup-language-switcher']);
+        $registry->registerLazy('site/public-fetch',           SitePublicFetchTool::class, 'core', self::CORE_TOOL_METADATA['site/public-fetch']);
+        $registry->registerLazy('site/cache-purge',            SiteCachePurgeTool::class, 'core', self::CORE_TOOL_METADATA['site/cache-purge']);
         $registry->registerLazy('sandbox/status',              SandboxStatusTool::class, 'core', self::CORE_TOOL_METADATA['sandbox/status']);
         $registry->registerLazy('file/read',                   FileReadTool::class, 'core', self::CORE_TOOL_METADATA['file/read']);
         $registry->registerLazy('file/write',                  FileWriteTool::class, 'core', self::CORE_TOOL_METADATA['file/write']);

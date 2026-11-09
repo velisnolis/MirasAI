@@ -10,6 +10,7 @@ use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 use Joomla\Router\Route;
 use Mirasai\Library\Mcp\JoomlaApiTokenAuthenticator;
+use Mirasai\Library\Mcp\McpActionLog;
 use Mirasai\Library\Mcp\McpHandler;
 use Mirasai\Library\Mcp\McpPathNormalizer;
 use Mirasai\Library\Tool\ToolRegistry;
@@ -60,6 +61,9 @@ final class MirasaiWebservices extends CMSPlugin implements SubscriberInterface
 
             return;
         }
+
+
+        McpActionLog::setUser($user);
 
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 

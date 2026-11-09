@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The latest published release is [`0.10.4`](https://github.com/velisnolis/MirasAI/releases/tag/v0.10.4). See the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
+The latest published release is [`0.11.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.11.0). See the [0.11.0 verification, template and activity log tools](docs/releases/0.11.0.md), the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -314,7 +314,17 @@ Common workflow:
 2. `template/summary` or `template/element-list`
 3. `template/element-read`
 4. `template/element-schema` if a write needs runtime prop schema
-5. write with `if_match` and either `dry_run:true` or `confirm_guarded_write:true`
+5. write with `if_match` and either `dry_run:true` or `confirm_guarded_write:true`;
+   send the dry run's `preview_token` back with the confirm, so a confirm with
+   other arguments is refused (`preview_mismatch`)
+6. check it: `template/render-check` (renders the stored layout as a guest, per
+   element path) and `site/public-fetch` (what a visitor gets at the URL);
+   `site/cache-purge` when a page cache still serves an old copy
+7. `template/audit` lists missing image files, empty list elements, heading
+   outline problems and images without alternative text
+
+`template/create` adds a new template switched off; fill it with
+`template/element-add` and leave switching it on to a person in the Builder.
 
 `template/read` and `template/element-list` accept `mode`. `full` (default) is
 the current payload. `outline` returns a nested tree of `type`, `path`,

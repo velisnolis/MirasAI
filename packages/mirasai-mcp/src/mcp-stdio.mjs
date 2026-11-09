@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { findSite } from './config.mjs';
-import { MirasaiHostClient, unexpectedPreflightResult } from './site-client.mjs';
+import { MirasaiHostClient, setUpstreamClient, unexpectedPreflightResult } from './site-client.mjs';
 import { previewStyle, updateStyle, verifyCompiledStyle } from './style-preview.mjs';
 
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -30,6 +30,8 @@ export function createRouterHandler(registry, options = {}) {
 
     try {
       if (method === 'initialize') {
+        setUpstreamClient(params?.clientInfo);
+
         return response(id, {
           protocolVersion: '2024-11-05',
           capabilities: {
