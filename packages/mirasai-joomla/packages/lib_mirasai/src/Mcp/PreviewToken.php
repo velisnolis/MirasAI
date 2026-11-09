@@ -12,6 +12,9 @@ namespace Mirasai\Library\Mcp;
  * token; a confirm that sends it back is refused unless its arguments are the
  * same. Sending it is optional, so older clients keep working.
  *
+ * It is a hash, not a session: it does not expire and two identical dry runs give the same token. It
+ * proves the arguments, not that the preview is recent; every guarded write requires if_match for that.
+ *
  * Mirrored in mirasai-wp. Both copies must stay free of WordPress and Joomla
  * calls so docker/test-preview-token.php can run them as plain PHP.
  */

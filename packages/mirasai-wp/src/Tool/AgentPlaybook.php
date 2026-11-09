@@ -163,7 +163,7 @@ class AgentPlaybook
             [
                 'id' => 'yootheme_builder',
                 'do' => 'Change Builder elements, props, sources, templates, widgets.',
-                'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch).',
+                'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch). The token is a hash of the tool and its arguments, not a session: it does not expire, and two identical dry runs give the same one. That the preview is still current comes from if_match.',
                 'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add and check it with template/render-check and a context_id. Switching it on changes what visitors see: template/set-status (and template/move for the order) with a dry run first; shadowed_by in the preview means an earlier template hides it. Then site/public-fetch on a page of that type.',
                 'not_the_same_as' => 'YOOtheme Style / theme.css. Builder JSON does not go through less.js.',
                 'avoid' => ['WP-CLI on post meta', 'editing layout JSON on disk', 'Customizer'],
@@ -172,7 +172,7 @@ class AgentPlaybook
                 'id' => 'verify_visitor_view',
                 'do' => 'After a Builder or content write, confirm what an anonymous visitor gets.',
                 'best' => 'site/public-fetch with the page URL and expect=[the texts you changed]. Missing with cache_bust=false but found with cache_bust=true: a page cache serves an old copy, see purge_page_cache. Missing both ways: the write did not reach this URL, or the post is not public (look at status and redirects).',
-                'caveat' => 'It reads the served HTML only: text hidden with CSS still counts and content added by JavaScript is not seen. A draft answers 404 to visitors; that is expected.',
+                'caveat' => 'It reads the served HTML only: text hidden with CSS still counts and content added by JavaScript is not seen. A draft answers 404 to visitors; that is expected. template/render-check cannot reproduce an archive, search or taxonomy request (warning listing_not_reproducible): for those templates this URL check is the proof.',
                 'avoid' => ['treating a new etag as proof that visitors see the change'],
             ],
             [

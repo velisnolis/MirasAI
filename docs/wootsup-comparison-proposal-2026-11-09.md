@@ -596,3 +596,32 @@ amb el seu lloc als dos hosts, la mateixa secció vàlida passa, i a Joomla un
   té límits (200 i 500). Ara enumera tots els id (metadades i comentari al
   contingut) i pagina amb `offset`/`limit`, amb `layouts_total`, `next_offset` i
   `layouts_unreadable`; Joomla fa el mateix.
+
+## Prova de la 0.12.0 a ambiens
+
+Quatre observacions a `docs/yootheme-builder-findings.md` (F-040 a F-043).
+
+- **F-040, `render-check` d'una plantilla d'arxiu.** Confirmat al codi:
+  `context_id` només reprodueix una fitxa, i una consulta d'arxiu, cerca o
+  taxonomia no té entrades fora d'una petició real. Ara `render-check` torna
+  `warnings`: `listing_not_reproducible` per a les plantilles que no són de
+  fitxa (WordPress: tipus que no comencen per `single-`; Joomla: diferent de
+  `com_content.article`) i `dynamic_not_rendered` amb els paths dels elements
+  lligats a una font que no s'han pintat. Provat a `proveswp` amb una plantilla
+  `archive-post` com la d'ambiens: un sol element (el títol) i els dos avisos,
+  amb el path de l'ítem de la graella.
+- **F-041, `preview_token` repetit.** És el disseny: és el hash de l'eina i
+  dels arguments, no una sessió. Totes les escriptures protegides demanen
+  `if_match`, que és el que prova que la previsualització és vigent. Documentat
+  al playbook i a `PreviewToken`.
+- **F-042, condició `!!` sobre un camp llista.** Reproduït a `proveswp` sense
+  ACF: amb l'entrada 1, la condició sobre `title` es compleix i les condicions
+  sobre `categories` i `categories.name` no. Causa dins de YOOtheme no
+  localitzada. Ara `template/element-source-preview` torna
+  `binding_through_list_field` quan una propietat o una condició passa per un
+  camp llista (`SourceListPaths`, amb el tipus de resultat i el mapa de tipus de
+  `template/source-types`). Provat: `categories` a WordPress i `tags` a Joomla
+  avisen; `title` no.
+- **F-043, `teaser` sense límit.** `template/audit` dona `unbounded_teaser`
+  (notice) quan un ítem d'una llista lliga `teaser` o `content` sense el filtre
+  `limit`. Provat a la plantilla d'arxiu de prova.

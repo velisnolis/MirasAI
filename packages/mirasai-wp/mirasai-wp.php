@@ -74,6 +74,7 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSchemaTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateSourceTypesTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourceReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTemplateElementWriteTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SourceListPaths.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourcePreviewTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourceSetTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementSourceDeleteTool.php';
