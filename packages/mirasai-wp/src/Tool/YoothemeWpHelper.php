@@ -107,6 +107,7 @@ class YoothemeWpHelper
                     'key' => (string) $key,
                     'name' => $this->templateName($template, (string) $key),
                     'type' => is_string($template['type'] ?? null) ? (string) $template['type'] : 'template',
+                    'status' => TemplateOrder::isEnabled($template) ? 'enabled' : 'disabled',
                     'language' => $this->templateLanguage($template),
                     'etag' => $this->etag($template),
                     'has_layout' => $layout !== null,
@@ -484,6 +485,36 @@ class YoothemeWpHelper
         $decoded = json_decode($matches[1], true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Every post that may hold a Builder layout, with no cap: ids from the layout meta keys and from posts
+     * whose content starts with the layout comment. listLayouts() is capped for listing; an audit of the
+     * whole site must not be. Callers still confirm each id with loadPostLayout().
+     *
+     * @return list<int>
+     */
+    public function allPostLayoutIds(): array
+    {
+        global $wpdb;
+
+        $placeholders = implode(', ', array_fill(0, count(self::POST_LAYOUT_META_KEYS), '%s'));
+        $statuses = "'publish', 'draft', 'private', 'pending', 'future'";
+        $fromMeta = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT p.ID FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
+             WHERE pm.meta_key IN ({$placeholders}) AND pm.meta_value <> '' AND p.post_status IN ({$statuses})",
+            self::POST_LAYOUT_META_KEYS
+        ));
+        $fromContent = $wpdb->get_col(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_content LIKE '<!-- {%' AND post_type <> 'revision' AND post_status IN ({$statuses})"
+        );
+
+        $ids = array_values(array_unique(array_map('intval', array_merge(is_array($fromMeta) ? $fromMeta : [], is_array($fromContent) ? $fromContent : []))));
+        sort($ids);
+
+        return $ids;
     }
 
     /**

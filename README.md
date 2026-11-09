@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The latest published release is [`0.11.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.11.0). See the [0.11.0 verification, template and activity log tools](docs/releases/0.11.0.md), the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
+The latest published release is [`0.12.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.12.0). See the [0.12.0 site audit, template switching and validation](docs/releases/0.12.0.md), the [0.11.0 verification, template and activity log tools](docs/releases/0.11.0.md), the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
@@ -324,7 +324,11 @@ Common workflow:
    outline problems and images without alternative text
 
 `template/create` adds a new template switched off; fill it with
-`template/element-add` and leave switching it on to a person in the Builder.
+`template/element-add`. `template/set-status` switches it on or off and
+`template/move` changes the order YOOtheme checks templates in (and
+`template/duplicate` copies one, switched off); both preview
+which template wins for that type (`shadowed_by`, `takes_over_from`).
+`template/audit` with `scope: "site"` audits every layout at once.
 
 `template/read` and `template/element-list` accept `mode`. `full` (default) is
 the current payload. `outline` returns a nested tree of `type`, `path`,

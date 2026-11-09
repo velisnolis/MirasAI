@@ -512,3 +512,87 @@ consulta de llista (`articles`) és al `grid_item`, no al `grid`.
 llista (contenidor amb ítems, que no sigui un `fragment`), amb el path del
 primer ítem. No rebutja res: un objecte únic lligat al contenidor és vàlid.
 Provat als dos hosts: avís al `grid`, cap avís al `grid_item`.
+
+## Després de la 0.11.0
+
+Correccions de la revisió de Codex a la PR #11 (redireccions amb només query;
+`renders_empty` amb només imatges o vídeo), pendents de publicar.
+
+### Auditoria de tot el web
+
+`template/audit` amb `scope: "site"`: totes les plantilles i tots els layouts
+(entrades i widgets a WordPress; articles fora de la paperera a Joomla). Per a
+cada layout amb troballes, els recomptes i com a molt `max_per_layout`
+troballes, de pitjor a millor; els nets només es compten. Provat a `proveswp`
+(3 layouts, 1 net, la imatge que falta i un salt h1 → h3 real a la plantilla de
+prova) i `provesjoomla` (2 layouts nets).
+
+### Activar i ordenar plantilles
+
+`template/set-status` i `template/move` (`guarded_write`, `collection_etag`).
+YOOtheme aplica la primera plantilla activada, en l'ordre desat, que té el tipus
+de la pàgina i unes condicions que hi encaixen (`TemplateHelper::match()`); una
+plantilla sense condicions les encaixa totes. La previsualització diu, abans i
+després, l'ordre de les plantilles d'aquell tipus, si una anterior sense
+condicions la tapa (`shadowed_by`) i de quines posteriors prendria pàgines.
+`template/list` mostra ara `status`.
+
+Proves: `docker/test-template-order.php` (29 comprovacions, les dues còpies
+idèntiques). En real a `proveswp`: activar la plantilla creada → el visitant de
+l'entrada 1 la veu; activar-ne dues → guanya la primera i la previsualització
+diu que l'altra queda tapada; moure la segona al davant → el visitant passa a
+veure-la; després, ordre original i totes dues desactivades. A `provesjoomla`:
+activar → el visitant de l'article 1 veu la plantilla; desactivar → torna
+l'article.
+
+### De la URL al layout
+
+No ha calgut cap eina nova: YOOtheme escriu `<!-- Builder #prefix -->` a l'HTML
+de cada layout que pinta (`template-<clau>` per a una plantilla, `page` per al
+layout propi, `header`/`footer` per a les àrees). `site/public-fetch` ara ho
+torna a `yootheme.layouts`, amb la clau de la plantilla, i a WordPress l'id de
+l'entrada a partir de la classe del `body` (`postid-N`, `page-id-N`). És `null`
+quan cap layout del Builder pinta la pàgina o quan un minificador d'HTML ha
+tret els comentaris.
+
+Provat a `proveswp` (pàgina amb layout propi → `own_layout` i id 5; entrada amb
+la plantilla activada → `template` i la clau exacta; sense plantilla → `null`)
+i a `provesjoomla` (article 2 → `own_layout`).
+
+### Duplicar plantilles
+
+`template/duplicate` (`guarded_write`, `collection_etag`): còpia amb el tipus,
+les condicions, els paràmetres i el layout, desactivada i just darrere de
+l'original; nom per defecte «<original> (copy)». Provat als dos hosts: la
+còpia té els mateixos elements que l'original (11/11 a WordPress, 12/12 a
+Joomla) i el visitant no veu cap canvi.
+
+### Afegir molts elements d'un cop: ja hi era; validació de tot l'arbre
+
+`template/element-add` ja accepta un element amb tots els seus fills (una
+secció amb files, columnes i elements) i ho escriu tot o res amb un sol
+`if_match`; és el que WootsUp anuncia a la 3.1. No cal `elements[]`.
+
+El forat era la validació: la comprovació de valors `select`/`radio` només
+mirava l'element de dalt. Ara `rejectInvalidTree()` mira cada node de l'arbre
+afegit i diu on és el valor dolent (`at: element>row[0]>column[0]>headline[0]`).
+A més, a **Joomla** aquesta validació existia però cap eina la cridava:
+`element-add` i `element-update-props` hi desaven valors invàlids sense avís.
+Ara les dues validen, com a WordPress.
+
+Proves: `docker/test-element-tree-validation.php` (12 comprovacions, els dos
+hosts) i en real: un `title_element: h7` dins d'una secció nova es rebutja
+amb el seu lloc als dos hosts, la mateixa secció vàlida passa, i a Joomla un
+`update-props` amb `h7` es rebutja.
+
+### Revisió de Codex a la PR #12
+
+- P1: a Joomla, `buildTemplatesEtag()` ordenava les plantilles per clau abans
+  del hash, i una reordenació no canviava el `collection_etag`; `set-status` i
+  `move` haurien acceptat un `if_match` d'abans d'una reordenació. Ara cada
+  plantilla s'ordena per dins però la col·lecció conserva l'ordre. Provat a
+  `provesjoomla`: després d'un `template/move`, l'ETag d'abans → `stale_etag`.
+- P2: a WordPress, l'auditoria de tot el web feia servir `listLayouts()`, que
+  té límits (200 i 500). Ara enumera tots els id (metadades i comentari al
+  contingut) i pagina amb `offset`/`limit`, amb `layouts_total`, `next_offset` i
+  `layouts_unreadable`; Joomla fa el mateix.

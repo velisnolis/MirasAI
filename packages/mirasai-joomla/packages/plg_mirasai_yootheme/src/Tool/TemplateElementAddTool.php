@@ -61,6 +61,12 @@ class TemplateElementAddTool extends AbstractTemplateElementWriteTool
                 return ['error' => 'element must be an object.', 'code' => 'invalid_element'];
             }
 
+            $rejection = $this->rejectInvalidTree($element);
+
+            if ($rejection !== null) {
+                return $rejection;
+            }
+
             $placements = array_keys(array_filter([
                 'parent_path' => $parentPath !== '',
                 'before_path' => $beforePath !== '',

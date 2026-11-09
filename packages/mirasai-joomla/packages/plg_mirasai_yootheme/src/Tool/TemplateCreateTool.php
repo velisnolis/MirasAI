@@ -27,7 +27,7 @@ class TemplateCreateTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Creates a new YOOtheme template, switched off, so no page changes until someone switches it on in the Builder. '
+        return 'Creates a new YOOtheme template, switched off, so no page changes until it is switched on with template/set-status. '
             . 'Give name, type as YOOtheme names it (com_content.article, com_content.category, com_content.featured, error-404; '
             . 'copy it from template/list when unsure) and optionally a starting layout. if_match is the collection_etag of '
             . 'template/list. Returns the new key: fill it with template/element-add and check it with template/render-check and a '
@@ -124,7 +124,7 @@ class TemplateCreateTool extends AbstractTool
             'etag' => $this->yooHelper->buildTemplateEtag($template),
             'collection_etag' => $this->yooHelper->buildTemplatesEtag($templates),
             'cache' => $cache,
-            'next' => 'template/element-add with key and this etag as if_match; template/render-check with a context_id; switch it on in the YOOtheme Builder.',
+            'next' => 'template/element-add with key and this etag as if_match; template/render-check with a context_id; then template/set-status, with a dry run first.',
         ];
     }
 

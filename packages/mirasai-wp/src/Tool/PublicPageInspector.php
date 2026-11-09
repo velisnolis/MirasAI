@@ -193,6 +193,7 @@ final class PublicPageInspector
             'has_main_region' => $page['has_main'],
             'excerpt' => self::excerpt($excerptSource, 300),
             'cache' => self::cacheSignals($headers, $body),
+            'yootheme' => self::yoothemeLayouts($body),
             'body_truncated' => $truncated,
         ];
 
@@ -420,6 +421,41 @@ final class PublicPageInspector
     }
 
     /**
+     * Which YOOtheme layouts rendered the page. The layout element prints «<!-- Builder #prefix -->»:
+     * template-<key> for a template, page for the page's own layout, header and footer for those areas.
+     * null when no Builder layout rendered the page, or an HTML minifier dropped the comments.
+     *
+     * @return array{layouts: list<array<string, string>>, wordpress_post_id: ?int}|null
+     */
+    public static function yoothemeLayouts(string $html): ?array
+    {
+        if (preg_match_all('/<!--\s*Builder #([A-Za-z0-9_-]+)\s*-->/', $html, $matches) === 0) {
+            return null;
+        }
+
+        $layouts = [];
+
+        foreach (array_values(array_unique($matches[1])) as $prefix) {
+            $layout = ['prefix' => $prefix];
+
+            if (str_starts_with($prefix, 'template-')) {
+                $layout += ['kind' => 'template', 'key' => substr($prefix, 9)];
+            } elseif ($prefix === 'page') {
+                $layout['kind'] = 'own_layout';
+            } else {
+                $layout['kind'] = 'area';
+            }
+
+            $layouts[] = $layout;
+        }
+
+        // WordPress body classes name the post: postid-12 for posts, page-id-12 for pages.
+        $postId = preg_match('/<body\b[^>]*\bclass="[^"]*\b(?:postid|page-id)-(\d+)\b/i', $html, $m) === 1 ? (int) $m[1] : null;
+
+        return ['layouts' => $layouts, 'wordpress_post_id' => $postId];
+    }
+
+    /**
      * @param array<string, string> $headers
      * @return array<string, mixed>
      */
@@ -493,6 +529,17 @@ final class PublicPageInspector
     {
         $parts = parse_url($base);
         $path = is_array($parts) ? (string) ($parts['path'] ?? '/') : '/';
+        $path = $path !== '' ? $path : '/';
+
+        // RFC 3986 §5.2.2: a reference that is only a query or a fragment keeps the whole current path.
+        if (str_starts_with($relative, '?')) {
+            return self::origin($base) . $path . $relative;
+        }
+
+        if (str_starts_with($relative, '#')) {
+            return self::origin($base) . $path . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        }
+
         $directory = substr($path, 0, (int) strrpos($path, '/') + 1);
 
         return self::origin($base) . ($directory !== '' ? $directory : '/') . $relative;

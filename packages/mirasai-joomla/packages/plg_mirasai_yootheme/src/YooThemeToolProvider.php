@@ -30,6 +30,9 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleSourcesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleUpdateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateCreateTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateDuplicateTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateMoveTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSetStatusTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateAuditTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateRenderCheckTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateTranslateTool;
@@ -104,6 +107,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read',
             'template/translate',
             'template/create',
+            'template/set-status',
+            'template/move',
+            'template/duplicate',
             'template/render-check',
             'template/audit',
         ];
@@ -136,6 +142,9 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read'                 => new TemplateReadTool(),
             'template/translate'            => new TemplateTranslateTool(),
             'template/create'               => new TemplateCreateTool(),
+            'template/set-status'           => new TemplateSetStatusTool(),
+            'template/move'                 => new TemplateMoveTool(),
+            'template/duplicate'            => new TemplateDuplicateTool(),
             'template/render-check'         => new TemplateRenderCheckTool(),
             'template/audit'                => new TemplateAuditTool(),
             default                         => throw new \InvalidArgumentException("Unknown tool: {$name}"),

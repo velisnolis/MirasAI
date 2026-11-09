@@ -120,5 +120,14 @@ $jt = (new \ReflectionClass($JR))->newInstanceWithoutConstructor();
 check(($jt->toMcpTool()['metadata']['risk_level'] ?? null) === 'read', 'joomla: read-only');
 check(array_keys($jt->getInputSchema()['properties']) === ['key', 'article_id', 'context_id', 'expect', 'offset', 'limit'], 'joomla: key or article_id, no module_id');
 
+// An image, a video or an iframe is content without text (Codex review, PR #11).
+foreach ([R::class, $JR] as $C) {
+    check($C::rendersNothing('') && $C::rendersNothing('<div class="uk-section"> <div>&nbsp;</div></div>'), "$C: no text and no media renders nothing");
+    check(!$C::rendersNothing('<div><img src="a.jpg" alt=""></div>'), "$C: an image alone is content");
+    check(!$C::rendersNothing('<video src="v.mp4"></video>') && !$C::rendersNothing('<IFRAME src="https://maps"></IFRAME>') && !$C::rendersNothing('<svg viewBox="0 0 1 1"></svg>'), "$C: video, iframe and svg are content");
+    check(!$C::rendersNothing('<p>Hola</p>'), "$C: text is content");
+    check($C::rendersNothing('<div class="imgx"></div>'), "$C: a class name that starts with img is not an image");
+}
+
 echo $fails === 0 ? "OK: $count checks\n" : "$fails of $count checks failed\n";
 exit($fails === 0 ? 0 : 1);

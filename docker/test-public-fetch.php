@@ -126,6 +126,18 @@ foreach ([
     $r = $I::fetch('/loop', $site, pages($loop, $seen));
     check(($r['code'] ?? '') === 'too_many_redirects' && count($seen) === $I::MAX_REDIRECTS + 1, "$host: redirect loop stops");
 
+    // Query-only and fragment-only references keep the current path (Codex review, PR #11).
+    $base = 'https://example.cat/news/story?page=1';
+    check($I::resolveUrl('?page=2', $site, $base) === ['url' => 'https://example.cat/news/story?page=2'], "$host: query-only reference keeps the path");
+    check($I::resolveUrl('#top', $site, $base) === ['url' => 'https://example.cat/news/story?page=1'], "$host: fragment-only reference keeps path and query");
+    check($I::resolveUrl('other', $site, $base) === ['url' => 'https://example.cat/news/other'], "$host: a relative path still resolves against the directory");
+    check($I::resolveUrl('?q=1', $site, 'https://example.cat') === ['url' => 'https://example.cat/?q=1'], "$host: query-only on a bare host");
+    $r = $I::fetch('/news/story?page=1', $site, pages([
+        'https://example.cat/news/story?page=1' => ['status' => 302, 'headers' => ['location' => '?page=2'], 'body' => ''],
+        'https://example.cat/news/story?page=2' => ['status' => 200, 'headers' => [], 'body' => 'ok'],
+    ]));
+    check(($r['final_url'] ?? '') === 'https://example.cat/news/story?page=2' && $r['status'] === 200, "$host: a query-only redirect is followed to the same page");
+
     $r = $I::fetch('/x', $site, static fn () => ['error' => 'refused', 'code' => 'loopback_failed']);
     check(($r['code'] ?? '') === 'loopback_failed' && $r['url'] === 'https://example.cat/x', "$host: fetcher error passed through");
 
@@ -173,6 +185,14 @@ foreach ([
 
     $a = $I::analyze(str_repeat('a', $I::MAX_BODY_BYTES + 10), [], []);
     check($a['body_truncated'] === true, "$host: oversize body truncated");
+
+    // Which YOOtheme layouts rendered the page.
+    $yoo = $I::yoothemeLayouts('<body class="post-template-default single postid-12 wp-theme-yootheme"><!-- Builder #template-abc_12 --><div></div><!-- Builder #footer --><!--Builder #template-abc_12--></body>');
+    check($yoo === ['layouts' => [['prefix' => 'template-abc_12', 'kind' => 'template', 'key' => 'abc_12'], ['prefix' => 'footer', 'kind' => 'area']], 'wordpress_post_id' => 12], "$host: template key, area and post id read, duplicates once");
+    check($I::yoothemeLayouts('<body class="page-template page page-id-5"><!-- Builder #page --></body>') === ['layouts' => [['prefix' => 'page', 'kind' => 'own_layout']], 'wordpress_post_id' => 5], "$host: own layout and page id");
+    check($I::yoothemeLayouts('<body class="x"><div>minified</div></body>') === null, "$host: no marker is null, not an empty list");
+    check($I::yoothemeLayouts('<body class="site com_content view-article"><!-- Builder #page --></body>')['wordpress_post_id'] === null, "$host: no WordPress post id on Joomla");
+    check(array_key_exists('yootheme', $I::analyze('<p>x</p>', [], [])), "$host: analyze always carries the yootheme key");
 
     // The tool.
     $seen = [];

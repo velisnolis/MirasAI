@@ -4,7 +4,7 @@
  * Plugin Name: MirasAI
  * Plugin URI: https://miras.pro
  * Description: MirasAI host endpoint for WordPress. Exposes a small MCP-compatible HTTP surface for the local MirasAI router.
- * Version: 0.11.0
+ * Version: 0.12.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: Miras
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MIRASAI_WP_VERSION', '0.11.0');
+define('MIRASAI_WP_VERSION', '0.12.0');
 define('MIRASAI_WP_CONTRACT_VERSION', '1');
 define('MIRASAI_WP_PLUGIN_FILE', __FILE__);
 define('MIRASAI_WP_PLUGIN_DIR', __DIR__);
@@ -84,6 +84,11 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementCloneTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementDeleteTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateCreateTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateOrder.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/AbstractTemplateOrderTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateSetStatusTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateMoveTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateDuplicateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateWidgetTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleReadTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateStyleSourcesTool.php';
