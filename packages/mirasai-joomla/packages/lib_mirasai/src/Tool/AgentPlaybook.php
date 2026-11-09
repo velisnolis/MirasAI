@@ -165,6 +165,13 @@ class AgentPlaybook
                 'avoid' => ['SQL on #__content fulltext', 'editing layout JSON on disk', 'Customizer'],
             ],
             [
+                'id' => 'verify_visitor_view',
+                'do' => 'After a Builder or content write, confirm what an anonymous visitor gets.',
+                'best' => 'site/public-fetch with the page URL and expect=[the texts you changed]. Missing with cache_bust=false but found with cache_bust=true: a page cache serves an old copy, see purge_page_cache. Missing both ways: the write did not reach this URL, or the article is not published or not public (look at status and redirects).',
+                'caveat' => 'It reads the served HTML only: text hidden with CSS still counts and content added by JavaScript is not seen. A draft answers 404 to visitors; that is expected.',
+                'avoid' => ['treating a new etag as proof that visitors see the change'],
+            ],
+            [
                 'id' => 'yootheme_style_read',
                 'do' => 'Inspect Style variables, custom Less, compiled CSS freshness.',
                 'best' => 'template/style-read. Optional template/style-sources for the import tree.',

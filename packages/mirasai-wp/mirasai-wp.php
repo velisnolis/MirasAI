@@ -44,6 +44,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentTranslateBatchTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentCheckLinksTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/ContentAuditMultilingualTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/PublicPageInspector.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/SitePublicFetchTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TaxonomyTermListTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TaxonomyTermTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/DbSchemaTool.php';

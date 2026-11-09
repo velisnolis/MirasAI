@@ -65,6 +65,7 @@ $requiredJobs = [
     'inspect_site',
     'content',
     'yootheme_builder',
+    'verify_visitor_view',
     'yootheme_style_read',
     'yootheme_style_write',
     'verify_css_on_disk',

@@ -39,6 +39,9 @@ Capabilities are not “MirasAI is installed ⇒ everything works”. They depen
 | YOOtheme **Style** write / recompile | **STOP** | **STOP** | `mirasai/style-update` | do not write config | **Cannot compile.** Stop. |
 | Prove CSS changed | CSS `compiled on` header via `file/read` | same | `mirasai/style-verify` then the header | `head -n1` of the CSS file | same as host |
 | Purge HTML cache after CSS write | not implemented on the host | same | same | WP Rocket: `rocket_clean_domain()` via `wp eval` | not from this environment |
+| See what a visitor gets after a write | `site/public-fetch` with `expect` | same | same, proxied | `curl` from the server | same as host, if authenticated |
+
+`site/public-fetch` only fetches URLs on the site's own host. A text missing with `cache_bust=false` but present with `cache_bust=true` means a page cache is serving an old copy. Missing both ways means the write did not reach that URL or the page is not public.
 
 Builder JSON and Style `theme.css` are different systems. Changing an element does not compile LESS. Changing `@less` / `custom_less` does not update the Builder.
 
