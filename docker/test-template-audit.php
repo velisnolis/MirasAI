@@ -11,10 +11,12 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 
+require_once $root . '/packages/mirasai-wp/src/Tool/YoothemeRowLayout.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/YoothemeLayoutAuditor.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/ToolInterface.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/AbstractTool.php';
 require_once $root . '/packages/mirasai-wp/src/Tool/TemplateAuditTool.php';
+require_once $root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/YoothemeRowLayout.php';
 require_once $root . '/packages/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool/YoothemeLayoutAuditor.php';
 require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/ToolInterface.php';
 require_once $root . '/packages/mirasai-joomla/packages/lib_mirasai/src/Tool/AbstractTool.php';
@@ -41,7 +43,8 @@ $definitions = [
     'fragment' => ['element' => true, 'container' => true],
     'text' => ['element' => true, 'fields' => ['content' => []]],
     'image' => ['element' => true, 'fields' => ['image' => [], 'image_alt' => []]],
-    'section' => ['fields' => []], 'row' => [], 'column' => [],
+    'section' => ['fields' => []], 'column' => [],
+    'row' => ['fields' => ['layout' => ['options' => ['' => [], '1-2,1-2' => [], '3-4,1-4' => []]]]],
 ];
 $def = static fn (string $type): array => $definitions[$type] ?? [];
 $files = static fn (string $image): ?bool => str_starts_with($image, 'http') ? null : $image !== 'images/missing.jpg';
@@ -107,6 +110,20 @@ foreach (['wordpress' => \Mirasai\WordPress\Tool\YoothemeLayoutAuditor::class, '
         ['type' => 'image', 'props' => ['image' => ''], 'source' => ['props' => ['image' => ['name' => 'featured']]]],
     ]));
     check($r['findings'] === [] && $r['headings'][0]['text'] === '(dynamic)', "$host: dynamic values are not judged; a bound headline still counts as h1");
+
+    // F-044: a row with several columns whose layout does not describe them.
+    $cols = static fn (string ...$widths): array => array_map(static fn (string $w): array => ['type' => 'column', 'props' => ['width_medium' => $w], 'children' => [['type' => 'headline', 'props' => ['content' => 'T']]]], $widths);
+    $rows = static fn (array ...$rows): array => ['type' => 'layout', 'children' => [['type' => 'section', 'children' => $rows]]];
+    $r = $audit($rows(
+        ['type' => 'row', 'children' => $cols('3-4', '1-4')],
+        ['type' => 'row', 'props' => ['layout' => '3-4,1-4'], 'children' => $cols('1-2', '1-2')],
+        ['type' => 'row', 'props' => ['layout' => '1-2,1-2'], 'children' => $cols('1-2', '1-2')],
+        ['type' => 'row', 'children' => [['type' => 'column', 'children' => [['type' => 'headline', 'props' => ['content' => 'T']]]]]],
+        ['type' => 'row', 'props' => ['status' => 'disabled'], 'children' => $cols('1-2', '1-2')],
+    ));
+    $rowFindings = array_values(array_filter($r['findings'], static fn (array $f): bool => $f['code'] === 'row_layout_mismatch'));
+    check(array_column($rowFindings, 'path') === ['root>section[0]>row[0]', 'root>section[0]>row[1]'], "$host: rows without or with a wrong layout, not a matching, single-column or disabled one");
+    check($rowFindings[0]['severity'] === 'warning' && str_contains($rowFindings[0]['fix'], '«3-4,1-4»') && str_contains($rowFindings[1]['fix'], '«1-2,1-2»'), "$host: a warning whose fix names the layout to set");
 
     $r = $audit($col([
         ['type' => 'headline', 'props' => ['content' => 'Títol']],

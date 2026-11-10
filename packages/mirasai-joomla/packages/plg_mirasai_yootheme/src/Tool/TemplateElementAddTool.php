@@ -15,7 +15,7 @@ class TemplateElementAddTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Adds a child element to a YOOtheme Builder layout target. Place it under a parent with parent_path, or between existing siblings with before_path/after_path. Supports templates, article layouts, and Builder modules. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
+        return 'Adds a child element to a YOOtheme Builder layout target. Place it under a parent with parent_path, or between existing siblings with before_path/after_path. Supports templates, article layouts, and Builder modules. A row with several columns and no layout gets the layout its column widths describe, so the Builder shows it as the page does (row_layout_filled); a row it cannot fill comes back in warnings. Requires if_match and uses dry_run/confirm_guarded_write before writing.';
     }
 
     public function getInputSchema(): array
@@ -66,6 +66,11 @@ class TemplateElementAddTool extends AbstractTemplateElementWriteTool
             if ($rejection !== null) {
                 return $rejection;
             }
+
+            $rowLayoutOptions = $this->rowLayoutOptions();
+            $rowLayoutsFilled = [];
+            $warnings = [];
+            $element = $this->fillRowLayouts($element, $rowLayoutOptions, $rowLayoutsFilled, $warnings);
 
             $placements = array_keys(array_filter([
                 'parent_path' => $parentPath !== '',
@@ -120,6 +125,34 @@ class TemplateElementAddTool extends AbstractTemplateElementWriteTool
             } else {
                 $response['reference_path'] = $placement === 'before_path' ? $beforePath : $afterPath;
                 $response['parent_path'] = $result['reference_parent_path'];
+            }
+
+            // The Builder places an added column by the row's layout, which now may not describe it.
+            if (($element['type'] ?? null) === 'column') {
+                $parent = $navigator->findElement($result['layout'], $response['parent_path']);
+                $issue = ($parent['element']['type'] ?? null) === 'row' ? YoothemeRowLayout::check($parent['element'], $rowLayoutOptions) : null;
+
+                if ($issue !== null) {
+                    $warnings[] = self::rowLayoutWarning($issue, 'path', $response['parent_path']);
+                }
+            }
+
+            // Places inside the added element become layout paths.
+            $inLayout = static fn (string $at): string => (string) $response['path'] . substr($at, strlen('element'));
+
+            if ($rowLayoutsFilled !== []) {
+                $response['row_layout_filled'] = array_map(static fn (array $row): array => ['path' => $inLayout($row['at']), 'layout' => $row['layout']], $rowLayoutsFilled);
+            }
+
+            if ($warnings !== []) {
+                $response['warnings'] = array_map(static function (array $warning) use ($inLayout): array {
+                    if (isset($warning['at'])) {
+                        $warning = ['path' => $inLayout($warning['at'])] + $warning;
+                        unset($warning['at']);
+                    }
+
+                    return $warning;
+                }, $warnings);
             }
 
             if ($includeElement) {

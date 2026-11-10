@@ -15,7 +15,7 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
 
     public function getDescription(): string
     {
-        return 'Updates props on one YOOtheme Builder layout element. Supports templates, article layouts, and Builder modules. Requires if_match and defaults to merge=true, so supplied props are merged into existing props.';
+        return 'Updates props on one YOOtheme Builder layout element. Supports templates, article layouts, and Builder modules. Requires if_match and defaults to merge=true, so supplied props are merged into existing props. Changing the width_* of a column or the layout of a row warns when the row layout no longer matches its columns, which the Builder needs to show the row as the page does.';
     }
 
     public function getInputSchema(): array
@@ -102,6 +102,12 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
                     $element = $updated['element'];
                     unset($element['children']);
                     $response['element'] = $element;
+                }
+
+                $warning = $this->rowLayoutWarningAfterUpdate($updated['layout'], $path, (string) ($updated['element']['type'] ?? ''), $props, $merge);
+
+                if ($warning !== null) {
+                    $response['warnings'] = [$warning];
                 }
 
                 return $response;

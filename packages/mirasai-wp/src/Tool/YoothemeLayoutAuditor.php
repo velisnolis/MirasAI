@@ -171,6 +171,15 @@ final class YoothemeLayoutAuditor
             }
         }
 
+        // A row whose layout does not describe its columns: the page is fine, the Builder is not (F-044).
+        if ($type === 'row') {
+            $issue = YoothemeRowLayout::check($node, YoothemeRowLayout::options($definition));
+
+            if ($issue !== null) {
+                $findings[] = self::finding('warning', 'row_layout_mismatch', $path, $type, YoothemeRowLayout::message($issue), YoothemeRowLayout::fix($issue));
+            }
+        }
+
         // A list element with nothing in it renders nothing.
         if (!empty($definition['container']) && !empty($definition['element']) && $type !== 'fragment'
             && (!is_array($node['children'] ?? null) || $node['children'] === [])
