@@ -1034,3 +1034,45 @@ no és l'extracte automàtic de WordPress.
 **Regla accionable.** En llistats d'entrades, posa sempre el filtre `limit` al
 `teaser` (o fes servir un extracte real). Sense límit, una entrada sense extracte
 omple la targeta sencera.
+
+### F-044 · Una fila sense `layout` es veu bé al web i surt com a «Whole» al Builder
+
+**Símptoma.** Pàgines, una plantilla i el Footer Builder construïts amb
+`template/element-add` i `element-update-props`, posant només `width_medium` a les
+columnes. El web pinta bé les columnes. A l'editor, la fila diu «Whole», les
+columnes es dibuixen malament i «Edit layout» avisa que reiniciarà les amplades.
+Al mateix web hi havia 29 files així; les que l'usuari va refer a mà al Builder
+van quedar amb `props.layout` igual a les amplades (`"3-4,1-4"`, `"1-3,2-3"`…).
+
+**Causa.** El front i l'editor llegeixen camps diferents.
+`row/templates/template.php` fa servir `layout` només per forçar
+`uk-child-width-1-1`; les amplades surten dels `width_*` de cada columna. La
+pantalla de la fila del Builder llegeix `layout`, i les opcions vàlides són les
+claus de `row/element.php` (p. ex. `2-5,3-5`; amb `|` per a `width_small`:
+`1-4,1-4,1-4,1-4|1-2,1-2,1-2,1-2`). Una fila d'una sola columna no en porta: la
+migració de `row/updates.php` esborra `1-1`.
+
+**Correcció.** Posar a cada fila amb més d'una columna `layout` = amplades de les
+columnes unides per comes, amb `element-update-props` sobre la fila.
+
+**Regla accionable.** Quan s'escriu una fila amb més d'una columna, o es canvia
+l'amplada d'una columna, `layout` va en la mateixa escriptura. Cap comprovació
+del front (`public-fetch`, `render-check`) no ho detecta.
+
+**Proposta per a MirasAI.**
+- `template/audit`: avís `row_layout_mismatch` quan una fila té més d'una
+  columna i `layout` falta, no és una opció de `row/element.php` o no coincideix
+  amb els `width_*`.
+- `template/element-update-props`: avís al dry-run quan es canvia un `width_*`
+  d'una columna i el `layout` de la fila queda desquadrat.
+- `template/element-add`: avís (o omplir `layout`) quan l'element afegit és una
+  fila amb diverses columnes sense `layout`.
+
+**Fet a MirasAI (pendent de publicar).** Les tres propostes, amb una diferència:
+`element-add` no només avisa, sinó que omple `layout` quan les amplades de les
+columnes són les d'un layout del Builder (`row_layout_filled`). Si no ho són, o si
+cap columna no té `width_medium`, torna l'avís sense endevinar res. Una fila de
+columnes sense cap amplada no s'avisa: el web i el Builder la mostren igual, a
+pila. Les amplades es comparen com ho fa `columnWidths()` del Builder: el primer
+segment és `width_medium`, després de `|` ve `width_small` i després
+`width_default`. Provat als dos webs de proves.

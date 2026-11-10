@@ -233,6 +233,12 @@ class AgentPlaybook
                 'fix' => 'Reload the tab before saving. To tell this apart from a real compile problem in two minutes, compile the same thing with mirasai/style-preview, which reads from disk: if the router gives the new value and the Customizer the old one, the browser is the stale party. Same class as the Builder holding a layout in memory.',
             ],
             [
+                'id' => 'row_layout_whole_in_builder',
+                'symptom' => 'Columns written with template/element-add or element-update-props show at the right widths on the page, but the Builder shows the row as «Whole», draws the columns wrong and «Edit layout» says it will reset the widths.',
+                'cause' => 'The page takes the widths from each column (width_medium, width_small…). The Builder row panel reads the row prop layout, the column widths joined by commas, with «|» before the width_small set: 3-4,1-4 or 1-4,1-4,1-4,1-4|1-2,1-2,1-2,1-2. render-check and public-fetch cannot see it.',
+                'fix' => 'Set layout in the same write as the widths. template/element-add fills it for a new row whose widths match a Builder layout (row_layout_filled). element-update-props warns with row_layout_mismatch and the layout to set; template/audit finds old ones.',
+            ],
+            [
                 'id' => 'customizer_save_noop',
                 'symptom' => 'Customizer save() returns success; CSS compiled-on header unchanged.',
                 'cause' => 'dirty was false. save() is a silent no-op. change() only marks dirty and does not start less.js.',

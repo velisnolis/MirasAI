@@ -18,8 +18,8 @@ class TemplateAuditTool extends AbstractTool
     public function getDescription(): string
     {
         return 'Audits one stored YOOtheme layout and lists findings by severity, each with its element path and a fix: '
-            . 'image files that do not exist and list elements (grid, slideshow…) with no items (error); no h1, a second h1 '
-            . 'and skipped heading levels (warning); images without alternative text and headings over 70 characters (notice). '
+            . 'image files that do not exist and list elements (grid, slideshow…) with no items (error); no h1, a second h1'
+            . ', skipped heading levels and rows whose layout does not match their column widths, which the Builder then shows as «Whole» (warning); images without alternative text and headings over 70 characters (notice). '
             . 'Also returns the heading outline. scope=site audits every template, post and widget layout instead and returns, '
             . 'per layout with findings, its counts and at most max_per_layout findings, worst first; clean layouts are only counted. '
             . 'It pages through every layout with offset/limit; next_offset is null once all are covered. '

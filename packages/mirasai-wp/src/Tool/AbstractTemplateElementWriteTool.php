@@ -74,6 +74,104 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
     }
 
     /**
+     * The layouts the installed Builder offers for a row, null when its definition cannot be read.
+     *
+     * @return list<string>|null
+     */
+    protected function rowLayoutOptions(): ?array
+    {
+        $definition = (new YoothemeWpHelper())->loadElementDefinition('row');
+
+        return isset($definition['error']) ? null : YoothemeRowLayout::options($definition);
+    }
+
+    /**
+     * Set layout on every row of an added element that has columns and no layout, when the widths
+     * match one Builder layout (F-044). Rows that cannot be filled come back as warnings.
+     *
+     * @param array<string, mixed> $element
+     * @param list<string>|null $options
+     * @param list<array<string, mixed>> $filled
+     * @param list<array<string, mixed>> $warnings
+     * @return array<string, mixed>
+     */
+    protected function fillRowLayouts(array $element, ?array $options, array &$filled, array &$warnings, string $at = 'element'): array
+    {
+        if (($element['type'] ?? null) === 'row') {
+            $row = YoothemeRowLayout::filled($element, $options);
+
+            if ($row !== null) {
+                $element = $row;
+                $filled[] = ['at' => $at, 'layout' => $row['props']['layout']];
+            } else {
+                $issue = YoothemeRowLayout::check($element, $options);
+
+                if ($issue !== null) {
+                    $warnings[] = self::rowLayoutWarning($issue, 'at', $at);
+                }
+            }
+        }
+
+        if (is_array($element['children'] ?? null)) {
+            foreach ($element['children'] as $index => $child) {
+                if (is_array($child)) {
+                    $type = is_string($child['type'] ?? null) && $child['type'] !== '' ? $child['type'] : 'unknown';
+                    $element['children'][$index] = $this->fillRowLayouts($child, $options, $filled, $warnings, $at . '>' . $type . '[' . $index . ']');
+                }
+            }
+        }
+
+        return $element;
+    }
+
+    /**
+     * @param array<string, mixed> $issue from YoothemeRowLayout::check()
+     * @return array<string, mixed>
+     */
+    protected static function rowLayoutWarning(array $issue, string $key, string $place): array
+    {
+        return [
+            'code' => 'row_layout_mismatch',
+            $key => $place,
+            'message' => YoothemeRowLayout::message($issue),
+            'fix' => YoothemeRowLayout::fix($issue),
+            'suggested_layout' => $issue['suggested_layout'],
+        ];
+    }
+
+    /**
+     * After a write to a row's layout or to a column's width_*, the row whose layout no longer
+     * describes its columns, as a warning (F-044). null when the write touched neither.
+     *
+     * @param array<string, mixed> $layout the layout after the write
+     * @param array<string, mixed> $props the props written
+     * @return array<string, mixed>|null
+     */
+    protected function rowLayoutWarningAfterUpdate(array $layout, string $path, string $type, array $props, bool $merge): ?array
+    {
+        $keys = array_map('strval', array_keys($props));
+
+        if ($type === 'row' && (!$merge || in_array('layout', $keys, true))) {
+            $rowPath = $path;
+        } elseif ($type === 'column' && (!$merge || preg_grep('/^width_/', $keys) !== [])) {
+            $separator = strrpos($path, '>');
+            $rowPath = $separator === false ? '' : substr($path, 0, $separator);
+        } else {
+            return null;
+        }
+
+        $row = (new YoothemeElementNavigator())->findElement($layout, $rowPath);
+
+        if (($row['element']['type'] ?? null) !== 'row') {
+            return null;
+        }
+
+        $issue = YoothemeRowLayout::check($row['element'], $this->rowLayoutOptions());
+
+        return $issue === null ? null : self::rowLayoutWarning($issue, 'path', $rowPath);
+    }
+
+    /**
      * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $mutator
      * @return array<string, mixed>
      */

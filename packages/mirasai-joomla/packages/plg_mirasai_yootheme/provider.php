@@ -53,6 +53,7 @@ require_once $pluginSrc . '/Tool/TemplateSetStatusTool.php';
 require_once $pluginSrc . '/Tool/TemplateMoveTool.php';
 require_once $pluginSrc . '/Tool/TemplateDuplicateTool.php';
 require_once $pluginSrc . '/Tool/TemplateRenderCheckTool.php';
+require_once $pluginSrc . '/Tool/YoothemeRowLayout.php';
 require_once $pluginSrc . '/Tool/YoothemeLayoutAuditor.php';
 require_once $pluginSrc . '/Tool/TemplateAuditTool.php';
 
