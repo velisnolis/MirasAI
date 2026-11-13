@@ -99,7 +99,7 @@ class TemplateElementReadTool extends AbstractTool
         $result = (new YooThemeElementNavigator())->findElement($layout, $path);
 
         if ($result === null) {
-            return ['error' => "Element path {$path} not found in template {$key}."];
+            return ['error' => "Element path {$path} not found in template {$key}."] + (new YooThemeElementNavigator())->missingPathError($layout, $path);
         }
 
         $element = $result['element'];
@@ -139,7 +139,7 @@ class TemplateElementReadTool extends AbstractTool
         $result = (new YooThemeElementNavigator())->findElement($layout, $path);
 
         if ($result === null) {
-            return ['error' => "Element path {$path} not found in article {$articleId}.", 'code' => 'element_not_found'];
+            return ['error' => "Element path {$path} not found in article {$articleId}."] + (new YooThemeElementNavigator())->missingPathError($layout, $path);
         }
 
         $element = $result['element'];
@@ -188,7 +188,7 @@ class TemplateElementReadTool extends AbstractTool
         $result = (new YooThemeElementNavigator())->findElement($layout, $path);
 
         if ($result === null) {
-            return ['error' => "Element path {$path} not found in module {$moduleId}.", 'code' => 'element_not_found'];
+            return ['error' => "Element path {$path} not found in module {$moduleId}."] + (new YooThemeElementNavigator())->missingPathError($layout, $path);
         }
 
         $element = $result['element'];

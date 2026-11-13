@@ -6,6 +6,29 @@ namespace Mirasai\WordPress\Tool;
 
 abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
 {
+    /** @var array<string, mixed>|null the layout applyToLayout() is working on */
+    private ?array $layoutInMemory = null;
+
+    /**
+     * Run this tool's change on a layout in memory: no target, no etag and no write. The result is
+     * what the tool's mutation returns, with the changed layout under layout, or an error.
+     * template/element-batch chains tools through here so that each one keeps its own checks.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $arguments
+     * @return array<string, mixed>
+     */
+    public function applyToLayout(array $layout, array $arguments): array
+    {
+        $this->layoutInMemory = $layout;
+
+        try {
+            return $this->handle($arguments);
+        } finally {
+            $this->layoutInMemory = null;
+        }
+    }
+
     public function getPermissions(): array
     {
         return [
@@ -177,6 +200,10 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
      */
     protected function mutateTemplateElement(array $arguments, callable $mutator): array
     {
+        if ($this->layoutInMemory !== null) {
+            return $mutator($this->layoutInMemory, $arguments);
+        }
+
         $ifMatch = trim((string) ($arguments['if_match'] ?? ''));
         $dryRun = ($arguments['dry_run'] ?? null) === true;
         $confirmed = ($arguments['confirm_guarded_write'] ?? null) === true;
@@ -249,6 +276,10 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
             [$cache, $collectionEtag] = $this->writeTargetLayout($helper, $freshTarget, $mutation['layout']);
         }
 
+        // A post keeps plain HTML in front of its layout; the write says whether it still matches.
+        $fallbackContent = $cache['fallback_content'] ?? null;
+        unset($cache['fallback_content']);
+
         unset($mutation['layout']);
 
         $response = array_merge([
@@ -262,6 +293,10 @@ abstract class AbstractTemplateElementWriteTool extends TemplateReadTool
             'collection_etag' => $collectionEtag,
             'cache' => $cache,
         ], $mutation);
+
+        if ($fallbackContent !== null) {
+            $response['fallback_content'] = $fallbackContent;
+        }
 
         if ($dryRun) {
             $response['action'] = 'preview';

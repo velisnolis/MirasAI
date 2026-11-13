@@ -12,10 +12,33 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
 {
     protected YooThemeHelper $yooHelper;
 
+    /** @var array<string, mixed>|null the layout applyToLayout() is working on */
+    private ?array $layoutInMemory = null;
+
     public function __construct()
     {
         parent::__construct();
         $this->yooHelper = new YooThemeHelper($this->db);
+    }
+
+    /**
+     * Run this tool's change on a layout in memory: no target, no etag and no write. The result is
+     * what the tool's mutation returns, with the changed layout under layout, or an error.
+     * template/element-batch chains tools through here so that each one keeps its own checks.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $arguments
+     * @return array<string, mixed>
+     */
+    public function applyToLayout(array $layout, array $arguments): array
+    {
+        $this->layoutInMemory = $layout;
+
+        try {
+            return $this->handle($arguments);
+        } finally {
+            $this->layoutInMemory = null;
+        }
     }
 
     public function getPermissions(): array
@@ -210,6 +233,10 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
      */
     protected function mutateTemplateElement(array $arguments, callable $mutator): array
     {
+        if ($this->layoutInMemory !== null) {
+            return $mutator($this->layoutInMemory, $arguments);
+        }
+
         $key = trim((string) ($arguments['key'] ?? ''));
         $articleId = (int) ($arguments['article_id'] ?? 0);
         $moduleId = (int) ($arguments['module_id'] ?? 0);
@@ -397,6 +424,8 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
         $cache = $dryRun
             ? ['cleared' => false, 'groups' => [], 'failures' => [], 'reason' => 'dry_run']
             : $this->yooHelper->writeArticleLayout($article);
+        // An article keeps plain HTML in introtext; the write says whether it still matches.
+        $fallbackContent = $dryRun ? null : $this->yooHelper->regenerateArticleIntrotext($article);
 
         unset($mutation['layout']);
 
@@ -411,6 +440,10 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
             'new_etag' => $newEtag,
             'cache' => $cache,
         ], $mutation);
+
+        if ($fallbackContent !== null) {
+            $response['fallback_content'] = $fallbackContent;
+        }
 
         if ($dryRun) {
             $response['action'] = 'preview';

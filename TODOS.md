@@ -206,6 +206,21 @@
 - **Added:** 2026-05-25
 - **Started:** 2026-05-25. Primera entrega implementada al dashboard: validació temporal de token, smoke test `initialize` + `tools/list surface=essential` + `system/diagnose`, checks d'`annotations` i `structuredContent`, i errors accionables per `401`, `403`, `404` i JSON-RPC. Segona entrega: tabs de client per Codex i `mcp2cli`, i opció local per substituir `YOUR_TOKEN` en els snippets sense persistir-lo. Tercera entrega: checklist d'onboarding que reflecteix estat core, endpoint, token, tools, diagnosi i config copiada. Ajust posterior: eliminat el bloc antic "Getting started", estat general pujat al primer viewport, curl rebaixat a debug i core status amb detall de què falta. Quart ajust: checklist convertit en passos numerats amb accions directes, incloent enllaç a `Users > Manage` per crear el token. Cinquè ajust: ordre visual alineat amb el workflow, validació abans de configuració de client. Sisè ajust: separació en pestanyes Onboarding/Status amb landing persistent segons onboarding completat. Setè ajust: botó "More info" per step amb modal contextual.
 
+### TODO-016: Mediateca, estat de pàgina i menús per MCP (aposta de producte, sense decidir)
+- **What:** `media/import` (pujar un fitxer a la mediateca), `content/update` (estat, pare i slug d'una pàgina) i eines de menú, totes com a `guarded_write`.
+- **Why:** En una feina real (2026-11-13, WordPress) tot això va haver d'anar per SSH de root, CageFS i WP-CLI perquè MirasAI no ho cobreix. En un web sense SSH no hi ha cap via.
+- **Pros:** Tanca el cicle «crear pàgina, posar-hi imatges, publicar-la i enllaçar-la al menú» sense sortir del MCP.
+- **Cons:** Eixampla el contracte fora de YOOtheme i de la traducció. Pujar fitxers és una superfície nova: mida, tipus MIME, origen (base64 dins del JSON o una URL que baixa el servidor, amb el risc d'SSRF). Els menús són models diferents a WordPress i a Joomla.
+- **Context:** `content/update` és petit i té el mateix patró que `content/translate`. `media/import` i els menús demanen disseny propi. Segons `AGENTS.md`, una aposta de producte passa per una segona opinió abans d'implementar-la.
+- **Depends on:** Decisió de l'Àlex sobre si MirasAI ha de cobrir contingut no YOOtheme.
+- **Added:** 2026-11-13
+
+### TODO-017: Mesurar on se'n va el temps d'una crida per `mcp2cli` (P2)
+- **What:** Cronometrar per separat l'arrencada de `mcp2cli`, la del router, la lectura del secret i cada petició HTTP al host, en un web real.
+- **Why:** F-046: llegir set layouts va passar de dos minuts, sense que se sàpiga per què. La 0.14.0 redueix el nombre de crides (`template/element-batch`, `element-replace-children`, `mirasai/batch`), però no se sap quina part del temps de cada una és local i quina del host.
+- **Context:** `mcp2cli` té sessions persistents (`--session-start`); cal veure si el wrapper local les pot deixar passar sota una concessió de secrets. Si el temps és del host, mirar què carrega WordPress en una petició REST de MirasAI.
+- **Added:** 2026-11-13
+
 ### TODO-005: Explorar overrides de llengua per microcopies compartides de templates
 - **What:** Avaluar una estratègia alternativa per substituir text fix de templates per claus de llengua Joomla.
 - **Why:** Pot reduir manteniment quan una mateixa microcopy es repeteix a múltiples templates.

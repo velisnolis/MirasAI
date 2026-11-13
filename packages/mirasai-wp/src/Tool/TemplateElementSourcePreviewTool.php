@@ -105,7 +105,7 @@ class TemplateElementSourcePreviewTool extends TemplateReadTool
         $current = (new YoothemeElementNavigator())->findElement($target['layout'], $path);
 
         if ($current === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return (new YoothemeElementNavigator())->missingPathError($target['layout'], $path);
         }
 
         $updated = (new YoothemeElementNavigator())->setElementSource($target['layout'], $path, $source);

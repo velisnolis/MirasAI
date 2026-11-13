@@ -137,6 +137,7 @@ test('router exposes local tools', async () => {
   assert.deepEqual(
     response.result.tools.map((tool) => tool.name).sort(),
     [
+      'mirasai/batch',
       'mirasai/host-diagnose',
       'mirasai/sites-list',
       'mirasai/sites-test',
@@ -147,9 +148,14 @@ test('router exposes local tools', async () => {
   );
 
   // Style update is the only router-local write and must expose the guarded
-  // workflow. Every other local tool stays read-only.
+  // workflow. A batch can carry writes, so it cannot claim to be read-only;
+  // the host still guards each call inside it. Every other local tool stays
+  // read-only.
   for (const tool of response.result.tools) {
-    if (tool.name === 'mirasai/style-update') {
+    if (tool.name === 'mirasai/batch') {
+      assert.equal(tool.annotations.readOnlyHint, false);
+      assert.equal(tool.metadata.risk_level, 'guarded_write');
+    } else if (tool.name === 'mirasai/style-update') {
       assert.equal(tool.annotations.readOnlyHint, false);
       assert.equal(tool.annotations.destructiveHint, true);
       assert.equal(tool.metadata.risk_level, 'guarded_write');

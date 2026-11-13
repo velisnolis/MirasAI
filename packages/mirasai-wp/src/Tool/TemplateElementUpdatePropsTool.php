@@ -55,7 +55,7 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
                 $target = $navigator->findElement($layout, $path);
 
                 if ($target === null) {
-                    return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+                    return (new YoothemeElementNavigator())->missingPathError($layout, $path);
                 }
 
                 $rejection = $this->rejectInvalidProps((string) ($target['element']['type'] ?? ''), $props);
@@ -67,7 +67,7 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
                 $updated = $navigator->updateElementProps($layout, $path, $props, $merge);
 
                 if ($updated === null) {
-                    return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+                    return (new YoothemeElementNavigator())->missingPathError($layout, $path);
                 }
 
                 $response = [

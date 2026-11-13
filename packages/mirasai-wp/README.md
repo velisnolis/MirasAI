@@ -109,6 +109,8 @@ POST /wp-json/mirasai/v1/checks/cache/purge
 - `template/element-move`
 - `template/element-clone`
 - `template/element-delete`
+- `template/element-replace-children`
+- `template/element-batch`
 - `template/style-read`
 - `template/style-sources`
 - `template/style-create`
@@ -232,6 +234,18 @@ the same target model (`key`, `post_id`, or `widget_id`) and the same
 `if_match` + `dry_run` + `confirm_guarded_write` workflow as the Dynamic Source
 tools, so they can operate on templates, page/post Builder layouts, and
 YOOtheme Builder widgets without changing unrelated layout storage.
+
+`template/element-replace-children` swaps every child of one element in a
+single write (`path` defaults to `root`, which rebuilds the page), and
+`template/element-batch` applies several of these operations in order under one
+`if_match`, all or nothing. Every write returns `new_etag`, the `if_match` of
+the next one. A write to a page or post also regenerates the plain HTML YOOtheme
+keeps in `post_content` in front of the layout and reports it as
+`fallback_content` (`regenerated` or `stale`).
+
+A path counts the position among all the children of the parent, not among
+those of the same type. A path that does not resolve comes back with
+`resolved_path`, `available_children` and, when it can be told, `did_you_mean`.
 
 `template/element-move` takes exactly one placement. `target_parent_path`
 appends or prepends under a parent; `before_path` and `after_path` place the

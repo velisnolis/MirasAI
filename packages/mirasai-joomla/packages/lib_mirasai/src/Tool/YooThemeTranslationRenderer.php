@@ -6,8 +6,11 @@ namespace Mirasai\Library\Tool;
 
 class YooThemeTranslationRenderer
 {
-    /** Render without shelling out or opening a second database connection. */
-    public static function render(string $fulltext, ?string $language = null): array
+    /**
+     * Render without shelling out or opening a second database connection.
+     * allowEmpty: a layout that outputs nothing (no children, or none with text) is a result, not a failure.
+     */
+    public static function render(string $fulltext, ?string $language = null, bool $allowEmpty = false): array
     {
         $originalApplication = null;
         try {
@@ -42,7 +45,7 @@ class YooThemeTranslationRenderer
             $layout = $builder->withParams(['context' => 'save'])->load($json);
             $normalized = json_encode($layout, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             $html = $builder->withParams(['context' => 'content'])->render($normalized, ['prefix' => 'page']);
-            if (!is_string($html) || trim($html) === '') { throw new \RuntimeException('Builder returned empty fallback HTML.'); }
+            if (!is_string($html) || (!$allowEmpty && trim($html) === '')) { throw new \RuntimeException('Builder returned empty fallback HTML.'); }
             return ['fulltext' => '<!-- ' . $normalized . ' -->', 'introtext' => $html,
                 'result' => ['status' => 'success', 'introtext_length' => strlen($html)]];
         } catch (\Throwable $e) {

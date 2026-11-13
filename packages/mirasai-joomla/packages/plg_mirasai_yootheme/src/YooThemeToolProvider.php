@@ -10,7 +10,9 @@ use Mirasai\Library\Tool\ToolProviderInterface;
 use Mirasai\Library\Tool\YooThemeLayoutProcessor;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementAddTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementCloneTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementBatchTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementDeleteTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementReplaceChildrenTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\MenuMigrateThemeToModulesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementMoveTool;
@@ -104,6 +106,8 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-move',
             'template/element-clone',
             'template/element-delete',
+            'template/element-replace-children',
+            'template/element-batch',
             'template/read',
             'template/translate',
             'template/create',
@@ -139,6 +143,8 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/element-move'         => new TemplateElementMoveTool(),
             'template/element-clone'        => new TemplateElementCloneTool(),
             'template/element-delete'       => new TemplateElementDeleteTool(),
+            'template/element-replace-children' => new TemplateElementReplaceChildrenTool(),
+            'template/element-batch'        => new TemplateElementBatchTool(),
             'template/read'                 => new TemplateReadTool(),
             'template/translate'            => new TemplateTranslateTool(),
             'template/create'               => new TemplateCreateTool(),

@@ -84,6 +84,8 @@ require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementUpdatePropsTool.p
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementMoveTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementCloneTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementDeleteTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementReplaceChildrenTool.php';
+require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateElementBatchTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateTranslateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateCreateTool.php';
 require_once MIRASAI_WP_PLUGIN_DIR . '/src/Tool/TemplateOrder.php';

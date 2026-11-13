@@ -55,7 +55,7 @@ class TemplateElementReadTool extends TemplateReadTool
         $result = (new YoothemeElementNavigator())->findElement($target['layout'], $path);
 
         if ($result === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return (new YoothemeElementNavigator())->missingPathError($target['layout'], $path);
         }
 
         $element = $result['element'];

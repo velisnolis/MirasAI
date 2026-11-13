@@ -39,7 +39,7 @@ class TemplateElementListTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only. Every mode carries status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor.';
+        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect. In a path the number is the position among all the children of the parent, not among those of the same type: column[0]>text[2] is the third child of the column, whatever the first two are. Copy paths from here rather than building them. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only. Every mode carries status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor.';
     }
 
     public function getInputSchema(): array

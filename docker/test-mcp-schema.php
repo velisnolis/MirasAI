@@ -21,6 +21,8 @@ require_once $yoothemeToolSrc . '/TemplateElementUpdatePropsTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementMoveTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementCloneTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementDeleteTool.php';
+require_once $yoothemeToolSrc . '/TemplateElementReplaceChildrenTool.php';
+require_once $yoothemeToolSrc . '/TemplateElementBatchTool.php';
 require_once $yoothemeToolSrc . '/TemplateElementSourceSupportTrait.php';
 require_once $yoothemeToolSrc . '/TemplateElementSourceSetTool.php';
 require_once $yoothemeToolSrc . '/TemplateReadTool.php';
@@ -29,10 +31,12 @@ require_once $yoothemeToolSrc . '/TemplateElementListTool.php';
 use Mirasai\Library\Tool\AbstractTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\AbstractTemplateElementWriteTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementAddTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementBatchTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementCloneTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementDeleteTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementListTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementMoveTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementReplaceChildrenTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementSourceSetTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateElementUpdatePropsTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateReadTool;
@@ -149,6 +153,8 @@ $joomlaElementWriteSchemas = [
     'element-move' => [TemplateElementMoveTool::class, ['path', 'if_match']],
     'element-clone' => [TemplateElementCloneTool::class, ['path', 'if_match']],
     'element-delete' => [TemplateElementDeleteTool::class, ['path', 'if_match']],
+    'element-replace-children' => [TemplateElementReplaceChildrenTool::class, ['if_match', 'children']],
+    'element-batch' => [TemplateElementBatchTool::class, ['if_match', 'operations']],
     'element-source-set' => [TemplateElementSourceSetTool::class, ['if_match']],
 ];
 

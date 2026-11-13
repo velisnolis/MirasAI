@@ -40,8 +40,12 @@ Capabilities are not “MirasAI is installed ⇒ everything works”. They depen
 | Prove CSS changed | CSS `compiled on` header via `file/read` | same | `mirasai/style-verify` then the header | `head -n1` of the CSS file | same as host |
 | Purge HTML cache after a write | `site/cache-purge` (WP Rocket, IONOS, object cache; every Joomla cache group). Other page caches come back as `unsupported` | same | same, proxied | WP Rocket: `rocket_clean_domain()` via `wp eval` | same as host, if authenticated |
 | See what a visitor gets after a write | `site/public-fetch` with `expect` | same | same, proxied | `curl` from the server | same as host, if authenticated |
+| Several Builder changes at once (from 0.14.0) | `template/element-batch`, or `template/element-replace-children` to rebuild a page: one `if_match`, one write | same | same, proxied | do not edit JSON/SQL | same as host |
+| Several independent calls, e.g. reading many layouts (from 0.14.0) | one request each | one process per call | `mirasai/batch`: one process for all of them | unnecessary | same as host |
 
 `site/public-fetch` only fetches URLs on the site's own host. A text missing with `cache_bust=false` but present with `cache_bust=true` means a page cache is serving an old copy. Missing both ways means the write did not reach that URL or the page is not public.
+
+Every Builder write returns `new_etag`, which is the `if_match` of the next write to that layout: there is no need to read the layout again in between. A path counts the position among all the children of the parent, not among those of the same type (`text[2]` is the third child); from 0.14.0 a path that does not resolve comes back with `available_children` and, when it can be told, `did_you_mean`. A write to a page or article reports `fallback_content`: `stale` means the plain HTML that search reads still holds the old text.
 
 Builder JSON and Style `theme.css` are different systems. Changing an element does not compile LESS. Changing `@less` / `custom_less` does not update the Builder.
 

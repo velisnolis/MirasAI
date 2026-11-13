@@ -399,13 +399,23 @@ class YoothemeWpHelper
             }
 
             $encoded = wp_json_encode($layout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $content = preg_replace(
-                '/<!--\\s*(\\{.*\\})\\s*-->/sU',
-                '<!-- ' . (is_string($encoded) ? $encoded : '{}') . ' -->',
-                (string) $post->post_content,
-                1,
-                $count,
-            );
+            $comment = '<!-- ' . (is_string($encoded) ? $encoded : '{}') . ' -->';
+            $fallback = $this->renderFallbackContent($layout);
+
+            if ($fallback['html'] !== null) {
+                // What the Builder writes on save: the plain HTML, the more tag and the layout.
+                $content = $fallback['html'] . "\n<!--more-->\n" . $comment;
+                $count = 1;
+            } else {
+                // A callback: a replacement string would read $10 or \1 inside the JSON as a reference.
+                $content = preg_replace_callback(
+                    '/<!--\\s*(\\{.*\\})\\s*-->/sU',
+                    static fn (): string => $comment,
+                    (string) $post->post_content,
+                    1,
+                    $count,
+                );
+            }
 
             if ($content === null || $count !== 1) {
                 return [
@@ -428,7 +438,15 @@ class YoothemeWpHelper
                 ];
             }
 
-            return $this->invalidateBuilderCache();
+            return $this->invalidateBuilderCache() + [
+                'fallback_content' => $fallback['html'] !== null
+                    ? ['status' => 'regenerated', 'length' => strlen($fallback['html'])]
+                    : [
+                        'status' => 'stale',
+                        'reason' => $fallback['reason'],
+                        'fix' => 'The page renders from the layout, so visitors see the change. The plain HTML in front of it in post_content, which WordPress search and SEO plugins read, is the old one until the page is saved once in the YOOtheme Builder.',
+                    ],
+            ];
         }
 
         return [
@@ -436,6 +454,44 @@ class YoothemeWpHelper
             'groups' => [],
             'failures' => [['group' => 'post_layout', 'error' => "Unsupported post layout source {$source}."]],
         ];
+    }
+
+    /**
+     * The plain HTML YOOtheme keeps in post_content in front of the layout comment, rendered as the
+     * Builder does when it saves a page. WordPress search and SEO plugins read it; visitors do not.
+     *
+     * No post context is set up, on purpose. This is the call PageController::savePage() makes,
+     * and the content context does not resolve Dynamic Sources: they belong to the prerender
+     * transform. An element with a binding comes out with its static props whichever post is
+     * current, so the result is what a save in the Builder would write.
+     *
+     * @param array<string, mixed> $layout
+     * @return array{html: string|null, reason?: string}
+     */
+    public function renderFallbackContent(array $layout): array
+    {
+        if (!class_exists(\YOOtheme\Builder::class) || !function_exists('YOOtheme\\app')) {
+            return ['html' => null, 'reason' => 'YOOtheme Builder is not loaded in this request.'];
+        }
+
+        $level = ob_get_level();
+        ob_start();
+
+        try {
+            $html = \YOOtheme\app(\YOOtheme\Builder::class)
+                ->withParams(['context' => 'content'])
+                ->render((string) wp_json_encode($layout));
+
+            return is_string($html)
+                ? ['html' => $html]
+                : ['html' => null, 'reason' => 'YOOtheme returned no content for this layout.'];
+        } catch (\Throwable $exception) {
+            return ['html' => null, 'reason' => 'YOOtheme failed to render the content: ' . $exception->getMessage()];
+        } finally {
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+        }
     }
 
     /**
