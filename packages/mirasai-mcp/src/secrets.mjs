@@ -4,6 +4,17 @@ const DEFAULT_SECRET_TTL_SECONDS = 3600;
 const secretCache = new Map();
 
 export function resolveToken(site, env = process.env, options = {}) {
+  if (env.MIRASAI_MCP_REQUIRE_TASK === '1') {
+    if (!env.AI_SECRET_TASK_SOCKET) {
+      throw new Error('An approved secret-task with an explicit TTL is required.');
+    }
+    if (!env.MIRASAI_MCP_SECRET_READER) {
+      throw new Error('Task mode requires a compatible MIRASAI_MCP_SECRET_READER.');
+    }
+    if (site.token_ref === undefined && site.basic_ref === undefined) {
+      throw new Error('Task mode requires an exact 1Password reference; environment or plain credentials cannot bypass the grant.');
+    }
+  }
   const reader = options.readOnePassword ?? readOnePassword;
   const now = options.now ?? Date.now;
   const basic = resolveBasicCredentials(site, env, reader, now);
@@ -76,6 +87,12 @@ function resolveBasicCredentials(site, env, reader, now) {
 function readCachedOnePassword(reference, site, env, reader, now) {
   const ttlMs = secretTtlMs(site, env);
 
+  // The task owns reuse and expiry. Never let an in-process cache mask a
+  // stopped/expired task or serve a value cached outside this exact grant.
+  if (env.AI_SECRET_TASK_SOCKET) {
+    return reader(reference, { site, env, ttlMs });
+  }
+
   if (ttlMs > 0) {
     const cached = secretCache.get(reference);
     const currentTime = now();
@@ -114,6 +131,10 @@ function readOnePassword(reference, { site, env = process.env, ttlMs } = {}) {
   const external = env.MIRASAI_MCP_SECRET_READER;
   if (typeof external === 'string' && external !== '') {
     return readExternal(external, reference, site, env, ttlMs);
+  }
+
+  if (env.AI_SECRET_TASK_SOCKET) {
+    throw new Error('secret-task requires a compatible MIRASAI_MCP_SECRET_READER; direct op is disabled.');
   }
 
   try {

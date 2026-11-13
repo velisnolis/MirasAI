@@ -106,6 +106,25 @@ mirasai-mcp test-site joomla-example
 mirasai-mcp serve
 ```
 
+For a task on one site, start `mirasai-mcp serve --site-id SITE_ID`. This
+filters the process registry before discovery, so `tools/list`, local router
+tools and remote calls cannot authenticate unrelated sites. An unknown or
+empty scope fails; the registry on disk and other router processes stay intact.
+An unscoped server retains the multi-site contract.
+
+On this Mac, `mcp2cli-mirasai` / `api2cli mirasai` require an explicitly
+approved `secret-task` lease and a `site_id` in the stdin JSON or `--site-id`.
+The wrapper supplies the router scope before mcp2cli discovers tools. Use
+`mirasai-mcp list-sites` for a local inventory without credentials.
+These requirements apply to authenticated schema discovery as well as calls.
+The wrapper never starts or renews a lease on its own.
+
+Within `AI_SECRET_TASK_SOCKET`, credential resolution always goes through the
+task reader. The router's own secret cache cannot outlive or bypass a stopped,
+expired or denied grant. A missing compatible reader fails instead of falling
+back to raw `op`. Local CLI task mode also rejects environment/plain credential
+sources that cannot be checked against the task's exact-reference allowlist.
+
 Use `--config /path/to/sites.json` to override the registry path.
 
 `serve` speaks both MCP stdio framings and answers in whichever the client

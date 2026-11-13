@@ -6,6 +6,19 @@ import { previewStyle, updateStyle, verifyCompiledStyle } from './style-preview.
 const ROUTER_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 export function createRouterHandler(registry, options = {}) {
+  // A short-lived CLI must scope discovery before tools/list, not only the
+  // subsequent tools/call. Otherwise discovery resolves every site's secrets.
+  if (options.siteId !== undefined) {
+    if (typeof options.siteId !== 'string' || options.siteId.trim() === '') {
+      throw new Error('A nonempty site_id is required for a scoped router.');
+    }
+    const site = findSite(registry, options.siteId);
+    registry = {
+      ...registry,
+      default_site_id: site.site_id,
+      sites: [{ ...site, default: true }],
+    };
+  }
   const clientFactory = options.clientFactory ?? ((site) => new MirasaiHostClient(site));
   const clientCache = new Map();
   const cachingFactory = (site) => {
