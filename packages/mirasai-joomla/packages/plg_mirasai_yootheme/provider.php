@@ -44,6 +44,8 @@ require_once $pluginSrc . '/Tool/TemplateElementUpdatePropsTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementMoveTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementCloneTool.php';
 require_once $pluginSrc . '/Tool/TemplateElementDeleteTool.php';
+require_once $pluginSrc . '/Tool/TemplateElementReplaceChildrenTool.php';
+require_once $pluginSrc . '/Tool/TemplateElementBatchTool.php';
 require_once $pluginSrc . '/Tool/TemplateReadTool.php';
 require_once $pluginSrc . '/Tool/TemplateTranslateTool.php';
 require_once $pluginSrc . '/Tool/TemplateCreateTool.php';

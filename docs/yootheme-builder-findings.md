@@ -1076,3 +1076,157 @@ columnes sense cap amplada no s'avisa: el web i el Builder la mostren igual, a
 pila. Les amplades es comparen com ho fa `columnWidths()` del Builder: el primer
 segment és `width_medium`, després de `|` ve `width_small` i després
 `width_default`. Provat als dos webs de proves.
+
+## 2026-11-13 · YOOtheme Pro 5.0.54 · WordPress · MirasAI 0.13.0 · un web de client WordPress
+
+Projecte: refer pàgines senceres d'un web de client amb scripts que criden el
+router per `mcp2cli`, una crida per procés. Les quatre entrades surten de la
+mateixa feina. Les correccions es van provar el mateix dia als dos webs de
+proves (WordPress 7.1.4 amb YOOtheme 5.0.53 i Joomla 6.2 amb YOOtheme 5.0.54),
+amb crides MCP reals.
+
+### F-045 · L'índex d'un camí compta la posició dins del pare, no dins del tipus
+
+**Símptoma.** `element_not_found` dues vegades amb camins com
+`…>column[0]>text[2]` pensats com «el tercer text».
+
+**Causa.** `YoothemeElementNavigator::walk()` construeix cada segment amb el
+tipus del fill i el seu índex dins de `children`: en una columna amb `text`,
+`headline`, `text`, `text`, els camins són `text[0]`, `headline[1]`, `text[2]` i
+`text[3]`. El tercer text és `text[3]`, i `text[1]` no existeix.
+
+**Regla accionable.** Copia els camins de `template/element-list` o de
+`template/read mode=outline`; no els construeixis comptant elements d'un tipus.
+
+**Un error germà, trobat en revisar aquest canvi.** `template/element-move` amb
+`target_parent_path` buscava el destí després de treure l'element del seu lloc.
+Si el destí penjava d'un germà posterior de l'element, aquell germà ja tenia un
+índex menys i el camí que havia llistat qui cridava apuntava un lloc més enllà.
+`before_path` i `after_path` ja ho corregien; `target_parent_path`, no.
+
+**Fet a MirasAI (pendent de publicar).** Un camí que no resol ja no torna només
+el codi. La resposta porta `resolved_path` (fins on ha resolt),
+`failed_segment`, `available_children` (els camins que sí que hi ha en aquell
+punt) i, quan es pot deduir, `did_you_mean`: llegeix l'índex equivocat com «l'n-è
+fill d'aquest tipus» o, si només n'hi ha un d'aquell tipus, el proposa. És una
+suposició: cal mirar que sigui l'element abans d'escriure-hi. Val per a totes les
+eines que reben un camí, de lectura i d'escriptura, als dos hosts. La descripció
+de `template/element-list` ara diu què compta el número.
+
+### F-046 · Refer una pàgina de quatre seccions va costar uns vuit minuts
+
+**Símptoma.** Cada canvi eren tres processos (`template/read` per l'etag, dry
+run i escriptura), i cada procés arrenca `mcp2cli`, el router, llegeix el
+secret, demana `tools/list` al host i fa la crida. Per refer una pàgina calia
+esborrar les seccions d'una en una, de l'última a la primera, i tornar-les a
+afegir. Llegir set layouts: més de dos minuts.
+
+**Causa.** Tres coses diferents.
+
+- La relectura sobrava: totes les escriptures ja tornaven `new_etag`, que és
+  l'etag de la lectura següent. F-024 deia «rellegeix l'etag entre seccions» i
+  els scripts ho feien. Comprovat als dos hosts: `new_etag` d'una escriptura és
+  igual a l'`etag` del `template/read` posterior.
+- No hi havia cap escriptura que agrupés canvis ni cap que substituís el
+  contingut d'un element.
+- El router demanava `tools/list` al host abans de cada crida, encara que ja
+  l'hagués demanat en aquell procés.
+
+**Regla accionable.** Encadena `new_etag` com a `if_match` de l'escriptura
+següent. No rellegeixis el layout entre escriptures; rellegeix-lo només després
+d'un error de transport (F-026) o d'un `stale_etag`.
+
+**Fet a MirasAI (pendent de publicar).**
+
+- `template/element-replace-children`: substitueix tots els fills d'un element
+  en una escriptura. Amb `path` `root` (per defecte) refà la pàgina. La
+  previsualització llista què se'n va (`removed`, amb quants elements penjaven
+  de cada fill) i què hi entra. Cada fill nou passa les mateixes comprovacions
+  que a `element-add`, `layout` de les files inclòs (F-044).
+- `template/element-batch`: diverses operacions sobre un layout amb un sol
+  `if_match`, una previsualització i una escriptura. `operations` és una llista
+  d'objectes amb `op` (`add`, `update_props`, `move`, `clone`, `delete`,
+  `replace_children`, `source_set`, `source_delete`) i els arguments de l'eina
+  corresponent. S'apliquen en ordre i cadascuna veu el layout com l'han deixat
+  les anteriors: després d'un `delete`, els germans de darrere tenen un índex
+  menys. Tot o res: si una falla, no s'escriu res i l'error diu quina
+  (`failed_operation`). `if_match`, `dry_run`, `confirm_guarded_write` i el
+  selector són del lot; dins d'una operació es rebutgen.
+- `mirasai/batch`, al router: diverses crides independents contra un web en un
+  sol procés, per exemple llegir set layouts. El host comprova cada crida com
+  si anés sola. Només té proves locals: els webs de proves no són al registre
+  del router.
+- El router recorda la llista d'eines de cada host mentre dura el procés i
+  només la torna a demanar per a un nom que no ha vist.
+
+Queda sense mesurar quant del temps per crida és del host i quant del procés
+local (`mcp2cli`, Node, lectura del secret). `mcp2cli` té sessions persistents
+(`--session-start`), que estalviarien l'arrencada; que el wrapper local les
+deixi passar sota una concessió de secrets no és d'aquest repo.
+
+### F-047 · Les escriptures per MCP deixaven ranci el text pla de la pàgina
+
+Tanca el pendent de F-011.
+
+**Símptoma.** Després de refer una pàgina per MCP, `post_content` conservava
+davant del comentari amb el JSON l'HTML de la versió anterior, amb textos i
+enllaços que ja no hi eren. El visitant no ho veu: YOOtheme pinta des del JSON.
+La cerca de WordPress i els plugins de SEO sí que el llegeixen.
+
+**Causa verificada.** `packages/builder-wordpress/src/PageController.php`,
+`savePage()`: en desar, el Builder escriu
+`"{$introtext}\n<!--more-->\n<!-- {$fulltext} -->"`, on `$introtext` és
+`$builder->withParams(['context' => 'content'])->render($content)`. Aquest
+context fa servir el `templates/content.php` de cada element, HTML pla sense
+fonts dinàmiques. `writePostLayout()` de MirasAI només substituïa el comentari.
+A Joomla passava el mateix amb `introtext`: `writeArticleLayout()` només
+escrivia `fulltext`.
+
+**Fet a MirasAI (pendent de publicar).** Una escriptura a una pàgina o entrada
+de WordPress, o a un article de Joomla, regenera aquest text amb el Builder del
+web i ho diu a la resposta: `fallback_content.status` és `regenerated` (amb la
+longitud) o `stale` (amb el motiu), quan YOOtheme no el pot pintar en aquella
+petició. El JSON del layout es desa tal com s'ha escrit, sense passar-lo pel
+context `save` del Builder, perquè `new_etag` continuï sent l'etag de la lectura
+següent. A Joomla, un layout amb fonts dinàmiques torna `stale`: el text pla
+depèn de l'idioma i del context del web, i l'API no els té. Una pàgina sense
+text dona `regenerated` amb longitud 0, i una fallada en desar el text pla
+també es diu com a `stale`: el layout ja està escrit i un error faria pensar
+que no.
+
+Comprovat al web de proves WordPress: una pàgina amb un text antic a
+`post_content`; després d'un `element-replace-children`, `wp post list --s=` ja
+no la troba pel text antic i sí pel nou, i `post_content` té la forma que hi
+deixa el Builder. Al web de proves Joomla, `introtext` queda igual.
+
+**Regla accionable.** Després d'escriure una pàgina, mira `fallback_content`.
+Amb `stale`, la pàgina es veu bé però el text pla és l'antic fins que algú la
+desi una vegada al Builder.
+
+### F-048 · Un `$10` o una barra invertida al text es perdien en escriure una pàgina de WordPress
+
+Error de MirasAI, no de YOOtheme. Afecta totes les versions fins a la 0.13.0.
+
+**Símptoma.** No es va veure a la feina; es va trobar llegint el codi per a
+F-047. Reproduït amb PHP: un text `Preu: $10` desat a una pàgina quedava
+`Preu: `, i `C:\\dir` (una barra invertida, tal com surt al JSON) quedava
+`C:\dir`, que després es llegeix d'una altra manera o deixa el JSON invàlid.
+
+**Causa.** `writePostLayout()` passava el JSON nou a `preg_replace()` com a text
+de substitució, i allà `$1`…`$99` i `\1`…`\99` són referències a grups de
+l'expressió, i `\\` és una barra escapada. Només passava en pàgines i entrades
+que guarden el layout al comentari de `post_content`; les plantilles i els
+widgets van per una altra via.
+
+**Abast.** Qualsevol escriptura d'elements a una pàgina o entrada reescrivia el
+JSON sencer, de manera que un `$` seguit de xifres o una barra invertida en
+qualsevol element de la pàgina es podia perdre encara que el canvi fos en un
+altre element. Preus en euros, que és el cas habitual, no hi cauen.
+
+**Fet a MirasAI (pendent de publicar).** La substitució es fa amb una funció,
+que no interpreta res. Prova: `docker/test-yootheme-element-batch.php` i, en
+directe, un text `Preu: $10 a C:\dir, abans \1` que torna igual als dos webs de
+proves.
+
+**Regla accionable.** En un web amb una versió anterior, si una pàgina té
+imports amb `$` o barres invertides, comprova'ls després d'escriure-hi.

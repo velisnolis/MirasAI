@@ -228,7 +228,7 @@ final class YoothemeElementNavigator
         );
 
         if (!$ok) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         $found = $this->findElement($updated, $path);
@@ -293,7 +293,7 @@ final class YoothemeElementNavigator
         );
 
         if (!$ok) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         $found = $this->findElement($updated, $path);
@@ -335,7 +335,7 @@ final class YoothemeElementNavigator
         $newPath = $this->insertChildInPlace($updated, $parentPath, $element, $position);
 
         if ($newPath === null) {
-            return ['error' => "Parent path {$parentPath} not found.", 'code' => 'parent_not_found'];
+            return $this->missingPathError($layout, $parentPath, 'parent_not_found', 'Parent path');
         }
 
         $found = $this->findElement($updated, $newPath);
@@ -381,10 +381,7 @@ final class YoothemeElementNavigator
         }
 
         if ($this->findElement($layout, $referencePath) === null) {
-            return [
-                'error' => "Reference path {$referencePath} not found.",
-                'code' => 'reference_not_found',
-            ];
+            return $this->missingPathError($layout, $referencePath, 'reference_not_found', 'Reference path');
         }
 
         $reference = $this->splitPath($referencePath);
@@ -442,7 +439,7 @@ final class YoothemeElementNavigator
         $source = $this->findElement($layout, $path);
 
         if ($source === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         $renamedIds = [];
@@ -491,7 +488,17 @@ final class YoothemeElementNavigator
         $source = $this->findElement($layout, $path);
 
         if ($source === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
+        }
+
+        if ($this->findElement($layout, $targetParentPath) === null) {
+            return $this->missingPathError($layout, $targetParentPath, 'target_parent_not_found', 'Target parent path');
+        }
+
+        $origin = $this->splitPath($path);
+
+        if ($origin === null) {
+            return ['error' => 'Malformed element path.', 'code' => 'invalid_path'];
         }
 
         $updated = $layout;
@@ -500,7 +507,14 @@ final class YoothemeElementNavigator
             return ['error' => "Element path {$path} could not be removed.", 'code' => 'element_not_found'];
         }
 
-        $newPath = $this->insertChildInPlace($updated, $targetParentPath, $source['element'], $position);
+        // The caller read the target path before the element left its place. When the target
+        // sits under a later sibling of the element, that sibling is now one index lower.
+        $newPath = $this->insertChildInPlace(
+            $updated,
+            $this->adjustPathAfterRemoval($targetParentPath, $origin[0], $origin[1]),
+            $source['element'],
+            $position
+        );
 
         if ($newPath === null) {
             return ['error' => "Target parent path {$targetParentPath} not found.", 'code' => 'target_parent_not_found'];
@@ -568,14 +582,11 @@ final class YoothemeElementNavigator
         $source = $this->findElement($layout, $path);
 
         if ($source === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         if ($this->findElement($layout, $referencePath) === null) {
-            return [
-                'error' => "Reference path {$referencePath} not found.",
-                'code' => 'reference_not_found',
-            ];
+            return $this->missingPathError($layout, $referencePath, 'reference_not_found', 'Reference path');
         }
 
         $reference = $this->splitPath($referencePath);
@@ -652,7 +663,7 @@ final class YoothemeElementNavigator
         $source = $this->findElement($layout, $path);
 
         if ($source === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         $updated = $layout;
@@ -697,7 +708,7 @@ final class YoothemeElementNavigator
         $source = $this->findElement($layout, $path);
 
         if ($source === null) {
-            return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+            return $this->missingPathError($layout, $path);
         }
 
         $updated = $layout;
@@ -711,6 +722,170 @@ final class YoothemeElementNavigator
             'deleted_path' => $path,
             'deleted_type' => (string) ($source['metadata']['type'] ?? 'unknown'),
         ];
+    }
+
+    /**
+     * Replace every child of one element, root included, in a single step.
+     *
+     * @param array<string, mixed> $layout
+     * @param array<int, mixed> $children
+     * @return array{layout: array<string, mixed>, metadata: array<string, mixed>, removed: list<array<string, mixed>>, added: list<array<string, mixed>>}|array{error: string, code: string}
+     */
+    public function replaceChildren(array $layout, string $path, array $children): array
+    {
+        $path = trim($path);
+        $target = $this->findElement($layout, $path);
+
+        if ($target === null) {
+            return $this->missingPathError($layout, $path);
+        }
+
+        $normalized = [];
+
+        foreach (array_values($children) as $index => $child) {
+            if (!is_array($child) || !$this->validElement($child)) {
+                return ['error' => "children[{$index}] must be an object with a non-empty string type.", 'code' => 'invalid_element'];
+            }
+
+            $normalized[] = $this->normalizeNewElement($child);
+        }
+
+        $removed = [];
+        $current = is_array($target['element']['children'] ?? null) ? $target['element']['children'] : [];
+
+        foreach ($current as $index => $child) {
+            if (is_array($child)) {
+                $removed[] = [
+                    'path' => $path . '>' . $this->nodeType($child) . '[' . $index . ']',
+                    'type' => $this->nodeType($child),
+                    'label' => $this->nodeLabel($child),
+                    'element_count' => count($this->listElements($child)),
+                ];
+            }
+        }
+
+        $updated = $layout;
+        $this->mutateElementInPlace(
+            $updated,
+            $path,
+            static function (array &$node) use ($normalized): void {
+                $node['children'] = $normalized;
+            },
+        );
+
+        $added = [];
+
+        foreach ($normalized as $index => $child) {
+            $added[] = [
+                'path' => $path . '>' . $this->nodeType($child) . '[' . $index . ']',
+                'type' => $this->nodeType($child),
+                'label' => $this->nodeLabel($child),
+                'element_count' => count($this->listElements($child)),
+            ];
+        }
+
+        $found = $this->findElement($updated, $path);
+
+        return [
+            'layout' => $updated,
+            'metadata' => $found['metadata'] ?? $target['metadata'],
+            'removed' => $removed,
+            'added' => $added,
+        ];
+    }
+
+    /**
+     * The error for a path that does not resolve, with what it takes to fix it: how far the path
+     * did resolve, the children that exist there, and the path the caller most likely meant.
+     *
+     * The index of a segment is the position among all the children of the parent, not among the
+     * children of that type. text[2] for "the third text" is the mistake this answers.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    public function missingPathError(array $layout, string $path, string $code = 'element_not_found', string $subject = 'Element path'): array
+    {
+        $error = ['error' => "{$subject} {$path} not found.", 'code' => $code, 'path' => $path];
+        $segments = explode('>', trim($path));
+
+        if (array_shift($segments) !== 'root') {
+            return $error + ['hint' => 'Paths start at root, as template/element-list returns them: root>section[0]>row[0].'];
+        }
+
+        $node = $layout;
+        $guess = 'root';
+        $failed = null;
+
+        foreach ($segments as $segment) {
+            $parsed = $this->parseSegment($segment);
+            $index = $parsed === null ? null : $this->guessChildIndex($node, $parsed[0], $parsed[1]);
+
+            if ($failed === null && ($index === null || $index !== $parsed[1])) {
+                $failed = $segment;
+                $children = [];
+
+                foreach (is_array($node['children'] ?? null) ? $node['children'] : [] as $childIndex => $child) {
+                    if (is_array($child)) {
+                        $children[] = $guess . '>' . $this->nodeType($child) . '[' . $childIndex . ']';
+                    }
+                }
+
+                $error['resolved_path'] = $guess;
+                $error['failed_segment'] = $segment;
+                $error['available_children'] = array_slice($children, 0, 40);
+
+                if (count($children) > 40) {
+                    $error['available_children_total'] = count($children);
+                }
+            }
+
+            if ($index === null) {
+                $guess = null;
+                break;
+            }
+
+            $node = $node['children'][$index];
+            $guess .= '>' . $parsed[0] . '[' . $index . ']';
+        }
+
+        if ($failed === null) {
+            return $error;
+        }
+
+        if ($guess !== null) {
+            $error['did_you_mean'] = $guess;
+        }
+
+        $error['hint'] = 'The index in a segment counts every child of the parent, whatever its type: text[2] is the third child, not the third text. Copy paths from template/element-list or template/read with mode=outline.'
+            . ($guess !== null ? ' did_you_mean reads the wrong index as the nth child of that type; check it is the element you mean before writing.' : '');
+
+        return $error;
+    }
+
+    /**
+     * The real index of the child a segment points at: the index as written when that child has
+     * the type, otherwise the nth child of the type, otherwise the only child of the type.
+     *
+     * @param array<string, mixed> $node
+     */
+    private function guessChildIndex(array $node, string $type, int $index): ?int
+    {
+        $children = is_array($node['children'] ?? null) ? $node['children'] : [];
+
+        if (is_array($children[$index] ?? null) && $this->nodeType($children[$index]) === $type) {
+            return $index;
+        }
+
+        $ofType = [];
+
+        foreach ($children as $childIndex => $child) {
+            if (is_array($child) && $this->nodeType($child) === $type) {
+                $ofType[] = (int) $childIndex;
+            }
+        }
+
+        return $ofType[$index] ?? (count($ofType) === 1 ? $ofType[0] : null);
     }
 
     /**

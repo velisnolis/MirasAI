@@ -196,6 +196,38 @@ export function routerTools() {
       },
     },
     {
+      name: 'mirasai/batch',
+      description:
+        'Runs several tool calls against one site in this one router process and returns each result in order. Use it for independent calls, such as reading several layouts or auditing several pages: N calls cost one process start instead of N, which is what makes a CLI that starts the router per call slow. Calls run in order and the batch stops at the first failed one unless stop_on_error is false. The host checks each call exactly as if it were sent alone: a guarded write still needs its own if_match and dry_run or confirm_guarded_write. For several changes to one layout use template/element-batch, which applies them under one etag.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site_id: { type: 'string', description: 'Configured site id for every call. Defaults to the router default site.' },
+          calls: {
+            type: 'array',
+            description: `Tool calls to run in order, at most ${MAX_BATCH_CALLS}: [{"name": "template/read", "arguments": {"post_id": 12, "mode": "outline"}}]. Do not repeat site_id inside arguments.`,
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                arguments: { type: 'object' },
+              },
+              required: ['name'],
+            },
+          },
+          stop_on_error: { type: 'boolean', description: 'Defaults to true. false runs every call and reports each failure.' },
+        },
+        required: ['calls'],
+      },
+      annotations: guardedWriteAnnotations(),
+      metadata: {
+        risk_level: 'guarded_write',
+        workflow_hint: 'direct',
+        surface: 'essential',
+        platforms: ['joomla', 'wordpress'],
+      },
+    },
+    {
       name: 'mirasai/host-diagnose',
       description: 'Run system/diagnose on one configured MirasAI host, including the agent playbook for Builder vs Style vs SSH routing.',
       inputSchema: {
@@ -322,6 +354,10 @@ async function callRouterTool(registry, clientFactory, params) {
         ...(typeof caught?.observed_sha256 === 'string' ? { observed_sha256: caught.observed_sha256 } : {}),
       }, true);
     }
+  }
+
+  if (name === 'mirasai/batch') {
+    return callBatch(registry, clientFactory, args);
   }
 
   if (name === 'mirasai/host-diagnose') {
@@ -460,10 +496,7 @@ async function callRemoteTool(registry, clientFactory, name, args) {
   const client = clientFactory(site);
 
   try {
-    const available = await client.toolsList();
-    const tools = Array.isArray(available?.tools) ? available.tools : [];
-
-    if (!tools.some((tool) => tool?.name === name)) {
+    if (!(await hostExposesTool(client, name))) {
       return callToolResult({
         error: `Tool ${name} is not exposed by site ${site.site_id}.`,
         code: 'tool_not_supported_on_platform',
@@ -719,6 +752,144 @@ function sharedPrefixLength(left, right) {
   }
 
   return limit;
+}
+
+// Names of the tools each host client has listed. A process that makes many
+// calls asks the host for its list once, and again only for a name it has not
+// seen yet, so a tool installed while the session is open is still found.
+const listedToolNames = new WeakMap();
+
+async function hostExposesTool(client, name) {
+  let names = listedToolNames.get(client);
+
+  if (names === undefined || !names.has(name)) {
+    const available = await client.toolsList();
+    names = new Set((Array.isArray(available?.tools) ? available.tools : []).map((tool) => tool?.name));
+    listedToolNames.set(client, names);
+  }
+
+  return names.has(name);
+}
+
+const MAX_BATCH_CALLS = 50;
+
+async function callBatch(registry, clientFactory, args) {
+  const calls = args.calls;
+
+  if (!Array.isArray(calls) || calls.length === 0) {
+    return callToolResult({ error: 'calls must be a non-empty list of {name, arguments}.', code: 'invalid_arguments' }, true);
+  }
+
+  if (calls.length > MAX_BATCH_CALLS) {
+    return callToolResult({
+      error: `A batch takes at most ${MAX_BATCH_CALLS} calls; got ${calls.length}.`,
+      code: 'too_many_calls',
+    }, true);
+  }
+
+  const site = findSite(registry, args.site_id);
+  const stopOnError = args.stop_on_error !== false;
+  const results = [];
+  let failed = 0;
+
+  for (const [index, call] of calls.entries()) {
+    const problem = batchCallProblem(call, site);
+    let outcome;
+
+    if (problem !== null) {
+      outcome = callToolResult({ error: problem, code: 'invalid_batch_call' }, true);
+    } else {
+      try {
+        outcome = await callRouterTool(registry, clientFactory, {
+          name: call.name,
+          arguments: { ...(call.arguments ?? {}), site_id: site.site_id },
+        });
+      } catch (caught) {
+        outcome = callToolResult({
+          error: caught instanceof Error ? caught.message : String(caught),
+          code: 'batch_call_failed',
+        }, true);
+      }
+    }
+
+    const ok = outcome?.isError !== true;
+    // result is the payload a caller reads. A host that answers with more than one
+    // text part, or with images or resources, keeps them all under content.
+    const parts = Array.isArray(outcome?.content) ? outcome.content : [];
+    const carriesMore = parts.length > 1 || parts.some((part) => part?.type !== 'text');
+    results.push({
+      index,
+      name: typeof call?.name === 'string' ? call.name : null,
+      ok,
+      result: batchResultPayload(outcome),
+      ...(carriesMore ? { content: parts } : {}),
+    });
+
+    if (!ok) {
+      failed += 1;
+
+      if (stopOnError) {
+        break;
+      }
+    }
+  }
+
+  return callToolResult({
+    site_id: site.site_id,
+    call_count: calls.length,
+    completed: results.length,
+    failed,
+    ...(results.length < calls.length
+      ? { not_run: calls.length - results.length, note: 'Stopped at the first failed call. Calls after it were not sent.' }
+      : {}),
+    results,
+  }, failed > 0);
+}
+
+function batchCallProblem(call, site) {
+  if (call === null || typeof call !== 'object' || Array.isArray(call)) {
+    return 'Each call must be an object with name and arguments.';
+  }
+
+  if (typeof call.name !== 'string' || call.name.trim() === '') {
+    return 'Each call needs the name of a tool.';
+  }
+
+  if (call.name === 'mirasai/batch') {
+    return 'A batch cannot contain another batch.';
+  }
+
+  const callArguments = call.arguments;
+
+  if (callArguments !== undefined && (callArguments === null || typeof callArguments !== 'object' || Array.isArray(callArguments))) {
+    return 'arguments must be an object.';
+  }
+
+  if (callArguments?.site_id !== undefined && callArguments.site_id !== site.site_id) {
+    return `A batch runs against one site (${site.site_id}); this call names ${callArguments.site_id}.`;
+  }
+
+  return null;
+}
+
+function batchResultPayload(outcome) {
+  if (outcome?.structuredContent !== undefined) {
+    return outcome.structuredContent;
+  }
+
+  const text = Array.isArray(outcome?.content)
+    ? outcome.content.find((part) => part?.type === 'text')?.text
+    : undefined;
+
+  if (typeof text !== 'string') {
+    return outcome ?? null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 function callToolResult(payload, isError = false) {

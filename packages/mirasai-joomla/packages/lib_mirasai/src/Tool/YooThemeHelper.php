@@ -262,6 +262,47 @@ class YooThemeHelper
         return $this->invalidateBuilderCache();
     }
 
+    /**
+     * Bring the plain HTML Joomla keeps in introtext in line with the layout just written to
+     * fulltext, as the Builder does when it saves. Joomla search reads introtext; visitors do not.
+     * The layout in fulltext is left exactly as written, so its etag does not move.
+     *
+     * @param array<string, mixed> $article
+     * @return array{status: string, length?: int, reason?: string, fix?: string}
+     */
+    public function regenerateArticleIntrotext(array $article): array
+    {
+        $articleId = (int) ($article['id'] ?? 0);
+        $language = is_string($article['language'] ?? null) && $article['language'] !== '*' ? (string) $article['language'] : null;
+        $stale = static fn (string $reason): array => [
+            'status' => 'stale',
+            'reason' => $reason,
+            'fix' => 'The article renders from the layout, so visitors see the change. The plain HTML in introtext, which Joomla search reads, is the old one until the article is saved once in the YOOtheme Builder.',
+        ];
+
+        // The layout is already written. Whatever goes wrong from here is reported, not thrown:
+        // an error would tell the caller that nothing was written.
+        try {
+            $rendered = YooThemeTranslationRenderer::render((string) ($article['fulltext'] ?? ''), $language, true);
+
+            if (($rendered['result']['status'] ?? null) !== 'success' || !is_string($rendered['introtext'] ?? null)) {
+                return $stale((string) ($rendered['result']['message'] ?? 'YOOtheme could not render the content.'));
+            }
+
+            $query = $this->db->getQuery(true)
+                ->update($this->db->quoteName('#__content'))
+                ->set($this->db->quoteName('introtext') . ' = ' . $this->db->quote($rendered['introtext']))
+                ->where('id = :id')
+                ->bind(':id', $articleId, ParameterType::INTEGER);
+
+            $this->db->setQuery($query)->execute();
+        } catch (\Throwable $exception) {
+            return $stale('The plain HTML could not be saved: ' . $exception->getMessage());
+        }
+
+        return ['status' => 'regenerated', 'length' => strlen($rendered['introtext'])];
+    }
+
     // -------------------------------------------------------------------------
     // YOOtheme Builder module helpers
     // -------------------------------------------------------------------------

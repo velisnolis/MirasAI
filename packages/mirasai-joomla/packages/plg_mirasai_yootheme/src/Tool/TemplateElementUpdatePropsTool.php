@@ -87,7 +87,7 @@ class TemplateElementUpdatePropsTool extends AbstractTemplateElementWriteTool
                 $updated = (new YooThemeElementNavigator())->updateElementProps($layout, $path, $props, $merge);
 
                 if ($updated === null) {
-                    return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+                    return (new YooThemeElementNavigator())->missingPathError($layout, $path);
                 }
 
                 $response = [

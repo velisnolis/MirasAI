@@ -60,7 +60,7 @@ class TemplateElementSourceDeleteTool extends AbstractTemplateElementWriteTool
                 $current = (new YoothemeElementNavigator())->findElement($layout, $path);
 
                 if ($current === null) {
-                    return ['error' => "Element path {$path} not found.", 'code' => 'element_not_found'];
+                    return (new YoothemeElementNavigator())->missingPathError($layout, $path);
                 }
 
                 $result = (new YoothemeElementNavigator())->deleteElementSource($layout, $path, $locations);

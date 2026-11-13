@@ -141,6 +141,7 @@ Implemented now:
   - `mirasai/sites-list`
   - `mirasai/sites-test`
   - `mirasai/host-diagnose`
+  - `mirasai/batch`
   - `mirasai/style-preview`
   - `mirasai/style-update`
   - `mirasai/style-verify`
@@ -148,6 +149,17 @@ Implemented now:
 - guarded Style writes with explicit `if_match`, dry-run by default, compiled
   CSS hash binding, private host snapshots, rollback, and post-write verification
 - CLI commands for `list-sites`, `add-site`, `set-default`, `test-site`, and `serve`
+
+`mirasai/batch` runs several tool calls against one site in one router process
+and returns each result in order. It exists for clients that start the router
+per call, such as a CLI: reading seven layouts costs one start instead of seven.
+The calls are independent and the host checks each one as if it were sent
+alone, so a guarded write inside a batch still needs its own `if_match` and
+`dry_run` or `confirm_guarded_write`. It stops at the first failed call unless
+`stop_on_error` is `false`. Several changes to one layout belong in the host's
+`template/element-batch`, which applies them under one etag. Within a process
+the router asks each host for its tool list once, and again only for a tool
+name it has not seen.
 
 The Style tools consume a platform-neutral host contract (`worker`, `base_url`,
 imports, and overrides). Both the WordPress and Joomla hosts expose the same
