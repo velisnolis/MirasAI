@@ -1231,10 +1231,43 @@ JSON sencer, de manera que un `$` seguit de xifres o una barra invertida en
 qualsevol element de la pàgina es podia perdre encara que el canvi fos en un
 altre element. Preus en euros, que és el cas habitual, no hi cauen.
 
-**Fet a MirasAI (pendent de publicar).** La substitució es fa amb una funció,
-que no interpreta res. Prova: `docker/test-yootheme-element-batch.php` i, en
-directe, un text `Preu: $10 a C:\dir, abans \1` que torna igual als dos webs de
-proves.
+**Què feia cada cas.** L'expressió té un sol grup de captura, el JSON antic.
+Comprovat amb PHP contra la línia de la 0.13.0:
+
+- `$10`, `$5`, `${12}`: desapareixen, perquè el grup no existeix. `$100` queda
+  `0`. El JSON continua sent vàlid i la pàgina es veu bé, amb el text canviat.
+- `$1` i `${1}` hi enganxen el JSON antic sencer, i `$0`, tot el comentari
+  antic. El JSON nou queda invàlid i la pàgina, sense layout.
+- Una barra invertida és `\\` al JSON i queda `\`. Si la segueix una lletra que
+  JSON entén com a escapament (`\f`, `\n`, `\t`, `\b`, `\r`, `\u` amb quatre
+  xifres hexadecimals), el JSON continua sent vàlid i el text canvia en silenci: un
+  `content:"\f101"` de CSS passa a tenir un salt de pàgina. Els codis de Font
+  Awesome comencen per `\f`. Amb qualsevol altra cosa (`C:\dir`, `\e900`,
+  `\12`), el JSON queda invàlid.
+
+**Fet a MirasAI (0.14.0).** La substitució es fa amb una funció, que no
+interpreta res. Prova: `docker/test-yootheme-element-batch.php` i, en directe,
+un text `Preu: $10 a C:\dir, abans \1` que torna igual als dos webs de proves.
+
+**Com es comprova un web que ha tingut una versió anterior.** El que es va
+perdre no és al layout actual. Tres pistes, totes de lectura a `wp_posts`:
+
+- el comentari del layout no es descodifica com a JSON, o en porta un altre a
+  dins;
+- entre dues revisions consecutives de la pàgina, el JSON és igual tret dels
+  caràcters que `preg_replace()` s'hauria menjat. Una edició humana que treu un
+  preu no deixa aquesta marca;
+- el text pla de fora del comentari conserva un `$10` que el layout ja no té.
+  Fins a la 0.14.0 una escriptura per MCP no el regenerava (F-047).
+
+Límits: un plugin que neteja revisions esborra la segona pista, i desar la
+pàgina al Builder després de l'escriptura esborra la tercera. Abans de la
+0.11.0 no hi ha registre de les escriptures per MCP; l'autor i la data de cada
+revisió és l'únic que en queda.
+
+Comprovat el 13/11/2026 en deu webs de client WordPress amb pàgines de
+YOOtheme: cap pàgina amb layout havia tingut mai aquests caràcters, en cap
+revisió. Dos d'aquests webs no conservaven revisions.
 
 **Regla accionable.** En un web amb una versió anterior, si una pàgina té
 imports amb `$` o barres invertides, comprova'ls després d'escriure-hi.
