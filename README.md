@@ -2,7 +2,7 @@
 
 MirasAI is a multi-platform MCP toolkit for controlled AI access to CMS sites.
 
-The latest published release is [`0.13.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.13.0). See the [0.13.0 warnings from real sites and row layouts](docs/releases/0.13.0.md), the [0.12.0 site audit, template switching and validation](docs/releases/0.12.0.md), the [0.11.0 verification, template and activity log tools](docs/releases/0.11.0.md), the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
+The latest published release is [`0.14.0`](https://github.com/velisnolis/MirasAI/releases/tag/v0.14.0). See the [0.14.0 batched Builder writes, path diagnosis and fallback text](docs/releases/0.14.0.md), the [0.13.0 warnings from real sites and row layouts](docs/releases/0.13.0.md), the [0.12.0 site audit, template switching and validation](docs/releases/0.12.0.md), the [0.11.0 verification, template and activity log tools](docs/releases/0.11.0.md), the [0.10.4 post-update checks](docs/releases/0.10.4.md), the [0.10.2 WordPress updater fixes](docs/releases/0.10.2.md) and the [0.10.1 Style fixes](docs/releases/0.10.1.md). See the [0.10.0 migration notes](docs/releases/0.10.0.md) before updating translation callers. MirasAI includes:
 
 - a production Joomla host package;
 - a WordPress host plugin;
