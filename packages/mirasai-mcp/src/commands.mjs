@@ -73,7 +73,13 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo()) {
 
   if (command === 'serve') {
     const registry = loadRegistry(configPath);
-    await serveStdio(createRouterHandler(registry), io.stdin, io.stdout);
+    const { flags, positional } = parseFlags(args);
+    if (positional.length > 0 || Object.keys(flags).some((key) => key !== 'siteId')
+        || (args.includes('--site-id') && typeof flags.siteId !== 'string')) {
+      io.stderr.write('serve accepts only --site-id ID and --config PATH.\n');
+      return 2;
+    }
+    await serveStdio(createRouterHandler(registry, { siteId: flags.siteId }), io.stdin, io.stdout);
     return 0;
   }
 
@@ -214,7 +220,7 @@ Usage:
   mirasai-mcp add-site --site-id ID --label LABEL --platform joomla|wordpress --url URL (--token-ref REF|--token-env ENV|--token-plain-dev TOKEN|--basic-ref REF|--basic-env ENV|--basic-plain-dev USER:PASS) [--protocol mirasai|mcp] [--secret-ttl-seconds 3600] [--style-worker-sha256 HASH] [--default] [--config sites.json]
   mirasai-mcp set-default site_id [--config sites.json]
   mirasai-mcp test-site [site_id] [--config sites.json]
-  mirasai-mcp serve [--config sites.json]
+  mirasai-mcp serve [--site-id ID] [--config sites.json]
 
 `;
 }
