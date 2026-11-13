@@ -1199,6 +1199,14 @@ Comprovat al web de proves WordPress: una pàgina amb un text antic a
 no la troba pel text antic i sí pel nou, i `post_content` té la forma que hi
 deixa el Builder. Al web de proves Joomla, `introtext` queda igual.
 
+**El text pla no porta fonts dinàmiques, i no és un defecte de MirasAI.** El
+context `content` no les resol: `builder-source/bootstrap.php` les enganxa només
+a `prerender`. Comprovat al web de proves WordPress amb un titular lligat a una
+font i amb un text estàtic al prop: en context `content` surt el text estàtic,
+igual amb l'entrada com a context (paràmetre `post` i consulta principal) que
+sense; en context `render`, la font es processa. Per això el render es fa sense
+context d'entrada, com a `savePage()`.
+
 **Regla accionable.** Després d'escriure una pàgina, mira `fallback_content`.
 Amb `stale`, la pàgina es veu bé però el text pla és l'antic fins que algú la
 desi una vegada al Builder.

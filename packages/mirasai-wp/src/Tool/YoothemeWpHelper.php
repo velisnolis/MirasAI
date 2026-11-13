@@ -460,6 +460,11 @@ class YoothemeWpHelper
      * The plain HTML YOOtheme keeps in post_content in front of the layout comment, rendered as the
      * Builder does when it saves a page. WordPress search and SEO plugins read it; visitors do not.
      *
+     * No post context is set up, on purpose. This is the call PageController::savePage() makes,
+     * and the content context does not resolve Dynamic Sources: they belong to the prerender
+     * transform. An element with a binding comes out with its static props whichever post is
+     * current, so the result is what a save in the Builder would write.
+     *
      * @param array<string, mixed> $layout
      * @return array{html: string|null, reason?: string}
      */
