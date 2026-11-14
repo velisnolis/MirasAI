@@ -280,7 +280,8 @@ Joomla:
 - translate articles and categories;
 - batch translation workflows;
 - multilingual audit;
-- internal link checks.
+- internal link checks;
+- publish or unpublish an existing article (`content/update`).
 
 WordPress:
 
@@ -288,9 +289,19 @@ WordPress:
 - translate posts/pages with WPML or Polylang;
 - translate terms;
 - multilingual audit;
-- internal link checks.
+- internal link checks;
+- publish, unpublish, move or rename an existing page (`content/update`).
 
 MirasAI does not auto-translate content. Tools expect translated text from the agent or caller.
+
+`content/update` is narrow on purpose. On WordPress it changes the status
+(`draft` or `publish`), the parent or the slug of an existing page; on Joomla,
+the state (`0` or `1`) of an existing article. It does not create, delete,
+trash or archive, and it never writes a title or content; posts and other post
+types are refused. The preview gives the permalink before and after, for the
+page and the pages under it (WordPress), or the menu items that point to the
+article (Joomla). It does not look for links to the old URL. Media uploads and
+menu items have no tool: use the CMS or its own API.
 
 ### YOOtheme
 
@@ -329,6 +340,18 @@ Common workflow:
 `template/duplicate` copies one, switched off); both preview
 which template wins for that type (`shadowed_by`, `takes_over_from`).
 `template/audit` with `scope: "site"` audits every layout at once.
+
+A page or article created outside the Builder has no layout, and the element
+tools answer `post_layout_missing` or `article_layout_missing`.
+`template/layout-init` writes the empty layout, only when the page or article
+has no text and no layout, with the etag of `content/read` as `if_match`; then
+`template/element-add` builds on it from `parent_path: "root"`.
+
+On WordPress, `menu/position-list` shows which menu sits in each YOOtheme
+position and `menu/position-assign` puts an existing menu in one (`navbar`,
+`dialog-mobile`…). A site with no menu in any position can show no header at
+all. Neither tool creates menus or edits their items. Joomla has no equivalent
+yet.
 
 `template/read` and `template/element-list` accept `mode`. `full` (default) is
 the current payload. `outline` returns a nested tree of `type`, `path`,

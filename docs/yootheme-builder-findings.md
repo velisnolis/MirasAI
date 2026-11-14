@@ -684,6 +684,12 @@ un comentari existent: no en crea cap.
 amb `element-add` des de `root`. Recorda F-011: l'HTML renderitzat de
 `post_content` queda buit fins que algú desa la pàgina al Builder.
 
+**Des de la 0.15.0.** `template/layout-init` fa aquest pas: amb l'`etag` de
+`content/read` escriu el layout buit en una pàgina (WordPress) o un article
+(Joomla) que no té ni text ni layout, i torna l'`etag` per a `element-add` amb
+`parent_path: "root"`. Provat als dos webs de proves el 14/11/2026: la primera
+`element-add` posterior torna `fallback_content: regenerated`.
+
 ### F-026 · Una escriptura sense resposta pot no haver passat
 
 **Símptoma.** La setena `element-add` torna `remote_tool_call_failed: Host … could
@@ -731,6 +737,11 @@ localitzat línia a línia.
 
 **Regla accionable.** Si la capçalera no surt, abans de sospitar del CSS mira
 si hi ha menú assignat a `navbar` o `dialog-mobile` i `logo.text`.
+
+**Des de la 0.15.0 (WordPress).** `menu/position-list` diu quin menú hi ha a
+cada posició i `menu/position-assign` n'hi posa un que ja existeix. Reproduït
+al web de proves el 14/11/2026: en assignar un menú a `navbar`, `tm-header`
+passa de 0 a 3 aparicions a la portada. A Joomla encara no hi ha eina.
 
 ### F-029 · `width_expand` de la secció no fa res amb `width: expand`
 

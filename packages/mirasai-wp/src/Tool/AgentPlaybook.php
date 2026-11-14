@@ -14,7 +14,7 @@ namespace Mirasai\WordPress\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 4;
+    public const VERSION = 5;
 
     /**
      * Short initialize text. Agents often skip long instructions; the full
@@ -156,8 +156,10 @@ class AgentPlaybook
             ],
             [
                 'id' => 'content',
-                'do' => 'Read or translate posts/pages/terms.',
+                'do' => 'Read or translate posts/pages/terms; publish, unpublish, move or rename a page.',
                 'best' => 'content/list, content/read, then content/translate with if_match. MirasAI does not auto-translate.',
+                'page_status_parent_slug' => 'content/update changes the status (draft or publish), the parent or the slug of an existing page, and nothing else. if_match is the etag of content/read. The dry run gives the permalink before and after, for the page and the pages under it; it does not look for links to the old URL, and WordPress stores no redirect for a page that moves.',
+                'not_covered' => 'Creating or deleting pages, titles, media uploads and menu items have no tool here: use the WordPress admin, the REST API or WP-CLI.',
                 'ssh' => 'Unnecessary unless debugging WPML/Polylang outside MCP.',
             ],
             [
@@ -165,11 +167,19 @@ class AgentPlaybook
                 'do' => 'Change Builder elements, props, sources, templates, widgets.',
                 'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch). The token is a hash of the tool and its arguments, not a session: it does not expire, and two identical dry runs give the same one. That the preview is still current comes from if_match.',
                 'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add and check it with template/render-check and a context_id. Switching it on changes what visitors see: template/set-status (and template/move for the order) with a dry run first; shadowed_by in the preview means an earlier template hides it. Then site/public-fetch on a page of that type.',
+                'new_page' => 'A page created outside the Builder has no layout, and template/read and template/element-* answer post_layout_missing. template/layout-init with the etag of content/read writes the empty layout, only on a page with no text and no layout; then template/element-add with post_id and parent_path root.',
                 'several_changes' => 'Several changes to one layout go in one call: template/element-batch applies operations in order under one if_match, all or nothing, and template/element-replace-children swaps every child of an element (path root rebuilds the page) instead of deleting and adding one by one. Every write answers new_etag, which is the if_match of the next write: do not re-read the layout between writes. Independent calls, such as reading several layouts, go in one mirasai/batch on the router.',
                 'paths' => 'Copy paths from template/element-list or template/read mode=outline. The number is the position among all the children of the parent, not among those of the same type: text[2] is the third child, whatever the first two are. A path that does not resolve answers resolved_path, available_children and, when it can tell, did_you_mean: check that suggestion before writing with it.',
                 'fallback_content' => 'A write to the page answers fallback_content. regenerated: the plain HTML in post_content, which WordPress search and SEO plugins read, matches the layout again. stale: YOOtheme could not render it here and it keeps the old text until the page is saved once in the Builder; visitors are not affected either way.',
                 'not_the_same_as' => 'YOOtheme Style / theme.css. Builder JSON does not go through less.js.',
                 'avoid' => ['WP-CLI on post meta', 'editing layout JSON on disk', 'Customizer'],
+            ],
+            [
+                'id' => 'menu_position',
+                'do' => 'Put an existing menu in a YOOtheme position (navbar, dialog-mobile…). A site with no menu in any position can show no header at all.',
+                'best' => 'menu/position-list, then menu/position-assign with its etag and a dry run first. It changes the header of every page: check the home page with site/public-fetch.',
+                'not_covered' => 'Creating menus and adding, editing or reordering their items have no tool here: use the WordPress admin, the REST API or WP-CLI.',
+                'avoid' => ['writing nav_menu_locations in theme_mods by hand'],
             ],
             [
                 'id' => 'verify_visitor_view',

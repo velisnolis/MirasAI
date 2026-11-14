@@ -32,6 +32,7 @@ use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleSourcesTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateStyleUpdateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSummaryTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateCreateTool;
+use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateLayoutInitTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateDuplicateTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateMoveTool;
 use Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateSetStatusTool;
@@ -111,6 +112,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read',
             'template/translate',
             'template/create',
+            'template/layout-init',
             'template/set-status',
             'template/move',
             'template/duplicate',
@@ -148,6 +150,7 @@ class YooThemeToolProvider implements ToolProviderInterface
             'template/read'                 => new TemplateReadTool(),
             'template/translate'            => new TemplateTranslateTool(),
             'template/create'               => new TemplateCreateTool(),
+            'template/layout-init'          => new TemplateLayoutInitTool(),
             'template/set-status'           => new TemplateSetStatusTool(),
             'template/move'                 => new TemplateMoveTool(),
             'template/duplicate'            => new TemplateDuplicateTool(),

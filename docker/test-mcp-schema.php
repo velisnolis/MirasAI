@@ -226,6 +226,50 @@ $links = schemaForToolWithoutConstructor(\Mirasai\Library\Tool\ContentCheckLinks
 expect('joomla links defaults to preview', $links['properties']['dry_run']['default'], true);
 expect('joomla links exposes scoped CAS', isset($links['properties']['if_match']), true);
 
+// content/update and template/layout-init (TODO-016): the Joomla copies take only what the decision allows.
+require_once $libSrc . '/Tool/ContentReadTool.php';
+require_once $libSrc . '/Tool/ContentUpdateTool.php';
+require_once $libSrc . '/Tool/ToolArgumentValidator.php';
+require_once $yoothemeToolSrc . '/TemplateLayoutInitTool.php';
+$update = \Mirasai\Library\Tool\ContentUpdateTool::class;
+$updateSchema = schemaForToolWithoutConstructor($update);
+expect('joomla content/update takes the state and no other field', array_keys($updateSchema['properties']), ['id', 'state', 'if_match', 'dry_run', 'confirm_guarded_write']);
+expect('joomla content/update requires id, state and if_match', $updateSchema['required'], ['id', 'state', 'if_match']);
+expect('joomla content/update is a guarded write', (new \ReflectionClass($update))->newInstanceWithoutConstructor()->getPermissions()['risk_level'], 'guarded_write');
+foreach ([-2, 2, 3, '1', null, true] as $state) {
+    $label = var_export($state, true);
+    expect("joomla content/update schema refuses state {$label}", \Mirasai\Library\Tool\ToolArgumentValidator::validate('content/update', $updateSchema, ['id' => 5, 'state' => $state, 'if_match' => 'e']) !== null, true);
+    expect("joomla content/update refuses state {$label} on a direct call", $update::requestedState(['id' => 5, 'state' => $state, 'if_match' => 'e'])['code'] ?? null, 'invalid_state');
+}
+foreach (['title', 'alias', 'catid', 'introtext', 'fulltext', 'featured'] as $field) {
+    expect("joomla content/update schema refuses {$field}", \Mirasai\Library\Tool\ToolArgumentValidator::validate('content/update', $updateSchema, ['id' => 5, 'state' => 1, 'if_match' => 'e', $field => 'x'])['code'] ?? null, 'unknown_argument');
+    expect("joomla content/update refuses {$field} on a direct call", $update::requestedState(['id' => 5, 'state' => 1, $field => 'x'])['code'] ?? null, 'unsupported_field');
+}
+expect('joomla content/update accepts 0 and 1', [$update::requestedState(['state' => 0]), $update::requestedState(['state' => 1.0])], [0, 1]);
+$now = '2026-11-14 08:00:00';
+expect('joomla content/update flags an unpublish', array_column($update::warnings(['state' => 1], 0, $now), 'code'), ['no_longer_public']);
+expect('joomla content/update flags a start date in the future', array_column($update::warnings(['state' => 0, 'publish_up' => '2027-01-01 00:00:00'], 1, $now), 'code'), ['outside_publish_window']);
+expect('joomla content/update flags a finish date in the past', array_column($update::warnings(['state' => 0, 'publish_down' => '2026-01-01 00:00:00'], 1, $now), 'code'), ['outside_publish_window']);
+expect('joomla content/update takes null and zero dates as no window', $update::warnings(['state' => 0, 'publish_up' => '2026-01-01 00:00:00', 'publish_down' => null], 1, $now) + $update::warnings(['state' => 0, 'publish_down' => '0000-00-00 00:00:00'], 1, $now), []);
+
+$read = \Mirasai\Library\Tool\ContentReadTool::class;
+$article = ['id' => 5, 'title' => 'T', 'alias' => 't', 'language' => '*', 'state' => 0, 'catid' => 2, 'introtext' => '', 'fulltext' => '', 'modified' => $now, 'checked_out' => 0];
+expect('joomla content etag ignores check-out', $read::contentEtag($article), $read::contentEtag(['checked_out' => 7] + $article));
+foreach (['title' => 'U', 'alias' => 'u', 'state' => 1, 'catid' => 3, 'introtext' => 'x', 'fulltext' => 'x', 'modified' => '2026-11-14 08:00:01'] as $field => $value) {
+    expect("joomla content etag moves with {$field}", $read::contentEtag([$field => $value] + $article) !== $read::contentEtag($article), true);
+}
+
+$init = \Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateLayoutInitTool::class;
+$initSchema = schemaForToolWithoutConstructor($init);
+expect('joomla template/layout-init takes no content', array_keys($initSchema['properties']), ['article_id', 'if_match', 'dry_run', 'confirm_guarded_write']);
+expect('joomla template/layout-init requires article_id and if_match', $initSchema['required'], ['article_id', 'if_match']);
+expect('joomla template/layout-init is a guarded write', (new \ReflectionClass($init))->newInstanceWithoutConstructor()->getPermissions()['risk_level'], 'guarded_write');
+expect('joomla template/layout-init writes the empty layout with the YOOtheme version', $init::emptyLayout('5.0.53'), ['type' => 'layout', 'children' => [], 'version' => '5.0.53']);
+expect('joomla template/layout-init takes a blank article', $init::notBlankReason($article), null);
+expect('joomla template/layout-init takes whitespace as blank', $init::notBlankReason(['introtext' => " \n", 'fulltext' => ''] + $article), null);
+expect('joomla template/layout-init refuses an article with introtext', $init::notBlankReason(['introtext' => '<p>x</p>'] + $article), 'introtext is not empty.');
+expect('joomla template/layout-init refuses an article with a layout', $init::notBlankReason(['fulltext' => '<!-- {"type":"layout"} -->'] + $article), 'fulltext is not empty.');
+
 if ($failed > 0) {
     echo "\n{$failed} schema test(s) failed.\n";
     exit(1);

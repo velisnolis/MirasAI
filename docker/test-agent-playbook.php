@@ -96,7 +96,7 @@ $playbooks = [
 ];
 
 foreach ($playbooks as $platform => $playbook) {
-    expectPlaybook("{$platform} playbook version is 4", $playbook['version'] ?? null, 4);
+    expectPlaybook("{$platform} playbook version is 5", $playbook['version'] ?? null, 5);
     expectPlaybook(
         "{$platform} playbook names host auth as a dependency",
         is_array($playbook['depends_on']['host_http'] ?? null),

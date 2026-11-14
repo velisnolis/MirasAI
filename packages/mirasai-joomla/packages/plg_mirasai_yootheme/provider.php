@@ -49,6 +49,7 @@ require_once $pluginSrc . '/Tool/TemplateElementBatchTool.php';
 require_once $pluginSrc . '/Tool/TemplateReadTool.php';
 require_once $pluginSrc . '/Tool/TemplateTranslateTool.php';
 require_once $pluginSrc . '/Tool/TemplateCreateTool.php';
+require_once $pluginSrc . '/Tool/TemplateLayoutInitTool.php';
 require_once $pluginSrc . '/Tool/TemplateOrder.php';
 require_once $pluginSrc . '/Tool/AbstractTemplateOrderTool.php';
 require_once $pluginSrc . '/Tool/TemplateSetStatusTool.php';

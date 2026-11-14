@@ -20,7 +20,7 @@ class ContentReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads a WordPress post/page by ID. Returns title, content, excerpt, status, author, dates, terms, metadata keys, and permalink.';
+        return 'Reads a WordPress post/page by ID. Returns title, content, excerpt, status, parent, author, dates, terms, metadata keys, and permalink.';
     }
 
     public function getSurface(): string
@@ -87,6 +87,7 @@ class ContentReadTool extends AbstractTool
             'etag' => $this->contentEtag($post),
             'title' => get_the_title($post),
             'slug' => (string) $post->post_name,
+            'parent_id' => (int) $post->post_parent,
             'content' => (string) $post->post_content,
             'excerpt' => (string) $post->post_excerpt,
             'author_id' => (int) $post->post_author,
@@ -144,6 +145,7 @@ class ContentReadTool extends AbstractTool
             'post_status' => (string) $post->post_status,
             'post_title' => (string) $post->post_title,
             'post_name' => (string) $post->post_name,
+            'post_parent' => (int) $post->post_parent,
             'post_content' => (string) $post->post_content,
             'post_excerpt' => (string) $post->post_excerpt,
             'post_modified_gmt' => (string) $post->post_modified_gmt,

@@ -56,6 +56,7 @@ require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentListTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentReadTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentTranslateBatchTool.php';
+require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentUpdateTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentCheckLinksTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/ContentAuditMultilingualTool.php';
 require_once JPATH_LIBRARIES . '/mirasai/src/Tool/CategoryTranslateTool.php';

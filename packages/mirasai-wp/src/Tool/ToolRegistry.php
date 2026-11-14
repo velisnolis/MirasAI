@@ -18,6 +18,7 @@ class ToolRegistry
         $registry->register(new ContentReadTool());
         $registry->register(new ContentTranslateTool());
         $registry->register(new ContentTranslateBatchTool());
+        $registry->register(new ContentUpdateTool());
         $registry->register(new ContentCheckLinksTool());
         $registry->register(new ContentAuditMultilingualTool());
         $registry->register(new SitePublicFetchTool());
@@ -58,6 +59,7 @@ class ToolRegistry
         $registry->register(new TemplateElementBatchTool());
         $registry->register(new TemplateTranslateTool());
         $registry->register(new TemplateCreateTool());
+        $registry->register(new TemplateLayoutInitTool());
         $registry->register(new TemplateSetStatusTool());
         $registry->register(new TemplateMoveTool());
         $registry->register(new TemplateDuplicateTool());
@@ -66,6 +68,8 @@ class ToolRegistry
         $registry->register(new TemplateStyleSourcesTool());
         $registry->register(new TemplateStyleCreateTool());
         $registry->register(new TemplateStyleUpdateTool());
+        $registry->register(new MenuPositionListTool());
+        $registry->register(new MenuPositionAssignTool());
         $registry->register(new AcfStatusTool());
         $registry->register(new AcfFieldGroupsListTool());
         $registry->register(new AcfFieldGroupReadTool());

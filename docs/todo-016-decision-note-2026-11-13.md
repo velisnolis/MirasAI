@@ -366,6 +366,63 @@ decisió. Les contrastables amb el codi s'han comprovat.
 | Faltava l'ETag de l'assignació de menú | should | Peça 3, WordPress |
 | «Buit» sense concretar; `fallback_content` | should | Peça 1 |
 
+## Implementació del paquet A (2026-11-14)
+
+Branca `feat/todo-016-host`. Eines:
+
+| Eina | WordPress | Joomla |
+| --- | --- | --- |
+| `template/layout-init` | pàgina (`post_id`) | article (`article_id`) |
+| `content/update` | `status`, `parent_id`, `slug` d'una pàgina | `state` d'un article |
+| `menu/position-list`, `menu/position-assign` | sí | pendent |
+
+`content/read` torna el pare a WordPress i, a Joomla, un `etag` que no tenia.
+L'ETag de contingut de WordPress ara inclou el pare.
+
+Decisions de detall:
+
+- **Res no s'ajusta pel camí.** Un slug que WordPress reescriuria o numeraria
+  es rebutja, amb el que quedaria. Les pàgines a la paperera i les programades
+  no es toquen.
+- **`menu_id: 0` buida la posició**, perquè una assignació es pugui desfer.
+  L'eina només funciona amb YOOtheme actiu.
+- **A Joomla l'estat s'escriu amb SQL**, com la resta d'eines del host. Es va
+  provar primer pel model d'articles de Joomla i es nega: l'endpoint MCP
+  autentica el token pel seu compte i no carrega cap identitat a l'aplicació,
+  de manera que el model veu un convidat. Conseqüència: Smart Search no
+  s'assabenta del canvi; la previsualització ho avisa quan està actiu. L'eina
+  es nega si l'article està obert en edició o si el web té workflows activats.
+- **`layout-init` escriu la versió de YOOtheme al layout**, perquè YOOtheme no
+  passi les migracions de versions antigues als elements que s'hi afegeixin.
+
+Prova en directe als dos webs de proves, amb la build instal·lada i peticions
+com a usuari de cada compte. Abans, dump de la base de dades i còpia del
+connector al servidor. Tot el que es va crear es va esborrar.
+
+| Web | Comprovacions | Resultat |
+| --- | --- | --- |
+| WordPress 7.1.4, YOOtheme 5.0.53 | 54 | totes bé |
+| Joomla 6.2.0, YOOtheme 5.0.55 | 28 | totes bé |
+
+El que es va comprovar: rebuig de camps i valors fora de la decisió; CAS;
+`preview_token`; el permalink previst és el que queda desat, també el de la
+pàgina filla; un visitant rep 200 a la URL nova i 404 en despublicar; el layout
+buit i les dues escriptures següents (`fallback_content: regenerated`); en
+assignar el menú a `navbar` la portada passa de 0 a 3 `tm-header`, i l'ETag de
+l'Style no es mou; en acabar, les assignacions de menú i els recomptes són els
+d'abans.
+
+La prova va trobar dos errors que les proves locals no veien, ja corregits:
+
+- A Joomla les classes del connector de YOOtheme es carreguen d'una llista
+  explícita (`provider.php`). Sense la classe nova a la llista, el proveïdor
+  fallava i deixava sense registrar totes les eines posteriors. Ara
+  `docker/test-host-contract.php` comprova aquestes llistes.
+- El model d'articles de Joomla (vegeu més amunt).
+
+No provat: assignació de menú amb Polylang o WPML; cap web amb workflows de
+Joomla activats; cap web que no sigui de proves.
+
 ## Sense resoldre
 
 - Per què Joomla rebutja el PDF i per què els cossos JSON són tan lents.
