@@ -78,6 +78,7 @@ POST /wp-json/mirasai/v1/checks/cache/purge
 - `content/read`
 - `content/translate`
 - `content/translate-batch`
+- `content/update`
 - `content/check-links`
 - `content/audit-multilingual`
 - `taxonomy/term-list`
@@ -92,6 +93,7 @@ POST /wp-json/mirasai/v1/checks/cache/purge
 - `template/render-check`
 - `template/audit`
 - `template/create`
+- `template/layout-init`
 - `template/set-status`
 - `template/move`
 - `template/duplicate`
@@ -117,6 +119,8 @@ POST /wp-json/mirasai/v1/checks/cache/purge
 - `template/style-update`
 - `template/translate`
 - `template/widget-translate`
+- `menu/position-list`
+- `menu/position-assign`
 - `acf/status`
 - `acf/field-groups/list`
 - `acf/field-group/read`

@@ -457,6 +457,58 @@ class YoothemeWpHelper
     }
 
     /**
+     * Why a post cannot take a first layout, or null when it is blank: nothing in any layout meta
+     * key and no text in post_content. A value that does not decode as a layout still counts.
+     */
+    public function postNotBlankReason(int $postId): ?string
+    {
+        foreach (self::POST_LAYOUT_META_KEYS as $metaKey) {
+            $value = get_post_meta($postId, $metaKey, true);
+
+            if (is_array($value) ? $value !== [] : trim((string) $value) !== '') {
+                return "Post meta {$metaKey} is not empty.";
+            }
+        }
+
+        $post = get_post($postId);
+
+        if ($post === null) {
+            return "Post {$postId} not found.";
+        }
+
+        return trim((string) $post->post_content) === '' ? null : 'post_content is not empty.';
+    }
+
+    /**
+     * The first layout of a blank post, as the comment the Builder keeps in post_content. Callers
+     * check postNotBlankReason() first: this replaces post_content.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    public function createPostLayout(int $postId, array $layout): array
+    {
+        $encoded = wp_json_encode($layout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $result = is_string($encoded)
+            ? wp_update_post(wp_slash(['ID' => $postId, 'post_content' => '<!-- ' . $encoded . ' -->']), true)
+            : 0;
+
+        if (!is_string($encoded) || is_wp_error($result) || $result === 0) {
+            return [
+                'cleared' => false,
+                'groups' => [],
+                'failures' => [[
+                    'group' => 'post_content',
+                    'error' => is_wp_error($result) ? $result->get_error_message() : 'The layout could not be written.',
+                ]],
+            ];
+        }
+
+        // An empty layout has no plain HTML, and neither has the post: they already match.
+        return $this->invalidateBuilderCache() + ['fallback_content' => ['status' => 'regenerated', 'length' => 0]];
+    }
+
+    /**
      * The plain HTML YOOtheme keeps in post_content in front of the layout comment, rendered as the
      * Builder does when it saves a page. WordPress search and SEO plugins read it; visitors do not.
      *
@@ -937,7 +989,10 @@ class YoothemeWpHelper
         $target = $this->loadPostLayout($postId);
 
         if ($target === null) {
-            return ['error' => "Post {$postId} has no detected YOOtheme layout.", 'code' => 'post_layout_missing'];
+            return [
+                'error' => "Post {$postId} has no detected YOOtheme layout. If it is a new, empty page, template/layout-init gives it one.",
+                'code' => 'post_layout_missing',
+            ];
         }
 
         return [

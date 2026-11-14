@@ -14,7 +14,7 @@ namespace Mirasai\Library\Tool;
  */
 class AgentPlaybook
 {
-    public const VERSION = 4;
+    public const VERSION = 5;
 
     /**
      * Short initialize prefix. Agents often skip long instructions; the full
@@ -153,8 +153,10 @@ class AgentPlaybook
             ],
             [
                 'id' => 'content',
-                'do' => 'Read or translate articles/categories.',
+                'do' => 'Read or translate articles/categories; publish or unpublish an article.',
                 'best' => 'content/list, content/read, then content/translate with dry_run=true. Apply the identical request with dry_run=false, preview etag as if_match and confirm_guarded_write=true. New articles default to state=0; updates preserve alias/state. Select target_id for an unassociated target and create_menu or menu_id for menu changes. Inspect status=partial and keep returned IDs before any retry. MirasAI does not auto-translate. For Builder articles, use yootheme_translatable_nodes[].replacement_key.',
+                'article_state' => 'content/update publishes (state 1) or unpublishes (state 0) an existing article, and nothing else. if_match is the etag of content/read. It refuses an article that is open for editing and a site with workflows enabled, and lists the menu items that point to the article without changing them. Smart Search is not told: its index keeps the old state until it is rebuilt.',
+                'not_covered' => 'Trash, archive, alias, category, media uploads and menu items outside a translation have no tool here: use the Joomla administrator or its Web Services API.',
                 'ssh' => 'Unnecessary unless debugging language associations outside MCP.',
             ],
             [
@@ -162,6 +164,7 @@ class AgentPlaybook
                 'do' => 'Change Builder elements, props, sources, templates, modules.',
                 'best' => 'template/list → template/element-read → template/element-schema if needed → template/element-* with if_match, dry_run, confirm_guarded_write. Send the dry run\'s preview_token back with the confirm: a confirm with other arguments is then refused (preview_mismatch). The token is a hash of the tool and its arguments, not a session: it does not expire, and two identical dry runs give the same one. That the preview is still current comes from if_match.',
                 'new_template' => 'template/create with the collection_etag of template/list: it is created switched off. Fill it with template/element-add and check it with template/render-check and a context_id. Switching it on changes what visitors see: template/set-status (and template/move for the order) with a dry run first; shadowed_by in the preview means an earlier template hides it. Then site/public-fetch on a page of that type.',
+                'new_article' => 'An article created outside the Builder has no layout, and template/element-* answer article_layout_missing. template/layout-init with the etag of content/read writes the empty layout, only on an article with no text; then template/element-add with article_id and parent_path root.',
                 'several_changes' => 'Several changes to one layout go in one call: template/element-batch applies operations in order under one if_match, all or nothing, and template/element-replace-children swaps every child of an element (path root rebuilds the page) instead of deleting and adding one by one. Every write answers new_etag, which is the if_match of the next write: do not re-read the layout between writes. Independent calls, such as reading several layouts, go in one mirasai/batch on the router.',
                 'paths' => 'Copy paths from template/element-list or template/read mode=outline. The number is the position among all the children of the parent, not among those of the same type: text[2] is the third child, whatever the first two are. A path that does not resolve answers resolved_path, available_children and, when it can tell, did_you_mean: check that suggestion before writing with it.',
                 'fallback_content' => 'A write to the article answers fallback_content. regenerated: the plain HTML in introtext, which Joomla search reads, matches the layout again. stale: YOOtheme could not render it here and it keeps the old text until the article is saved once in the Builder; visitors are not affected either way.',

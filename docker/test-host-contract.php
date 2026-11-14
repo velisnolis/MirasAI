@@ -92,6 +92,34 @@ expectHostContract(
     true
 );
 
+// Classes are loaded from explicit lists, not by an autoloader. A tool class missing from its list
+// only fails on a real site, and on Joomla it takes every tool registered after it down with it.
+$packages = dirname(__DIR__) . '/packages';
+$fileLists = [
+    'mirasai-wp.php' => [$packages . '/mirasai-wp/mirasai-wp.php', $packages . '/mirasai-wp/src/Tool'],
+    'plg_mirasai_yootheme/provider.php' => [
+        $packages . '/mirasai-joomla/packages/plg_mirasai_yootheme/provider.php',
+        $packages . '/mirasai-joomla/packages/plg_mirasai_yootheme/src/Tool',
+    ],
+    'plg_mirasai_rereplacer/provider.php' => [
+        $packages . '/mirasai-joomla/packages/plg_mirasai_rereplacer/provider.php',
+        $packages . '/mirasai-joomla/packages/plg_mirasai_rereplacer/src/Tool',
+    ],
+];
+
+foreach ($fileLists as $label => [$list, $directory]) {
+    $source = (string) file_get_contents($list);
+    $missing = [];
+
+    foreach (glob($directory . '/*.php') ?: [] as $file) {
+        if (!str_contains($source, "/Tool/" . basename($file) . "'")) {
+            $missing[] = basename($file);
+        }
+    }
+
+    expectHostContract("{$label} loads every tool class file", $missing, []);
+}
+
 if ($failed > 0) {
     echo "\n{$failed} host contract test(s) failed.\n";
     exit(1);

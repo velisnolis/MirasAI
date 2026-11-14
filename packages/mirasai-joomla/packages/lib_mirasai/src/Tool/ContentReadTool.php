@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Mirasai\Library\Tool;
 
+use Joomla\Database\DatabaseInterface;
+use Joomla\Database\ParameterType;
+
 class ContentReadTool extends AbstractTool
 {
     public function getName(): string
@@ -13,7 +16,8 @@ class ContentReadTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, and category. '
+        return 'Reads a single article by ID. Returns title, language, introtext, metadesc, metakey, category, and the etag '
+            . 'content/update and template/layout-init take as if_match. '
             . 'For standard articles: introtext and fulltext contain the article HTML. '
             . 'For YOOtheme Builder articles (has_yootheme_builder=true): returns yootheme_layout_summary and yootheme_translatable_nodes — '
             . 'an array of {path, field, replacement_key, text, format}. '
@@ -67,6 +71,7 @@ class ContentReadTool extends AbstractTool
             'alias' => $row['alias'],
             'language' => $row['language'],
             'state' => (int) $row['state'],
+            'etag' => self::contentEtag(['fulltext' => $row['fulltext_raw']] + $row),
             'category_id' => (int) $row['catid'],
             'category_title' => $row['category_title'],
             'created' => $row['created'],
@@ -101,5 +106,43 @@ class ContentReadTool extends AbstractTool
         }
 
         return $result;
+    }
+
+    /**
+     * The article as the tools that take the content etag need it, or null when it does not exist.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function loadForEtag(DatabaseInterface $db, int $id): ?array
+    {
+        $query = $db->getQuery(true)
+            ->select($db->quoteName([
+                'id', 'title', 'alias', 'language', 'state', 'catid', 'introtext', 'fulltext', 'modified',
+                'checked_out', 'publish_up', 'publish_down',
+            ]))
+            ->from($db->quoteName('#__content'))
+            ->where('id = :id')
+            ->bind(':id', $id, ParameterType::INTEGER);
+
+        $article = $db->setQuery($query)->loadAssoc();
+
+        return is_array($article) ? $article : null;
+    }
+
+    /**
+     * Mirrors mirasai-wp's contentEtag(): what an article says and where it sits, so a write planned
+     * on an older read is refused.
+     *
+     * @param array<string, mixed> $article
+     */
+    public static function contentEtag(array $article): string
+    {
+        $value = [];
+
+        foreach (['id', 'title', 'alias', 'language', 'state', 'catid', 'introtext', 'fulltext', 'modified'] as $field) {
+            $value[$field] = (string) ($article[$field] ?? '');
+        }
+
+        return hash('sha256', json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
     }
 }

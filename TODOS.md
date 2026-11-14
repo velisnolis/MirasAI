@@ -206,13 +206,27 @@
 - **Added:** 2026-05-25
 - **Started:** 2026-05-25. Primera entrega implementada al dashboard: validació temporal de token, smoke test `initialize` + `tools/list surface=essential` + `system/diagnose`, checks d'`annotations` i `structuredContent`, i errors accionables per `401`, `403`, `404` i JSON-RPC. Segona entrega: tabs de client per Codex i `mcp2cli`, i opció local per substituir `YOUR_TOKEN` en els snippets sense persistir-lo. Tercera entrega: checklist d'onboarding que reflecteix estat core, endpoint, token, tools, diagnosi i config copiada. Ajust posterior: eliminat el bloc antic "Getting started", estat general pujat al primer viewport, curl rebaixat a debug i core status amb detall de què falta. Quart ajust: checklist convertit en passos numerats amb accions directes, incloent enllaç a `Users > Manage` per crear el token. Cinquè ajust: ordre visual alineat amb el workflow, validació abans de configuració de client. Sisè ajust: separació en pestanyes Onboarding/Status amb landing persistent segons onboarding completat. Setè ajust: botó "More info" per step amb modal contextual.
 
-### TODO-016: Mediateca, estat de pàgina i menús per MCP (aposta de producte, sense decidir)
-- **What:** `media/import` (pujar un fitxer a la mediateca), `content/update` (estat, pare i slug d'una pàgina) i eines de menú, totes com a `guarded_write`.
-- **Why:** En una feina real (2026-11-13, WordPress) tot això va haver d'anar per SSH de root, CageFS i WP-CLI perquè MirasAI no ho cobreix. En un web sense SSH no hi ha cap via.
-- **Pros:** Tanca el cicle «crear pàgina, posar-hi imatges, publicar-la i enllaçar-la al menú» sense sortir del MCP.
-- **Cons:** Eixampla el contracte fora de YOOtheme i de la traducció. Pujar fitxers és una superfície nova: mida, tipus MIME, origen (base64 dins del JSON o una URL que baixa el servidor, amb el risc d'SSRF). Els menús són models diferents a WordPress i a Joomla.
-- **Context:** `content/update` és petit i té el mateix patró que `content/translate`. `media/import` i els menús demanen disseny propi. Segons `AGENTS.md`, una aposta de producte passa per una segona opinió abans d'implementar-la.
-- **Depends on:** Decisió de l'Àlex sobre si MirasAI ha de cobrir contingut no YOOtheme.
+### TODO-016: Layout buit, `content/update` i posició de menú al host (P1, decidit)
+- **What:** Tres eines `guarded_write` al host: inicialitzar el layout d'una pàgina o article buit (F-025); `content/update` per a l'estat (`draft`/`publish`), el pare i el slug d'una pàgina existent (`post_type=page`) a WordPress i l'estat (`0`/`1`) d'un article a Joomla; i assignar un menú a una posició de YOOtheme (`navbar`, `dialog-mobile`).
+- **Why:** En una feina real (2026-11-13, WordPress) això va haver d'anar per SSH i WP-CLI. F-028 ja documentava l'assignació de menú.
+- **Cons:** `content/update` reobre el «CRUD d'articles» descartat el 2026-11-09. Límit decidit: no crea, no esborra, no envia a la paperera i no toca títol ni contingut; entrades i altres tipus es rebutgen; qualsevol ampliació demana una decisió nova. A Joomla, l'assignació de menú es nega si la posició ja la governa un `mod_menu`.
+- **Context:** Decisió, evidència, revisió creuada i proves als webs de proves a `docs/todo-016-decision-note-2026-11-13.md`. `content/read` ha de tornar el pare. La previsualització de `content/update` diu el permalink d'abans i de després, sense auditoria d'enllaços.
+- **Estat (2026-11-14):** escrit a la branca `feat/todo-016-host` i provat als dos webs de proves (55 i 28 comprovacions). WordPress: `template/layout-init`, `content/update`, `menu/position-list` i `menu/position-assign`. Joomla: `template/layout-init` i `content/update` (només l'estat). Falta la revisió i publicar la 0.15.0. L'assignació de menú a Joomla queda per a després: abans cal definir l'estil, l'idioma i l'ETag.
+- **Added:** 2026-11-13. **Decidit:** 2026-11-13.
+
+### TODO-018: `mirasai/media-upload` al router (P2, decidit)
+- **What:** Pujar fitxers d'una carpeta local a la mediateca per l'API del nucli, amb títol i alt. Carpeta dedicada per web declarada per l'operador, tipus comprovat pels bytes (jpg, png, webp, gif, pdf; mai SVG) i confirmació lligada a un manifest amb mida i hash de cada fitxer. Les condicions de disseny són a la nota («Paquet B»).
+- **Why:** El 2026-11-13 es van pujar 63 fitxers per SSH. L'agent no té la credencial del web: la té el router.
+- **Cons:** Superfície nova: un agent enganyat podria publicar un fitxer del Mac; la carpeta permesa és el que ho limita. A WordPress cal contrasenya d'aplicació; a Joomla, el límit de `com_media` compta el base64. Títol i alt només a WordPress.
+- **Context:** Mateixa nota. El WordPress de proves va acceptar per REST un SVG amb un `<script>`: la validació del nucli no basta.
+- **Depends on:** TODO-016 publicat. Abans, aclarir als webs de proves qui habilita l'SVG, per què Joomla rebutja el PDF i per què els cossos JSON són lents.
+- **Added:** 2026-11-13
+
+### TODO-019: Editar elements de menú (ajornat)
+- **What:** Crear, editar i reordenar elements de menú per MCP.
+- **Why:** Un cas real (2026-11-13): dos elements convertits en enllaços propis amb àncora i un canvi d'ordre, fets per WP-CLI.
+- **Cons:** Dos models diferents. A Joomla, l'API del nucli torna 500 i deixa l'element bloquejat si no s'envien tots els camps.
+- **Depends on:** Un segon cas real.
 - **Added:** 2026-11-13
 
 ### TODO-017: Mesurar on se'n va el temps d'una crida per `mcp2cli` (P2)

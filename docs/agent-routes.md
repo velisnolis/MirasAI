@@ -41,11 +41,16 @@ Capabilities are not “MirasAI is installed ⇒ everything works”. They depen
 | Purge HTML cache after a write | `site/cache-purge` (WP Rocket, IONOS, object cache; every Joomla cache group). Other page caches come back as `unsupported` | same | same, proxied | WP Rocket: `rocket_clean_domain()` via `wp eval` | same as host, if authenticated |
 | See what a visitor gets after a write | `site/public-fetch` with `expect` | same | same, proxied | `curl` from the server | same as host, if authenticated |
 | Several Builder changes at once (from 0.14.0) | `template/element-batch`, or `template/element-replace-children` to rebuild a page: one `if_match`, one write | same | same, proxied | do not edit JSON/SQL | same as host |
+| First layout of a new, empty page or article (from 0.15.0) | `template/layout-init` with the etag of `content/read`, then `template/element-add` from `parent_path: "root"` | same | same, proxied | no longer needed | same as host |
+| Publish, unpublish, move or rename a page (WordPress); publish or unpublish an article (Joomla) (from 0.15.0) | `content/update` with the etag of `content/read`, dry run first | same | same, proxied | no longer needed | same as host |
+| Put a menu in a YOOtheme position (WordPress, from 0.15.0) | `menu/position-list`, then `menu/position-assign` | same | same, proxied | no longer needed | same as host |
 | Several independent calls, e.g. reading many layouts (from 0.14.0) | one request each | one process per call | `mirasai/batch`: one process for all of them | unnecessary | same as host |
 
 `site/public-fetch` only fetches URLs on the site's own host. A text missing with `cache_bust=false` but present with `cache_bust=true` means a page cache is serving an old copy. Missing both ways means the write did not reach that URL or the page is not public.
 
 Every Builder write returns `new_etag`, which is the `if_match` of the next write to that layout: there is no need to read the layout again in between. A path counts the position among all the children of the parent, not among those of the same type (`text[2]` is the third child); from 0.14.0 a path that does not resolve comes back with `available_children` and, when it can be told, `did_you_mean`. A write to a page or article reports `fallback_content`: `stale` means the plain HTML that search reads still holds the old text.
+
+`content/update` changes nothing but the status, parent and slug of a page, or the state of an article: no title, no content, no trash, no new pages. Its preview gives the permalink before and after; it does not look for links to the old URL. Media uploads, and creating, editing or reordering menu items, have no MirasAI tool: use the CMS, its own API or its CLI. On Joomla, assigning a menu to a YOOtheme position has no tool yet.
 
 Builder JSON and Style `theme.css` are different systems. Changing an element does not compile LESS. Changing `@less` / `custom_less` does not update the Builder.
 

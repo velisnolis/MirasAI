@@ -402,7 +402,10 @@ abstract class AbstractTemplateElementWriteTool extends AbstractTool
         $layout = $this->yooHelper->getArticleLayout($article);
 
         if ($layout === null) {
-            return ['error' => "Article {$articleId} has no YOOtheme layout in fulltext.", 'code' => 'article_layout_missing'];
+            return [
+                'error' => "Article {$articleId} has no YOOtheme layout in fulltext. If it is a new, empty article, template/layout-init gives it one.",
+                'code' => 'article_layout_missing',
+            ];
         }
 
         $mutation = $mutator($layout, $arguments);

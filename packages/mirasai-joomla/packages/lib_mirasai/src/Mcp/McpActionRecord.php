@@ -15,7 +15,7 @@ namespace Mirasai\Library\Mcp;
 final class McpActionRecord
 {
     /** Arguments that name what a tool acts on, in the order they are reported. */
-    private const TARGET_KEYS = ['key', 'post_id', 'article_id', 'module_id', 'widget_id', 'term_id', 'category_id', 'style_id', 'id', 'path', 'url'];
+    private const TARGET_KEYS = ['key', 'post_id', 'article_id', 'module_id', 'widget_id', 'term_id', 'category_id', 'style_id', 'id', 'position', 'path', 'url'];
 
     private const ETAG_PAIRS = [['old_etag', 'new_etag'], ['source_etag', 'target_etag'], [null, 'etag'], [null, 'collection_etag']];
 
