@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mirasai\Plugin\Mirasai\Yootheme\Tool;
 
+use Joomla\Database\ParameterType;
 use Mirasai\Library\Tool\AbstractTool;
 use Mirasai\Library\Tool\ContentReadTool;
 use Mirasai\Library\Tool\YooThemeHelper;
@@ -141,8 +142,17 @@ class TemplateLayoutInitTool extends AbstractTool
             ];
         }
 
+        $blank = $article;
         $this->yooHelper->setArticleLayout($article, $layout);
-        $cache = $this->yooHelper->writeArticleLayout($article);
+
+        if (!$this->writeIfStillBlank($blank, (string) $article['fulltext'])) {
+            return [
+                'error' => 'The article changed while the layout was being written, and was left alone. Call content/read again.',
+                'code' => 'stale_etag',
+            ];
+        }
+
+        $cache = $this->yooHelper->invalidateBuilderCache();
         $written = ContentReadTool::loadForEtag($this->db, $articleId);
 
         if ($written === null || $this->yooHelper->getArticleLayout($written) !== $layout) {
@@ -161,6 +171,34 @@ class TemplateLayoutInitTool extends AbstractTool
             'fallback_content' => ['status' => 'regenerated', 'length' => 0],
             'next' => 'template/element-add with article_id, parent_path root and etag as if_match.',
         ];
+    }
+
+    /**
+     * The write repeats what was checked: the same empty text and nobody editing. A save that
+     * lands between the read and this write keeps its text, and the call is refused.
+     *
+     * @param array<string, mixed> $blank the article as it was read
+     */
+    private function writeIfStillBlank(array $blank, string $fulltext): bool
+    {
+        $id = (int) $blank['id'];
+        $introtextBefore = (string) $blank['introtext'];
+        $fulltextBefore = (string) $blank['fulltext'];
+        $query = $this->db->getQuery(true)
+            ->update($this->db->quoteName('#__content'))
+            ->set($this->db->quoteName('fulltext') . ' = :layout')
+            ->where($this->db->quoteName('id') . ' = :id')
+            ->where($this->db->quoteName('introtext') . ' = :introtext')
+            ->where($this->db->quoteName('fulltext') . ' = :before')
+            ->where('(' . $this->db->quoteName('checked_out') . ' IS NULL OR ' . $this->db->quoteName('checked_out') . ' = 0)')
+            ->bind(':layout', $fulltext)
+            ->bind(':id', $id, ParameterType::INTEGER)
+            ->bind(':introtext', $introtextBefore)
+            ->bind(':before', $fulltextBefore);
+
+        $this->db->setQuery($query)->execute();
+
+        return $this->db->getAffectedRows() === 1;
     }
 
     /**

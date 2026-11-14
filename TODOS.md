@@ -211,7 +211,7 @@
 - **Why:** En una feina real (2026-11-13, WordPress) això va haver d'anar per SSH i WP-CLI. F-028 ja documentava l'assignació de menú.
 - **Cons:** `content/update` reobre el «CRUD d'articles» descartat el 2026-11-09. Límit decidit: no crea, no esborra, no envia a la paperera i no toca títol ni contingut; entrades i altres tipus es rebutgen; qualsevol ampliació demana una decisió nova. A Joomla, l'assignació de menú es nega si la posició ja la governa un `mod_menu`.
 - **Context:** Decisió, evidència, revisió creuada i proves als webs de proves a `docs/todo-016-decision-note-2026-11-13.md`. `content/read` ha de tornar el pare. La previsualització de `content/update` diu el permalink d'abans i de després, sense auditoria d'enllaços.
-- **Estat (2026-11-14):** escrit a la branca `feat/todo-016-host` i provat als dos webs de proves (54 i 28 comprovacions). WordPress: `template/layout-init`, `content/update`, `menu/position-list` i `menu/position-assign`. Joomla: `template/layout-init` i `content/update` (només l'estat). Falta la revisió i publicar la 0.15.0. L'assignació de menú a Joomla queda per a després: abans cal definir l'estil, l'idioma i l'ETag.
+- **Estat (2026-11-14):** escrit a la branca `feat/todo-016-host` i provat als dos webs de proves (55 i 28 comprovacions). WordPress: `template/layout-init`, `content/update`, `menu/position-list` i `menu/position-assign`. Joomla: `template/layout-init` i `content/update` (només l'estat). Falta la revisió i publicar la 0.15.0. L'assignació de menú a Joomla queda per a després: abans cal definir l'estil, l'idioma i l'ETag.
 - **Added:** 2026-11-13. **Decidit:** 2026-11-13.
 
 ### TODO-018: `mirasai/media-upload` al router (P2, decidit)

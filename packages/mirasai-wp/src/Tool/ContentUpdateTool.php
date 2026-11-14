@@ -380,7 +380,7 @@ class ContentUpdateTool extends AbstractTool
                 'title' => (string) $child->post_title,
                 'status' => (string) $child->post_status,
                 'before' => $link,
-                'after' => self::movedLink($link, $uriBefore, $uriAfter),
+                'after' => self::movedLink($link, (string) get_page_uri($child), $uriBefore, $uriAfter),
             ];
         }
 
@@ -388,23 +388,25 @@ class ContentUpdateTool extends AbstractTool
     }
 
     /**
-     * The URL of a page under one whose path changes. Its own part of the path comes last, so the
-     * last match is the one to swap. Null when the page above had no path to find.
+     * The URL of a page under one whose path changes. Its own path starts with the path of the page
+     * above, and that start is what moves; a slug repeated further down stays. Null when the paths
+     * do not say where it goes.
      */
-    public static function movedLink(string $link, string $uriBefore, string $uriAfter): ?string
+    public static function movedLink(string $link, string $uri, string $uriBefore, string $uriAfter): ?string
     {
         if ($uriBefore === $uriAfter) {
             return $link;
         }
 
-        if ($uriBefore === '') {
+        if ($uriBefore === '' || !str_starts_with($uri, $uriBefore . '/')) {
             return null;
         }
 
-        $needle = '/' . $uriBefore . '/';
-        $at = strrpos($link, $needle);
+        $at = strrpos($link, '/' . $uri);
 
-        return $at === false ? $link : substr_replace($link, '/' . $uriAfter . '/', $at, strlen($needle));
+        return $at === false
+            ? $link
+            : substr_replace($link, '/' . $uriAfter . substr($uri, strlen($uriBefore)), $at, strlen($uri) + 1);
     }
 
     /**

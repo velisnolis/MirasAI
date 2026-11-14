@@ -51,6 +51,9 @@ $GLOBALS['wp'] = [
         41 => page(41, 'paperera', ['post_status' => 'trash']),
         42 => page(42, 'programada', ['post_status' => 'future']),
         50 => page(50, 'inici'),
+        60 => page(60, 'a'),
+        61 => page(61, 'a', ['post_parent' => 60]),
+        62 => page(62, 'b', ['post_parent' => 61]),
     ],
     'meta' => [32 => ['_yootheme_page' => '{"broken']],
     'options' => ['show_on_front' => 'page', 'page_on_front' => 50, 'page_for_posts' => 0],
@@ -407,10 +410,14 @@ check($r['action'] === 'updated' && get_post(30)->post_name === 'qui-som' && !in
 $GLOBALS['wp']['posts'][30]->post_status = 'draft';
 $GLOBALS['wp']['posts'][30]->post_name = '';
 
-// Paths under a page: the last match, and no guess without a path.
-check(ContentUpdateTool::movedLink('https://serveis.example/serveis/web/', 'serveis', 'empresa') === 'https://serveis.example/empresa/web/', 'update: the host is not mistaken for the path');
-check(ContentUpdateTool::movedLink('https://serveis.example/?page_id=21', 'serveis', 'empresa') === 'https://serveis.example/?page_id=21', 'update: a plain link does not move');
-check(ContentUpdateTool::movedLink('https://serveis.example/fill/', '', 'pare') === null, 'update: no prediction under a page without a path');
+// Paths under a page: only the start that belongs to the page above moves.
+$r = $update->handle(['id' => 60, 'if_match' => etagOf(60), 'slug' => 'nou', 'dry_run' => true]);
+check(array_column($r['children'], 'after', 'id') === [61 => 'https://serveis.example/nou/a/', 62 => 'https://serveis.example/nou/a/b/'], 'update: a slug repeated further down stays where it is');
+check(ContentUpdateTool::movedLink('https://serveis.example/serveis/web/', 'serveis/web', 'serveis', 'empresa') === 'https://serveis.example/empresa/web/', 'update: the host is not mistaken for the path');
+check(ContentUpdateTool::movedLink('https://serveis.example/bloc/serveis/web/', 'serveis/web', 'serveis', 'empresa') === 'https://serveis.example/bloc/empresa/web/', 'update: a site in a folder keeps its folder');
+check(ContentUpdateTool::movedLink('https://serveis.example/?page_id=21', 'serveis/web', 'serveis', 'empresa') === 'https://serveis.example/?page_id=21', 'update: a plain link does not move');
+check(ContentUpdateTool::movedLink('https://serveis.example/fill/', 'fill', '', 'pare') === null, 'update: no prediction under a page without a path');
+check(ContentUpdateTool::movedLink('https://serveis.example/altre/fill/', 'altre/fill', 'serveis', 'empresa') === null, 'update: no prediction for a path that is not under the page');
 
 // ---------------------------------------------------------------------------
 // template/layout-init

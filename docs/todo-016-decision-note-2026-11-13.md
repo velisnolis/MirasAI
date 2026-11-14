@@ -401,7 +401,7 @@ connector al servidor. Tot el que es va crear es va esborrar.
 
 | Web | Comprovacions | Resultat |
 | --- | --- | --- |
-| WordPress 7.1.4, YOOtheme 5.0.53 | 54 | totes bé |
+| WordPress 7.1.4, YOOtheme 5.0.53 | 55 | totes bé |
 | Joomla 6.2.0, YOOtheme 5.0.55 | 28 | totes bé |
 
 El que es va comprovar: rebuig de camps i valors fora de la decisió; CAS;
@@ -419,6 +419,20 @@ La prova va trobar dos errors que les proves locals no veien, ja corregits:
   fallava i deixava sense registrar totes les eines posteriors. Ara
   `docker/test-host-contract.php` comprova aquestes llistes.
 - El model d'articles de Joomla (vegeu més amunt).
+
+La revisió automàtica del PR va trobar dues coses més, corregides i tornades
+a provar als dos webs:
+
+- La previsualització de `content/update` buscava el camí de la pàgina mare
+  per l'última aparició dins de la URL de la filla. Amb un slug repetit més
+  avall (`/a/a/b/`) movia el tram equivocat. Ara mou l'inici del camí de la
+  filla, que és el que és de la mare.
+- A Joomla, `template/layout-init` escrivia el layout per ID després de
+  comprovar que l'article era buit. Ara l'escriptura repeteix la condició
+  (mateix text buit, ningú editant): un desat que caigui entremig es conserva
+  i la crida es rebutja. A WordPress l'escriptura continua passant per
+  `wp_update_post`, com la resta d'eines del host, que no té forma
+  condicional.
 
 No provat: assignació de menú amb Polylang o WPML; cap web amb workflows de
 Joomla activats; cap web que no sigui de proves.
