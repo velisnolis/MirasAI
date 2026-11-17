@@ -745,6 +745,85 @@ test('style-update turns a failed readback into a verification failure after wri
 
   assert.equal(result.ok, false);
   assert.equal(result.code, 'style_write_verification_failed');
+  assert.equal(result.write_state, 'saved');
+  assert.equal(result.verification_state, 'failed');
   assert.equal(result.verification.readback_succeeded, false);
   assert.match(result.verification.readback_error, /Synthetic readback outage/);
+});
+
+test('style-update preserves host evidence when the write reply reports a post-save error', async () => {
+  const worker = `
+    self.addEventListener('message', function (event) {
+      var id = event.data[0];
+      var payload = event.data[1];
+      if (payload.cmd === 'css') {
+        self.postMessage({ id: id, result: { css: '.x{}', variables: {}, errors: [] } });
+        return;
+      }
+      if (payload.cmd === 'minify') {
+        self.postMessage({ id: id, result: { css: payload.data.css, rtl: payload.data.css } });
+      }
+    });
+  `;
+  const client = {
+    async callTool(name) {
+      if (name === 'template/style-sources') {
+        return {
+          structuredContent: {
+            filename: 'entry.less',
+            filepath: '/less/',
+            desturl: '/css',
+            imports: { 'entry.less': '' },
+            overrides: { less: {}, custom_less: '', internal_style: null },
+            style_id: 'flow',
+            is_active_style: true,
+            import_count: 1,
+            etag: 'etag-before',
+          },
+        };
+      }
+
+      if (name === 'file/read') {
+        return { structuredContent: { content: worker } };
+      }
+
+      if (name === 'template/style-update') {
+        return {
+          structuredContent: {
+            action: 'updated',
+            dry_run: false,
+            new_etag: 'etag-after',
+            error: 'Post-save hook failed',
+            code: 'post_save_failed',
+          },
+        };
+      }
+
+      if (name === 'template/style-read') {
+        return {
+          structuredContent: {
+            error: 'Synthetic readback outage.',
+            code: 'readback_unavailable',
+          },
+        };
+      }
+
+      throw new Error(`Unexpected tool: ${name}`);
+    },
+  };
+
+  const result = await updateStyle({
+    client,
+    siteUrl: 'https://example.test',
+    ifMatch: 'etag-before',
+    dryRun: false,
+    confirmGuardedWrite: true,
+    expectedWorkerSha256: sha256(worker),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'post_save_failed');
+  assert.equal(result.write_state, 'saved');
+  assert.equal(result.host.new_etag, 'etag-after');
+  assert.equal(result.verification_state, 'not_verified');
 });

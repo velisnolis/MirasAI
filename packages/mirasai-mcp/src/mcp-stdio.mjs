@@ -112,7 +112,7 @@ export function routerTools() {
         properties: {
           site_id: {
             type: 'string',
-            description: 'Configured site id. Defaults to the router default site.',
+            description: 'Configured site id. Reads default to the router default site; writes require site_id when several sites are configured.',
           },
         },
       },
@@ -131,7 +131,7 @@ export function routerTools() {
       inputSchema: {
         type: 'object',
         properties: {
-          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          site_id: { type: 'string', description: 'Configured site id. Reads default to the router default site; writes require site_id when several sites are configured.' },
           style_id: { type: 'string', description: 'Style to compile. Defaults to the active style.' },
           variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
           vars: {
@@ -162,7 +162,7 @@ export function routerTools() {
       inputSchema: {
         type: 'object',
         properties: {
-          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          site_id: { type: 'string', description: 'Configured site id. Reads default to the router default site; writes require site_id when several sites are configured.' },
           style_id: { type: 'string', description: 'Active style id. Switching families is not supported; a site with no active style and no stored variables or custom Less may be given its first family.' },
           variation: { type: 'string', description: 'Style variation, applied as @internal-style. Defaults to the active one.' },
           vars: {
@@ -196,7 +196,7 @@ export function routerTools() {
       inputSchema: {
         type: 'object',
         properties: {
-          site_id: { type: 'string', description: 'Configured site id. Defaults to the router default site.' },
+          site_id: { type: 'string', description: 'Configured site id. Reads default to the router default site; writes require site_id when several sites are configured.' },
           include_css: { type: 'boolean', description: 'Return the freshly compiled CSS. Defaults to false.' },
         },
       },
@@ -215,7 +215,7 @@ export function routerTools() {
       inputSchema: {
         type: 'object',
         properties: {
-          site_id: { type: 'string', description: 'Configured site id for every call. Defaults to the router default site.' },
+          site_id: { type: 'string', description: 'Configured site id for every call. Reads default to the router default site; writes require site_id when several sites are configured.' },
           calls: {
             type: 'array',
             description: `Tool calls to run in order, at most ${MAX_BATCH_CALLS}: [{"name": "template/read", "arguments": {"post_id": 12, "mode": "outline"}}]. Do not repeat site_id inside arguments.`,
@@ -248,7 +248,7 @@ export function routerTools() {
         properties: {
           site_id: {
             type: 'string',
-            description: 'Configured site id. Defaults to the router default site.',
+            description: 'Configured site id. Reads default to the router default site; writes require site_id when several sites are configured.',
           },
         },
       },
@@ -279,6 +279,9 @@ async function callRouterTool(registry, clientFactory, params) {
   if (rejection !== null) {
     return callToolResult(rejection, true);
   }
+
+  const destinationError = await requireWriteDestination(registry, clientFactory, name, args);
+  if (destinationError) return callToolResult(destinationError, true);
 
   if (name === 'mirasai/sites-list') {
     return callToolResult({
@@ -390,6 +393,45 @@ async function callRouterTool(registry, clientFactory, params) {
   }
 
   return callRemoteTool(registry, clientFactory, name, args);
+}
+
+// Unknown tools are not assumed read-only. Consult the selected host's own
+// metadata, never a merged catalogue whose first entry may be from another host.
+function isReadTool(tool) {
+  const risk = tool?.metadata?.risk_level;
+  return risk === 'read' || (risk === undefined && tool?.annotations?.readOnlyHint === true);
+}
+
+async function requireWriteDestination(registry, factory, name, args) {
+  if (Object.hasOwn(args, 'site_id') && (typeof args.site_id !== 'string' || !args.site_id.trim())) {
+    return { code: 'invalid_arguments', error: 'site_id must be a nonempty string.' };
+  }
+  if (registry.sites.length <= 1 || args.site_id) return null;
+  const own = routerTools().find((tool) => tool.name === name);
+  if (own && isReadTool(own)) return null;
+  async function readOnly(toolName) {
+    const local = routerTools().find((tool) => tool.name === toolName);
+    if (local) return isReadTool(local);
+    const client = factory(findSite(registry));
+    await hostExposesTool(client, toolName);
+    return isReadTool(listedToolNames.get(client)?.get(toolName));
+  }
+  let safe = false;
+  try {
+    if (name === 'mirasai/batch' && Array.isArray(args.calls) && args.calls.length > 0) {
+      safe = true;
+      for (const call of args.calls) {
+        if (!await readOnly(call?.name)) { safe = false; break; }
+      }
+    } else if (!own) safe = await readOnly(name);
+  } catch { /* Without authoritative metadata, require an explicit destination. */ }
+  return safe ? null : {
+    code: 'site_id_required',
+    error: 'With several configured sites, writes and tools not proven read-only require an explicit site_id, including previews of write tools.',
+    site_ids: registry.sites.map((entry) => entry.site_id),
+    write_state: 'not_sent',
+    action_required: 'Select the intended site and repeat the call with site_id. Nothing was sent for execution.',
+  };
 }
 
 async function listAllTools(registry, clientFactory, params = {}) {
@@ -508,6 +550,8 @@ async function callRemoteTool(registry, clientFactory, name, args) {
 
   const client = clientFactory(site);
 
+  let dispatched = false;
+  let readOnly = false;
   try {
     if (!(await hostExposesTool(client, name))) {
       return callToolResult({
@@ -519,12 +563,15 @@ async function callRemoteTool(registry, clientFactory, name, args) {
       }, true);
     }
 
+    readOnly = isReadTool(listedToolNames.get(client)?.get(name));
+    dispatched = true;
     return await client.callTool(name, remoteArgs);
   } catch (caught) {
     clientFactory.evict?.(site);
     return callToolResult({
       error: caught instanceof Error ? caught.message : String(caught),
       code: 'remote_tool_call_failed',
+      ...(!readOnly ? { write_state: dispatched ? 'unknown' : 'not_sent', verification_state: 'not_verified', action_required: dispatched ? 'Read the target and reconcile its state before retrying. The request may have been saved; do not replay it blindly.' : 'No execution request was sent.' } : {}),
       tool: name,
       site_id: site.site_id,
       platform: site.platform,
@@ -550,7 +597,7 @@ function addSiteIdToTool(tool, site) {
 
   properties.site_id = {
     type: 'string',
-    description: 'Configured MirasAI site id. Defaults to the router default site.',
+    description: 'Configured MirasAI site id. Reads default to the router default site; writes require site_id when several sites are configured.',
     enum: [site.site_id],
   };
 
@@ -777,7 +824,7 @@ async function hostExposesTool(client, name) {
 
   if (names === undefined || !names.has(name)) {
     const available = await client.toolsList();
-    names = new Set((Array.isArray(available?.tools) ? available.tools : []).map((tool) => tool?.name));
+    names = new Map((Array.isArray(available?.tools) ? available.tools : []).map((tool) => [tool?.name, tool]));
     listedToolNames.set(client, names);
   }
 
@@ -849,6 +896,8 @@ async function callBatch(registry, clientFactory, args) {
 
   return callToolResult({
     site_id: site.site_id,
+    transactional: false,
+    action_required: 'Earlier successful writes remain saved. Reconcile failed or unknown outcomes before retrying; do not replay the whole batch.',
     call_count: calls.length,
     completed: results.length,
     failed,

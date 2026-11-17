@@ -6,6 +6,63 @@ namespace Mirasai\Library\Tool;
 
 final class YooThemeElementNavigator
 {
+    /** Paging applies to the flat full index; paths and etag remain absolute. */
+    public static function pageSchema(): array
+    {
+        return [
+            'subtree' => ['type' => 'string', 'description' => 'Absolute path from element-list, including the selected node. Defaults to root. full mode only.'],
+            'max_depth' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Depth relative to subtree; 0 returns only that node. full mode only.'],
+            'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 2000, 'description' => 'Flat elements per page. Repeat the same filters with next_cursor.'],
+            'cursor' => ['type' => 'string', 'description' => 'next_cursor from the previous page; rejected after layout, target or filter changes.'],
+        ];
+    }
+
+    public static function pageElements(array $elements, array $args, array $identity, int $defaultLimit = 500): array
+    {
+        $subtree = $args['subtree'] ?? 'root';
+        $limit = $args['limit'] ?? $args['max_results'] ?? $defaultLimit;
+        $depth = $args['max_depth'] ?? null;
+        if (!is_string($subtree) || !is_int($limit) || $limit < 1 || $limit > 2000
+            || ($depth !== null && (!is_int($depth) || $depth < 0))) {
+            return ['error' => 'Invalid subtree, limit or max_depth.', 'code' => 'invalid_arguments'];
+        }
+        if ((self::normalizeReadMode($args['mode'] ?? null)['mode'] ?? null) !== 'full') {
+            return ['error' => 'Paging and subtree filters require mode=full.', 'code' => 'invalid_arguments'];
+        }
+        if (!in_array($subtree, array_column($elements, 'path'), true)) {
+            return ['error' => 'Subtree path does not exist. Read element-list again.', 'code' => 'invalid_path'];
+        }
+        $baseDepth = substr_count($subtree, '>');
+        $filtered = array_values(array_filter($elements, static fn (array $node): bool =>
+            ($node['path'] === $subtree || str_starts_with($node['path'], $subtree . '>'))
+            && ($depth === null || substr_count($node['path'], '>') - $baseDepth <= $depth)));
+        $fingerprint = hash('sha256', (string) json_encode([$identity, $subtree, $depth, $limit, $args['fields'] ?? null]));
+        $offset = 0;
+        if (array_key_exists('cursor', $args)) {
+            $cursor = $args['cursor'];
+            if (!is_string($cursor) || strlen($cursor) > 512) {
+                return ['error' => 'Invalid cursor.', 'code' => 'invalid_cursor'];
+            }
+            $decoded = json_decode((string) base64_decode($cursor, true), true);
+            if (!is_array($decoded) || !is_int($decoded['offset'] ?? null) || $decoded['offset'] < 0) {
+                return ['error' => 'Invalid cursor.', 'code' => 'invalid_cursor'];
+            }
+            if (($decoded['fingerprint'] ?? null) !== $fingerprint) {
+                return ['error' => 'Layout, target or filters changed. Restart without cursor.', 'code' => 'stale_cursor'];
+            }
+            $offset = $decoded['offset'];
+            if ($offset > count($filtered)) return ['error' => 'Cursor outside results.', 'code' => 'invalid_cursor'];
+        }
+        $next = $offset + $limit;
+        return [
+            'elements' => array_slice($filtered, $offset, $limit),
+            'total' => count($filtered),
+            'count' => count(array_slice($filtered, $offset, $limit)),
+            'truncated' => $next < count($filtered),
+            'next_cursor' => $next < count($filtered) ? base64_encode((string) json_encode(['fingerprint' => $fingerprint, 'offset' => $next])) : null,
+        ];
+    }
+
     /**
      * Return a flat depth-first element index for a decoded YOOtheme layout.
      *

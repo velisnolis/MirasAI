@@ -158,5 +158,27 @@ foreach ([R::class, $JR] as $C) {
     check(str_contains($C::warnings(['x'], false, 'single-post')[0]['fix'], 'context_id'), "$C: a single template is told to try another context_id");
 }
 
+foreach ([R::class, \Mirasai\Plugin\Mirasai\Yootheme\Tool\TemplateRenderCheckTool::class] as $C) {
+    $bind = ['query' => ['name' => 'posts'], 'props' => ['title' => ['name' => 'title'], 'image' => ['name' => 'image']]];
+    $original = ['type' => 'layout', 'children' => [
+        ['type' => 'grid_item', 'source' => $bind],
+        ['type' => 'section', 'props' => ['status' => 'disabled'], 'children' => [['type' => 'text', 'source' => $bind]]],
+        ['type' => 'text', 'source' => $bind],
+    ]];
+    $renderTree = (object) ['children' => [
+        (object) ['props' => ['mirasai_path' => 'root>grid_item[0]', 'title' => 'One', 'image' => '']],
+        (object) ['props' => ['mirasai_path' => 'root>grid_item[0]', 'title' => 'Two', 'image' => '']],
+    ]];
+    $d = $C::bindingDiagnostics($original, $renderTree, true);
+    check($d[0]['rendered_instances'] === 2 && $d[0]['empty_bound_props'] === ['image'], "$C: repeated rows report only fields empty in every instance");
+    check($d[0]['state'] === 'rendered_with_empty_fields', "$C: rows with missing image are not an empty query");
+    check($d[1]['state'] === 'disabled' && $d[1]['disabled_by'] === 'root>section[1]', "$C: disabled ancestor is named");
+    check($d[2]['state'] === 'not_rendered_unknown_cause' && $d[2]['source_item_count'] === null, "$C: absent transformed node does not prove zero source rows");
+    $d = $C::bindingDiagnostics($original, $renderTree, false);
+    check($d[2]['state'] === 'context_required' && $d[1]['state'] === 'disabled', "$C: missing context does not override explicit disabled evidence");
+    $renderTree->children[0]->props['image'] = 'a.jpg';
+    check($C::bindingDiagnostics($original, $renderTree, true)[0]['state'] === 'rendered', "$C: one nonempty image is not all-empty");
+}
+
 echo $fails === 0 ? "OK: $count checks\n" : "$fails of $count checks failed\n";
 exit($fails === 0 ? 0 : 1);

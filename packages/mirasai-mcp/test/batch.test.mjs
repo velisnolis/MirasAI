@@ -29,7 +29,7 @@ function fakeHost(counters, tools = ['template/read', 'template/element-delete']
 function router(counters, tools) {
   const handler = createRouterHandler(registry, { clientFactory: () => fakeHost(counters, tools) });
   return async (args) => (await handler({
-    jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'mirasai/batch', arguments: args },
+    jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'mirasai/batch', arguments: { site_id: 'wp-demo', ...args } },
   })).result;
 }
 
@@ -78,7 +78,7 @@ test('a batch stays on one site and cannot nest', async () => {
   assert.equal(otherSite.structuredContent.results[0].result.code, 'invalid_batch_call');
   assert.match(otherSite.structuredContent.results[0].result.error, /one site/);
 
-  const nested = await call({ calls: [{ name: 'mirasai/batch', arguments: { calls: [read(1)] } }] });
+  const nested = await call({ calls: [{ name: 'mirasai/batch', arguments: { site_id: 'wp-demo', calls: [read(1)] } }] });
   assert.equal(nested.structuredContent.results[0].result.code, 'invalid_batch_call');
   assert.equal(counters.calls.length, 0);
 });
@@ -119,7 +119,7 @@ test('a batch keeps every part of a result that is more than one text', async ()
   });
   const result = (await handler({
     jsonrpc: '2.0', id: 1, method: 'tools/call',
-    params: { name: 'mirasai/batch', arguments: { calls: [{ name: 'demo/shot' }, { name: 'demo/shot', arguments: { plain: true } }] } },
+    params: { name: 'mirasai/batch', arguments: { site_id: 'wp-demo', calls: [{ name: 'demo/shot' }, { name: 'demo/shot', arguments: { plain: true } }] } },
   })).result.structuredContent.results;
 
   assert.deepEqual(result[0].result, { note: 'first' });

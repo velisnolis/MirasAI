@@ -46,7 +46,7 @@ class TemplateRenderCheckTool extends AbstractTool
             . 'its type and the text; not_rendered lists the stored paths that do not render (disabled, a display condition, an empty '
             . 'source). For a com_content.article template, pass context_id: the article it should render with, so Dynamic Sources '
             . 'resolve. With expect, says in which paths each text appears. It ignores the publication state, so unpublished articles '
-            . 'render too; use site/public-fetch for what a visitor really gets at a URL. Read-only.';
+            . 'render too; use site/public-fetch for what a visitor really gets at a URL. binding_diagnostics reports disabled ancestors, missing context, rendered instance counts and bound props empty in every rendered instance. Missing nodes do not prove zero source rows. Read-only.';
     }
 
     public function getInputSchema(): array
@@ -187,6 +187,7 @@ class TemplateRenderCheckTool extends AbstractTool
         $type = (string) ($params['template'] ?? '');
         $listing = $key !== '' && $type !== self::ARTICLE_VIEW;
         $warnings = self::warnings($summary['dynamic_not_rendered'], $listing, $type);
+        $response['binding_diagnostics'] = self::bindingDiagnostics($layout, $rendered['tree'], !$listing && $context !== null);
 
         if ($warnings !== []) {
             $response['warnings'] = $warnings;
@@ -206,6 +207,59 @@ class TemplateRenderCheckTool extends AbstractTool
      * @param list<string> $dynamicMissing
      * @return list<array<string, mixed>>
      */
+    /** Observations of the transformed tree, not a second execution of the source query. */
+    public static function bindingDiagnostics(array $layout, object $tree, bool $contextKnown): array
+    {
+        $rendered = [];
+        $collect = static function (object $node) use (&$collect, &$rendered): void {
+            $props = (array) ($node->props ?? []);
+            $path = $props[self::PATH_PROP] ?? null;
+            if (is_string($path)) $rendered[$path][] = $props;
+            foreach ((array) ($node->children ?? []) as $child) {
+                if (is_object($child)) $collect($child);
+            }
+        };
+        $collect($tree);
+        $results = [];
+        $walk = static function (array $node, string $path, ?string $disabledBy) use (&$walk, &$results, $rendered, $contextKnown): void {
+            if (($node['props']['status'] ?? null) === 'disabled') $disabledBy = $path;
+            $source = $node['source'] ?? null;
+            if (is_array($source) && $source !== []) {
+                $copies = $rendered[$path] ?? [];
+                $empty = [];
+                foreach (array_keys(is_array($source['props'] ?? null) ? $source['props'] : []) as $prop) {
+                    if ($copies !== [] && count(array_filter($copies, static fn (array $props): bool =>
+                        isset($props[$prop]) && $props[$prop] !== '' && $props[$prop] !== [])) === 0) $empty[] = $prop;
+                }
+                $state = $disabledBy !== null ? 'disabled'
+                    : (!$contextKnown ? 'context_required'
+                    : ($copies === [] ? 'not_rendered_unknown_cause'
+                    : ($empty !== [] ? 'rendered_with_empty_fields' : 'rendered')));
+                $results[] = [
+                    'path' => $path,
+                    'state' => $state,
+                    'rendered_instances' => count($copies),
+                    // Removed nodes can mean an empty query OR a display condition. Do not guess.
+                    'source_item_count' => null,
+                    'empty_bound_props' => $empty,
+                    'disabled_by' => $disabledBy,
+                    'next_action' => match ($state) {
+                        'disabled' => 'Inspect the disabled element or ancestor before changing its source.',
+                        'context_required' => 'Supply context_id for a single template, or inspect a real listing URL with site/public-fetch.',
+                        'not_rendered_unknown_cause' => 'Inspect source arguments and display conditions; this render cannot prove the query returned zero rows.',
+                        'rendered_with_empty_fields' => 'Inspect the bound fields and their source values; do not add more containers.',
+                        default => null,
+                    },
+                ];
+            }
+            foreach (is_array($node['children'] ?? null) ? $node['children'] : [] as $index => $child) {
+                if (is_array($child)) $walk($child, $path . '>' . ($child['type'] ?? 'unknown') . '[' . $index . ']', $disabledBy);
+            }
+        };
+        $walk($layout, 'root', null);
+        return $results;
+    }
+
     public static function warnings(array $dynamicMissing, bool $listing, string $type): array
     {
         $warnings = [];
@@ -222,7 +276,7 @@ class TemplateRenderCheckTool extends AbstractTool
             $warnings[] = [
                 'code' => 'dynamic_not_rendered',
                 'paths' => $dynamicMissing,
-                'message' => 'Elements bound to a Dynamic Source did not render: their source gave nothing in this render, so this result is not what a visitor of a real page gets.',
+                'message' => 'Elements bound to a Dynamic Source did not render. An empty source, a display condition or missing context may explain this; this render alone cannot establish the cause.',
                 'fix' => $listing ? 'Check a URL of this type with site/public-fetch.' : 'Pass a context_id whose content has these values, or check a real URL with site/public-fetch.',
             ];
         }

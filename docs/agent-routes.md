@@ -118,3 +118,53 @@ Only when `mirasai/style-preview` is not in `tools/list`:
 6. Purge page cache: `site/cache-purge`, or WP Rocket's `rocket_clean_domain()` over SSH.
 
 Prefer installing `@miras/mirasai-mcp` with a pinned `style_worker_sha256` over this recipe.
+
+## Router destination and write outcomes
+
+With several configured sites, pass `site_id` for every write tool, including
+its dry run. An unknown tool or one without reliable read-only metadata also
+requires it. Reads may use the default. A router scoped with `--site-id` or a
+registry with one site keeps its existing implicit destination.
+
+A batch containing any write requires its top-level `site_id` before any call
+runs. A read-only batch may use the default. Router batches are sequential,
+not transactional: earlier successful writes remain saved after a later error.
+Never replay a whole batch to recover from a partial failure.
+
+An MCP error does not prove that nothing was saved. The router preserves host
+results, including partial-write evidence. If transport fails after dispatch,
+`write_state: unknown` means read the target and reconcile before retrying;
+`not_sent` means no execution request was sent. Style separates `write_state`
+from `verification_state`: a confirmed save followed by failed readback reports
+`saved` and `failed`, with the host result and ETag retained. A verified Style
+update reports `saved` and `verified`. This verification checks the existing
+readback contract; it does not replace public-page or visual verification.
+
+## Bounded layout reads and binding diagnosis
+
+On both hosts, `template/element-list` in `mode=full` accepts `subtree`
+(an absolute path, default `root`), `max_depth` relative to that node (0 includes
+only the selected node), and `limit` (default 500, maximum 2000). The response
+contains `total` matching elements, `count`, `truncated` and `next_cursor`.
+Repeat the same selector and filters with `cursor: next_cursor` to continue.
+The cursor is tied to the complete layout ETag, target and filters; on
+`stale_cursor`, restart the read. Paths are never rebased. Joomla keeps its
+`max_results` alias and `fields` projection. Outline and bindings-only retain
+their existing shape; paging arguments on those modes are rejected explicitly.
+This bounds response size, not the cost of loading the CMS layout.
+
+`template/render-check` adds `binding_diagnostics` per stored binding:
+
+- `disabled`: names the disabled node or ancestor in `disabled_by`.
+- `context_required`: use a concrete post/article, or a real listing URL.
+- `rendered_with_empty_fields`: rendered instances exist, but the named bound
+  properties are empty in every instance.
+- `rendered`: instances survived and no mapped property is empty in all of them.
+- `not_rendered_unknown_cause`: no instance survived; inspect source arguments
+  and display conditions before changing anything.
+
+`rendered_instances` counts transformed nodes with the same stored path. It is
+not a database row count, especially under nested repetitions.
+`source_item_count` remains null: the transformed tree cannot distinguish a
+zero-row query from records removed by display conditions. The diagnostics do
+not run a second source query or infer visitor visibility from draft rendering.

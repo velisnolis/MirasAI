@@ -40,12 +40,14 @@ function unwrap(result) {
 }
 
 async function hostCall(client, name, args) {
-  const payload = unwrap(await client.callTool(name, args));
+  const result = await client.callTool(name, args);
+  const payload = unwrap(result);
 
-  if (payload && typeof payload === 'object' && typeof payload.error === 'string') {
-    const error = new Error(payload.error);
-    error.code = payload.code ?? 'host_tool_error';
+  if (result?.isError === true || (payload && typeof payload === 'object' && typeof payload.error === 'string')) {
+    const error = new Error(payload?.error ?? 'Host returned an MCP tool error.');
+    error.code = payload?.code ?? 'host_tool_error';
     error.tool = name;
+    error.host_result = payload;
     throw error;
   }
 
@@ -302,30 +304,43 @@ export async function updateStyle({
     };
   }
 
-  const host = await hostCall(client, 'template/style-update', {
-    if_match: ifMatch.trim(),
-    style_id: preview.style.id,
-    ...(preview.style.variation !== undefined && preview.style.variation !== null
-      ? { variation: preview.style.variation }
-      : {}),
-    vars,
-    unset_vars: unsetVars,
-    ...(customLess !== undefined ? { custom_less: customLess } : {}),
-    compiled_css: preview.compiled_css,
-    compiled_rtl: preview.compiled_rtl,
-    compiled_css_sha256: preview.css.candidate_sha256,
-    compiled_rtl_sha256: sha256(preview.compiled_rtl),
-    ...(preview.compile.provenance === 'router_provenance_v1'
-      ? {
-        compile_provenance: {
-          worker_sha256: preview.worker.sha256,
-          sources_sha256: preview.compile.sources_sha256,
-        },
-      }
-      : {}),
-    dry_run: dryRun,
-    ...(confirmGuardedWrite ? { confirm_guarded_write: true } : {}),
-  });
+  let host;
+  try {
+    host = await hostCall(client, 'template/style-update', {
+      if_match: ifMatch.trim(),
+      style_id: preview.style.id,
+      ...(preview.style.variation !== undefined && preview.style.variation !== null
+        ? { variation: preview.style.variation }
+        : {}),
+      vars,
+      unset_vars: unsetVars,
+      ...(customLess !== undefined ? { custom_less: customLess } : {}),
+      compiled_css: preview.compiled_css,
+      compiled_rtl: preview.compiled_rtl,
+      compiled_css_sha256: preview.css.candidate_sha256,
+      compiled_rtl_sha256: sha256(preview.compiled_rtl),
+      ...(preview.compile.provenance === 'router_provenance_v1'
+        ? {
+          compile_provenance: {
+            worker_sha256: preview.worker.sha256,
+            sources_sha256: preview.compile.sources_sha256,
+          },
+        }
+        : {}),
+      dry_run: dryRun,
+      ...(confirmGuardedWrite ? { confirm_guarded_write: true } : {}),
+    });
+  } catch (error) {
+    return {
+      ok: false, code: error.code ?? 'style_write_outcome_unknown',
+      error: error instanceof Error ? error.message : String(error),
+      dry_run: dryRun,
+      write_state: dryRun ? 'not_written' : (error.host_result?.write_state ?? (error.host_result?.action === 'updated' && error.host_result?.dry_run === false ? 'saved' : 'unknown')),
+      verification_state: 'not_verified',
+      host: error.host_result ?? null,
+      action_required: 'Inspect the host result and read the Style before retrying. Do not assume a failed response means nothing was saved.',
+    };
+  }
 
   const safePreview = {
     style: preview.style,
@@ -381,6 +396,8 @@ export async function updateStyle({
       dry_run: false,
       error: 'The host may have written the Style, but post-write verification failed. Inspect the host result and private snapshot before retrying; do not blindly repeat the write.',
       code: 'style_write_verification_failed',
+      write_state: verification.host_action_is_updated && verification.host_confirms_real_write ? 'saved' : 'unknown',
+      verification_state: 'failed',
       stage: 'post_write_verification',
       preview: safePreview,
       host,
@@ -395,6 +412,8 @@ export async function updateStyle({
     preview: safePreview,
     host,
     verification,
+    write_state: 'saved',
+    verification_state: 'verified',
     etag: served.etag,
   };
 }

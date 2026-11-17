@@ -219,6 +219,30 @@ expectMode(
     $wpBindingRows->rows($wp, $layout)
 );
 
+foreach ([YooThemeElementNavigator::class, WpYoothemeElementNavigator::class] as $C) {
+    $nodes = (new $C())->listElements($layout);
+    $identity = ['storage' => 'template', 'id' => 'a', 'etag' => 'v1'];
+    $page = $C::pageElements($nodes, ['limit' => 2], $identity);
+    $all = $page['elements'];
+    while ($page['next_cursor'] !== null) {
+        $page = $C::pageElements($nodes, ['limit' => 2, 'cursor' => $page['next_cursor']], $identity);
+        $all = array_merge($all, $page['elements']);
+    }
+    expectMode("$C paging retains all absolute paths exactly once", $all, $nodes);
+    $first = $C::pageElements($nodes, ['limit' => 1], $identity);
+    $cursor = $first['next_cursor'];
+    expectMode("$C stale etag refused", $C::pageElements($nodes, ['limit' => 1, 'cursor' => $cursor], array_merge($identity, ['etag' => 'v2']))['code'], 'stale_cursor');
+    expectMode("$C other target refused", $C::pageElements($nodes, ['limit' => 1, 'cursor' => $cursor], array_merge($identity, ['id' => 'b']))['code'], 'stale_cursor');
+    expectMode("$C changed limit refused", $C::pageElements($nodes, ['limit' => 2, 'cursor' => $cursor], $identity)['code'], 'stale_cursor');
+    expectMode("$C malformed cursor refused", $C::pageElements($nodes, ['cursor' => 'oops'], $identity)['code'], 'invalid_cursor');
+    $path = $nodes[1]['path'];
+    expectMode("$C depth zero returns selected node", array_column($C::pageElements($nodes, ['subtree' => $path, 'max_depth' => 0], $identity)['elements'], 'path'), [$path]);
+    expectMode("$C invalid subtree refused", $C::pageElements($nodes, ['subtree' => 'root>missing[0]'], $identity)['code'], 'invalid_path');
+    expectMode("$C outline paging refused", $C::pageElements($nodes, ['mode' => 'outline'], $identity)['code'], 'invalid_arguments');
+    expectMode("$C zero limit refused", $C::pageElements($nodes, ['limit' => 0], $identity)['code'], 'invalid_arguments');
+    expectMode("$C schema exposes all paging fields", array_keys($C::pageSchema()), ['subtree', 'max_depth', 'limit', 'cursor']);
+}
+
 if ($failed > 0) {
     echo "\n{$failed} read-mode test(s) failed.\n";
     exit(1);

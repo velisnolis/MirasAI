@@ -25,6 +25,7 @@ class TemplateElementListTool extends AbstractTool
     ];
 
     private YooThemeHelper $yooHelper;
+    private array $pageArguments = [];
 
     public function __construct()
     {
@@ -39,14 +40,14 @@ class TemplateElementListTool extends AbstractTool
 
     public function getDescription(): string
     {
-        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect. In a path the number is the position among all the children of the parent, not among those of the same type: column[0]>text[2] is the third child of the column, whatever the first two are. Copy paths from here rather than building them. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only. Every mode carries status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor.';
+        return 'Lists elements in a YOOtheme Builder template as a flat depth-first index with stable paths, type, depth, parent, child count, prop keys, label, and source-binding flag. Use this before template/element-read to locate the element to inspect. In a path the number is the position among all the children of the parent, not among those of the same type: column[0]>text[2] is the third child of the column, whatever the first two are. Copy paths from here rather than building them. In full mode use subtree, max_depth and limit (default 500, max 2000); repeat filters with next_cursor to continue. A cursor expires when the layout, target or filters change. ETag and paths always refer to the full layout. mode=outline returns a nested type/path/title tree; mode=bindings_only returns Dynamic Source bindings only. Every mode carries status on an element the Builder keeps but does not output, so a disabled row is visible without reading its props; bindings_only adds disabled_by for a binding sitting inside a disabled ancestor.';
     }
 
     public function getInputSchema(): array
     {
         return [
             'type' => 'object',
-            'properties' => [
+            'properties' => YooThemeElementNavigator::pageSchema() + [
                 'key' => [
                     'type' => 'string',
                     'description' => 'Template storage key as returned by template/list. Use one of key, article_id, or module_id.',
@@ -81,6 +82,7 @@ class TemplateElementListTool extends AbstractTool
 
     public function handle(array $arguments): array
     {
+        $this->pageArguments = $arguments;
         $key = trim((string) ($arguments['key'] ?? ''));
         $articleId = (int) ($arguments['article_id'] ?? 0);
         $moduleId = (int) ($arguments['module_id'] ?? 0);
@@ -110,6 +112,10 @@ class TemplateElementListTool extends AbstractTool
 
         if (isset($mode['error'])) {
             return $mode;
+        }
+
+        if ($mode['mode'] !== 'full' && array_intersect(array_keys($arguments), array_keys(YooThemeElementNavigator::pageSchema())) !== []) {
+            return ['error' => 'Paging and subtree filters require mode=full.', 'code' => 'invalid_arguments'];
         }
 
         if ($articleId > 0) {
@@ -249,8 +255,9 @@ class TemplateElementListTool extends AbstractTool
         }
 
         $elements = $navigator->listElements($layout);
-        $truncated = count($elements) > $maxResults['max_results'];
-        $elements = array_slice($elements, 0, $maxResults['max_results']);
+        $page = YooThemeElementNavigator::pageElements($elements, $this->pageArguments, $identity, $maxResults['max_results']);
+        if (isset($page['error'])) return $page;
+        $elements = $page['elements'];
 
         if (isset($fields['fields'])) {
             $elements = array_map(
@@ -260,7 +267,9 @@ class TemplateElementListTool extends AbstractTool
         }
 
         $response['count'] = count($elements);
-        $response['truncated'] = $truncated;
+        $response['total'] = $page['total'];
+        $response['truncated'] = $page['truncated'];
+        $response['next_cursor'] = $page['next_cursor'];
         $response['elements'] = $elements;
 
         return $response;

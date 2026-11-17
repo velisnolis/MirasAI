@@ -204,6 +204,10 @@ foreach ([TemplateReadTool::class, TemplateElementListTool::class] as $class) {
     expect("joomla {$short} mode enum", $mode['enum'] ?? [], ['full', 'outline', 'bindings_only']);
 }
 
+foreach (['subtree', 'max_depth', 'limit', 'cursor'] as $field) {
+    expect("joomla element-list exposes {$field}", isset(schemaForToolWithoutConstructor(TemplateElementListTool::class)['properties'][$field]), true);
+}
+
 $sourceSetProperties = schemaForToolWithoutConstructor(TemplateElementSourceSetTool::class)['properties'] ?? [];
 
 foreach (['leaves', 'rebind_disabled'] as $batchProperty) {
